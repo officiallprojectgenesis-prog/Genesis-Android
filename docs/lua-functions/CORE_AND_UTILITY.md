@@ -5,9 +5,9 @@ Timers, event handling, network latent transfers, file I/O, XML parsing, JSON se
 ## Parity Status
 
 - **Total Functions:** 195
-- **Implemented:** 160 (82.1%)
-- **Stubs:** 4
-- **Missing:** 31
+- **Implemented:** 167 (85.6%)
+- **Stubs:** 2
+- **Missing:** 26
 
 > **Technical Requirement:** Pure CPU/platform logic. Mostly ported or needs standard library wrappers (e.g. tinyxml2, sha256, zlib).
 
@@ -23,7 +23,7 @@ Timers, event handling, network latent transfers, file I/O, XML parsing, JSON se
 | `addEventHandler` | **Implemented** | `CLuaManager.cpp:164` | `CLuaFunctionDefs::AddEventHandler` | Operational on Android. (l_addEventHandler) |
 | `base64Decode` | **Implemented** | `CLuaCryptDefs.cpp:28` | `ArgumentParserWarn<false, Base64decode>` | Operational on Android. (l_base64Decode) |
 | `base64Encode` | **Implemented** | `CLuaCryptDefs.cpp:27` | `ArgumentParserWarn<false, Base64encode>` | Operational on Android. (l_base64Encode) |
-| `bindKey` | *Stub* | `CLuaManager.cpp:209` | `CLuaFunctionDefs::BindKey` | Currently stubbed: `l_true: lua_pushboolean(L, 1)`. Needs native engine wiring. |
+| `bindKey` | **Implemented** | `CLuaManager.cpp:209` | `CLuaFunctionDefs::BindKey` | Operational on Android. (BindKey) |
 | `bitAnd` | **Implemented** | `CLuaBitDefs.cpp:18` | `bitAnd` | Operational on Android. (BitAnd) |
 | `bitArShift` | **Implemented** | `CLuaBitDefs.cpp:20` | `bitArShift` | Operational on Android. (BitArShift) |
 | `bitExtract` | **Implemented** | `CLuaBitDefs.cpp:22` | `bitExtract` | Operational on Android. (BitExtract) |
@@ -76,7 +76,7 @@ Timers, event handling, network latent transfers, file I/O, XML parsing, JSON se
 | `getClothesTypeName` | **Implemented** | `CLuaManager.cpp:192` | `CLuaFunctionDefs::GetClothesTypeName` | Operational on Android. (l_getClothesTypeName) |
 | `getColorFromString` | **Implemented** | `CLuaUtilDefs.cpp:52` | `GetColorFromString` | Operational on Android. (l_getColorFromString) |
 | `getCommandHandlers` | **Implemented** | `CLuaManager.cpp:228` | `CLuaFunctionDefs::GetCommandHandlers` | Operational on Android. (l_getCommandHandlers) |
-| `getCommandsBoundToKey` | Missing | `CLuaManager.cpp:218` | `CLuaFunctionDefs::GetCommandsBoundToKey` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
+| `getCommandsBoundToKey` | **Implemented** | `CLuaManager.cpp:218` | `CLuaFunctionDefs::GetCommandsBoundToKey` | Operational on Android. (GetCommandsBoundToKey) |
 | `getCursorAlpha` | **Implemented** | `CLuaManager.cpp:201` | `CLuaFunctionDefs::GetCursorAlpha` | Operational on Android. (l_getCursorAlpha) |
 | `getCursorPosition` | **Implemented** | `CLuaManager.cpp:197` | `CLuaFunctionDefs::GetCursorPosition` | Operational on Android. (l_getCursorPosition) |
 | `getDevelopmentMode` | **Implemented** | `CLuaManager.cpp:235` | `CLuaFunctionDefs::GetDevelopmentMode` | Operational on Android. (l_getDevelopmentMode) |
@@ -84,10 +84,10 @@ Timers, event handling, network latent transfers, file I/O, XML parsing, JSON se
 | `getDistanceBetweenPoints3D` | **Implemented** | `CLuaUtilDefs.cpp:56` | `GetDistanceBetweenPoints3D` | Operational on Android. (l_getDistanceBetweenPoints3D) |
 | `getEasingValue` | **Implemented** | `CLuaUtilDefs.cpp:57` | `GetEasingValue` | Operational on Android. (l_getEasingValue) |
 | `getEventHandlers` | **Implemented** | `CLuaManager.cpp:166` | `CLuaFunctionDefs::GetEventHandlers` | Operational on Android. (l_getEventHandlers) |
-| `getFunctionsBoundToKey` | Missing | `CLuaManager.cpp:216` | `CLuaFunctionDefs::GetFunctionsBoundToKey` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `getKeyBoundToCommand` | Missing | `CLuaManager.cpp:219` | `CLuaFunctionDefs::GetKeyBoundToCommand` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `getKeyBoundToFunction` | Missing | `CLuaManager.cpp:217` | `CLuaFunctionDefs::GetKeyBoundToFunction` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `getKeyState` | Missing | `CLuaManager.cpp:211` | `CLuaFunctionDefs::GetKeyState` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
+| `getFunctionsBoundToKey` | **Implemented** | `CLuaManager.cpp:216` | `CLuaFunctionDefs::GetFunctionsBoundToKey` | Operational on Android. (GetFunctionsBoundToKey) |
+| `getKeyBoundToCommand` | **Implemented** | `CLuaManager.cpp:219` | `CLuaFunctionDefs::GetKeyBoundToCommand` | Operational on Android. (GetKeyBoundToCommand) |
+| `getKeyBoundToFunction` | **Implemented** | `CLuaManager.cpp:217` | `CLuaFunctionDefs::GetKeyBoundToFunction` | Operational on Android. (GetKeyBoundToFunction) |
+| `getKeyState` | **Implemented** | `CLuaManager.cpp:211` | `CLuaFunctionDefs::GetKeyState` | Operational on Android. (GetKeyState) |
 | `getKeyboardLayout` | **Implemented** | `CLuaManager.cpp:244` | `CLuaFunctionDefs::GetKeyboardLayout` | Operational on Android. (l_getKeyboardLayout) |
 | `getLatentEventHandles` | Missing | `CLuaManager.cpp:172` | `CLuaFunctionDefs::GetLatentEventHandles` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
 | `getLatentEventStatus` | Missing | `CLuaManager.cpp:173` | `CLuaFunctionDefs::GetLatentEventStatus` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
@@ -185,7 +185,7 @@ Timers, event handling, network latent transfers, file I/O, XML parsing, JSON se
 | `triggerEvent` | **Implemented** | `CLuaManager.cpp:167` | `CLuaFunctionDefs::TriggerEvent` | Operational on Android. (l_triggerEvent) |
 | `triggerLatentServerEvent` | Missing | `CLuaManager.cpp:171` | `CLuaFunctionDefs::TriggerLatentServerEvent` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
 | `triggerServerEvent` | **Implemented** | `CLuaManager.cpp:168` | `CLuaFunctionDefs::TriggerServerEvent` | Operational on Android. (l_triggerServerEvent) |
-| `unbindKey` | *Stub* | `CLuaManager.cpp:210` | `CLuaFunctionDefs::UnbindKey` | Currently stubbed: `l_true: lua_pushboolean(L, 1)`. Needs native engine wiring. |
+| `unbindKey` | **Implemented** | `CLuaManager.cpp:210` | `CLuaFunctionDefs::UnbindKey` | Operational on Android. (UnbindKey) |
 | `utfChar` | **Implemented** | `CLuaUTFDefs.cpp:95` | `ArgumentParserWarn<nullptr, UtfChar>` | Operational on Android. (l_utfChar) |
 | `utfCode` | **Implemented** | `CLuaUTFDefs.cpp:95` | `ArgumentParserWarn<false, UtfCode>` | Operational on Android. (l_utfCode) |
 | `utfLen` | **Implemented** | `CLuaUTFDefs.cpp:94` | `ArgumentParserWarn<false, UtfLen>` | Operational on Android. (l_utfLen) |

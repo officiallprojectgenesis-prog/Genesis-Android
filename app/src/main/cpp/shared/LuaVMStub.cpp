@@ -11,6 +11,7 @@
 #include "LuaResourceApi.h"
 #include "LuaMtaWindowApi.h"
 #include "LuaEventRegistry.h"
+#include "LuaKeyBindApi.h"
 #include "LuaApiExtra.h"
 #include "LuaGuiApi.h"
 #include "ResourceLoader.h"
@@ -340,6 +341,49 @@ static void ApplyScriptInput() {
             i += n;
         }
         if (enter) FireKey("enter");
+    }
+}
+
+// A hardware key (KeyBindsQueueKey). Desktop CClientGame::KeyStrokeHandler fires onClientKey first, and a
+// cancelled event stops the binds. CKeyBinds then calls the bound functions and commands unless the
+// input goes to a GUI (INPUTMODE_NO_BINDS) or the chat box. CScriptKeyBinds::Call passes the key
+// name, "down" or "up", then the bind's own arguments.
+static void ApplyKeyEvents() {
+    if (!g_dx.L) return;
+    lua_State* L = g_dx.L;
+    std::string key;
+    bool down = false;
+    while (KeyBindsNextKey(key, down)) {
+        lua_pushstring(L, key.c_str());
+        lua_pushboolean(L, down ? 1 : 0);
+        if (!fireHandlers("onClientKey", 2, ClientRootElement())) continue;
+        if (GuiKeyCapture() || MtaWindowChatInputActive()) continue;
+        std::vector<KeyBindCall> calls;
+        std::vector<KeyBindCommand> commands;
+        KeyBindsCollect(key, down, calls, commands);
+        for (const KeyBindCall& call : calls) {
+            if (!KeyBindLive(call.ref)) continue;
+            OwnerScope scope(call.owner, call.netId, call.generation);
+            lua_rawgeti(L, LUA_REGISTRYINDEX, call.ref);
+            lua_pushstring(L, key.c_str());
+            lua_pushstring(L, down ? "down" : "up");
+            for (int ref : call.args) lua_rawgeti(L, LUA_REGISTRYINDEX, ref);
+            if (lua_pcall(L, 2 + static_cast<int>(call.args.size()), 0, 0) != LUA_OK) {
+                LUA_LOGE("Lua bindKey %s: %s", key.c_str(), lua_tostring(L, -1));
+                lua_pop(L, 1);
+            }
+        }
+        for (const KeyBindCommand& command : commands) {
+            // Client command handlers only. DIAG: the command is not also sent to the server
+            // (CClientGame::ProcessCommand); the VM has no command sender.
+            lua_getglobal(L, "executeCommandHandler");
+            lua_pushstring(L, command.command.c_str());
+            lua_pushstring(L, command.arguments.c_str());
+            if (lua_pcall(L, 2, 0, 0) != LUA_OK) {
+                LUA_LOGE("Lua bindKey command %s: %s", command.command.c_str(), lua_tostring(L, -1));
+                lua_pop(L, 1);
+            }
+        }
     }
 }
 
@@ -1738,8 +1782,6 @@ static void installDxBindings(lua_State* L) {
         {"getElementModel", l_num0},
         {"getElementVelocity", l_getElementVelocity},
         {"getPlayerName", l_getPlayerName},
-        {"bindKey", l_true},
-        {"unbindKey", l_true},
         {"isTimer", l_isTimer},
         {"killTimer", l_killTimer},
         {"resetTimer", l_resetTimer},
@@ -1853,6 +1895,7 @@ static void installDxBindings(lua_State* L) {
     InstallWeaponLua(L);
     InstallResourceLua(L);
     InstallMtaWindowLua(L);
+    InstallKeyBindLua(L);
     // These two stay on this file even if extra bindings register the same names.
     lua_pushcfunction(L, l_getNetworkStats);
     lua_setglobal(L, "getNetworkStats");
@@ -2331,6 +2374,7 @@ std::string LuaVMStub::pumpDx() {
         [](const DxRuntime::Timer& timer) { return timer.times == 0; }), g_dx.timers.end());
     PumpCursorEvents();
     ApplyScriptInput();
+    ApplyKeyEvents();
     PumpEndedSounds();
     g_dx.frame.clear();
     PulseCamera();
@@ -2526,6 +2570,7 @@ bool ActiveVmOnServerEvent(const uint8_t* body, size_t length, size_t bits) {
 static void DropResourceState(lua_State* L, const std::string& name, uint16_t netId, uint32_t generation) {
     GuiDropResource(name, netId, generation);
     Events::DropOwner(name, netId, generation);
+    KeyBindsDropResource(L, name, netId, generation);
     for (auto& [event, refs] : g_dx.handlers) {
         refs.erase(std::remove_if(refs.begin(), refs.end(), [&](const DxRuntime::Handler& handler) {
             if (OwnerOfHandler(handler.ref) != name) return false;

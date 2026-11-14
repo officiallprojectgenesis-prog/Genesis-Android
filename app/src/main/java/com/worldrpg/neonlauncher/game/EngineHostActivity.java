@@ -105,6 +105,7 @@ public final class EngineHostActivity extends GTASA {
     private final java.util.HashMap<Integer, Boolean> soundPaused = new java.util.HashMap<>();
     private native boolean nativeSendChat(String text);
     private native void nativeChatInputActive(boolean active);
+    private native void nativeKeyEvent(String key, boolean down);
     private native void nativeDropConnection();
     private native String nativeMapSnapshot();
 
@@ -1003,12 +1004,58 @@ public final class EngineHostActivity extends GTASA {
             toggleMtaPause();
             return true;
         }
+        // A hardware keyboard key for bindKey and onClientKey. Held-key repeats are not new presses.
+        String key = mtaKeyName(keyCode);
+        if (key != null && event.getRepeatCount() == 0) nativeKeyEvent(key, true);
         return super.onKeyDown(keyCode, event);
+    }
+
+    /** Desktop key-bind name (CScriptKeyBinds.cpp g_bkKeys) for an Android key code, or null. */
+    private static String mtaKeyName(int keyCode) {
+        if (keyCode >= android.view.KeyEvent.KEYCODE_A && keyCode <= android.view.KeyEvent.KEYCODE_Z) {
+            return String.valueOf((char) ('a' + (keyCode - android.view.KeyEvent.KEYCODE_A)));
+        }
+        if (keyCode >= android.view.KeyEvent.KEYCODE_0 && keyCode <= android.view.KeyEvent.KEYCODE_9) {
+            return String.valueOf((char) ('0' + (keyCode - android.view.KeyEvent.KEYCODE_0)));
+        }
+        if (keyCode >= android.view.KeyEvent.KEYCODE_F1 && keyCode <= android.view.KeyEvent.KEYCODE_F12) {
+            // F8 is the desktop console key and is not bindable.
+            if (keyCode == android.view.KeyEvent.KEYCODE_F8) return null;
+            return "F" + (1 + keyCode - android.view.KeyEvent.KEYCODE_F1);
+        }
+        if (keyCode >= android.view.KeyEvent.KEYCODE_NUMPAD_0 && keyCode <= android.view.KeyEvent.KEYCODE_NUMPAD_9) {
+            return "num_" + (keyCode - android.view.KeyEvent.KEYCODE_NUMPAD_0);
+        }
+        switch (keyCode) {
+            case android.view.KeyEvent.KEYCODE_SPACE: return "space";
+            case android.view.KeyEvent.KEYCODE_ENTER: return "enter";
+            case android.view.KeyEvent.KEYCODE_TAB: return "tab";
+            case android.view.KeyEvent.KEYCODE_DEL: return "backspace";
+            case android.view.KeyEvent.KEYCODE_FORWARD_DEL: return "delete";
+            case android.view.KeyEvent.KEYCODE_DPAD_LEFT: return "arrow_l";
+            case android.view.KeyEvent.KEYCODE_DPAD_UP: return "arrow_u";
+            case android.view.KeyEvent.KEYCODE_DPAD_RIGHT: return "arrow_r";
+            case android.view.KeyEvent.KEYCODE_DPAD_DOWN: return "arrow_d";
+            case android.view.KeyEvent.KEYCODE_SHIFT_LEFT: return "lshift";
+            case android.view.KeyEvent.KEYCODE_SHIFT_RIGHT: return "rshift";
+            case android.view.KeyEvent.KEYCODE_CTRL_LEFT: return "lctrl";
+            case android.view.KeyEvent.KEYCODE_CTRL_RIGHT: return "rctrl";
+            case android.view.KeyEvent.KEYCODE_ALT_LEFT: return "lalt";
+            case android.view.KeyEvent.KEYCODE_ALT_RIGHT: return "ralt";
+            case android.view.KeyEvent.KEYCODE_PAGE_UP: return "pgup";
+            case android.view.KeyEvent.KEYCODE_PAGE_DOWN: return "pgdn";
+            case android.view.KeyEvent.KEYCODE_MOVE_HOME: return "home";
+            case android.view.KeyEvent.KEYCODE_MOVE_END: return "end";
+            case android.view.KeyEvent.KEYCODE_INSERT: return "insert";
+            default: return null;
+        }
     }
 
     @Override
     public boolean onKeyUp(int keyCode, android.view.KeyEvent event) {
         if (keyCode == android.view.KeyEvent.KEYCODE_BACK) return true;
+        String key = mtaKeyName(keyCode);
+        if (key != null) nativeKeyEvent(key, false);
         return super.onKeyUp(keyCode, event);
     }
 

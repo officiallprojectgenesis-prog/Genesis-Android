@@ -229,6 +229,7 @@ int GetChatboxLayout(lua_State* L) {
 }  // namespace
 
 void MtaWindowSetChatInputActive(bool active) { g_chatInputActive.store(active); }
+bool MtaWindowChatInputActive() { return g_chatInputActive.load(); }
 
 void MtaWindowResetSession() { SetCharacterLimit(kDefaultCharacterLimit); }
 

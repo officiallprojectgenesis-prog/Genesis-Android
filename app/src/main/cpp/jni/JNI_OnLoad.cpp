@@ -22,6 +22,7 @@
 #include "../shared/PacketHandler.h"
 #include "../shared/LuaVMStub.h"
 #include "../shared/LuaMtaWindowApi.h"
+#include "../shared/LuaKeyBindApi.h"
 #include "../shared/ServerWorld.h"
 #include "../shared/AssetManager.h"
 
@@ -532,6 +533,15 @@ Java_com_worldrpg_neonlauncher_game_EngineHostActivity_nativeSendChat(JNIEnv* en
     const bool sent = g_state->join->SendChat(raw);
     env->ReleaseStringUTFChars(text, raw);
     return sent ? JNI_TRUE : JNI_FALSE;
+}
+
+// A hardware keyboard key in desktop key-bind spelling ("e", "F1", "space"). Unknown names are ignored.
+JNIEXPORT void JNICALL
+Java_com_worldrpg_neonlauncher_game_EngineHostActivity_nativeKeyEvent(JNIEnv* env, jobject, jstring key, jboolean down) {
+    const char* name = key ? env->GetStringUTFChars(key, nullptr) : nullptr;
+    if (!name) return;
+    WorldRPG::Script::KeyBindsQueueKey(name, down == JNI_TRUE);
+    env->ReleaseStringUTFChars(key, name);
 }
 
 // The chat input bar opened or closed (desktop CLocalGUI::IsChatBoxInputEnabled, read by

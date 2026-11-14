@@ -12,6 +12,7 @@
 
 #include "HttpDownloader.h"
 #include "LuaEventRegistry.h"
+#include "LuaKeyBindApi.h"
 #include "LuaMtaWindowApi.h"
 #include "LuaVMStub.h"
 #include "MtaCipher.h"
@@ -773,6 +774,52 @@ void CheckMtaWindow(WorldRPG::Script::LuaVMStub& vm) {
         assert(getVehicleOccupant(me) == false and getVehicleOccupants() == false, 'not a vehicle')
         assert(getVehicleController({}) == false, 'not a vehicle')
     )LUA");
+    // Key binds (CLuaFunctionDefs.Input.cpp 148-276, 420-655; CScriptKeyBinds.cpp).
+    RunLua(vm, "bind-key", R"LUA(
+        _G.keyLog = {}
+        _G.onE = function(key, state, extra) keyLog[#keyLog + 1] = key .. ':' .. state .. ':' .. tostring(extra) end
+        _G.onBoth = function(key, state) keyLog[#keyLog + 1] = 'both:' .. key .. ':' .. state end
+        assert(bindKey() == false and bindKey('e') == false and bindKey('e', 'down') == false, 'bad arguments')
+        assert(bindKey('nokey', 'down', onE) == false, 'unknown key')
+        assert(bindKey('e', 'sideways', onE) == false, 'unknown state')
+        assert(bindKey('E', 'down', onE, 'x') == true, 'key name is case-insensitive')
+        assert(bindKey('F2', 'both', onBoth) == true, 'both states')
+        assert(bindKey('fire', 'down', onBoth) == true, 'a control name binds')
+        assert(#getFunctionsBoundToKey('e') == 1 and getFunctionsBoundToKey('e')[1] == onE, 'functions of e')
+        assert(#getFunctionsBoundToKey('E') == 0, 'getter uses the table spelling')
+        assert(#getFunctionsBoundToKey('F2') == 2 and #getFunctionsBoundToKey('F2', 'up') == 1, 'state filter')
+        assert(getKeyBoundToFunction(onE) == 'e' and getKeyBoundToFunction(print) == false, 'key of function')
+        assert(getKeyBoundToFunction('x') == false, 'needs a function')
+        assert(getKeyState('e') == false and getKeyState('nokey') == false, 'nothing pressed')
+        assert(bindKey('p', 'down', 'panel', 'open') == true and bindKey('p', 'down', 'panel', 'open') == true, 'command bind')
+        assert(getCommandsBoundToKey('p').panel == 'open' and getKeyBoundToCommand('panel') == 'p', 'command getters')
+        assert(getKeyBoundToCommand('nothing') == false, 'unbound command')
+        addCommandHandler('panel', function(name, args) keyLog[#keyLog + 1] = 'cmd:' .. name .. ':' .. tostring(args) end)
+        addEventHandler('onClientKey', root, function(key, press) if key == 'F3' then cancelEvent() end end)
+        assert(bindKey('F3', 'down', onBoth) == true, 'F3 bound')
+    )LUA");
+    WorldRPG::Script::KeyBindsQueueKey("E", true);
+    WorldRPG::Script::KeyBindsQueueKey("f2", true);
+    WorldRPG::Script::KeyBindsQueueKey("f2", false);
+    WorldRPG::Script::KeyBindsQueueKey("p", true);
+    WorldRPG::Script::KeyBindsQueueKey("F3", true);
+    WorldRPG::Script::KeyBindsQueueKey("F8", true);
+    WorldRPG::Script::ActiveVmPump();
+    RunLua(vm, "bind-key-fired", R"LUA(
+        local got = table.concat(keyLog, ' ')
+        assert(got == 'e:down:x both:F2:down both:F2:up cmd:panel:open', 'binds fired: ' .. got)
+        assert(getKeyState('e') == true and getKeyState('F2') == false, 'key state')
+        assert(unbindKey('e', 'up') == false and unbindKey('e', 'down', print) == false, 'no such bind')
+        assert(unbindKey('e', 'down', onE) == true and #getFunctionsBoundToKey('e') == 0, 'unbind function')
+        assert(unbindKey('F2') == true and #getFunctionsBoundToKey('F2') == 0, 'unbind every state')
+        assert(unbindKey('F2') == false and unbindKey('nokey') == false, 'nothing left')
+        assert(unbindKey('p', 'down', 'panel') == true and getKeyBoundToCommand('panel') == false, 'unbind command')
+        _G.keyLog = {}
+    )LUA");
+    WorldRPG::Script::KeyBindsQueueKey("e", false);
+    WorldRPG::Script::KeyBindsQueueKey("f2", true);
+    WorldRPG::Script::ActiveVmPump();
+    RunLua(vm, "bind-key-removed", "assert(#keyLog == 0 and getKeyState('e') == false, 'removed binds do not fire')");
     RunLua(vm, "chatbox-limit-set", "assert(setChatboxCharacterLimit(40) == true)");
     WorldRPG::Script::MtaWindowResetSession();
     RunLua(vm, "chatbox-limit-session", "assert(getChatboxCharacterLimit() == 96, 'a new session resets the limit')");
