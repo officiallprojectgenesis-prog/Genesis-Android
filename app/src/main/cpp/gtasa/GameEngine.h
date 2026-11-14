@@ -3,6 +3,9 @@
 #include <cstdint>
 #include <memory>
 #include <string>
+#include <vector>
+
+#include "../shared/entity/PedSpawn.h"
 
 #ifdef __ANDROID__
 #include <android/log.h>
@@ -169,6 +172,12 @@ void ClearScriptCamera();
 // setTime / setWeather. False when the arguments are outside the desktop range.
 bool NoteScriptTime(int hour, int minute);
 bool NoteScriptWeather(int weather);
+// The weather from the last successful setWeather. False until one is set.
+bool CopyScriptWeather(int& weather);
+// createPed bookkeeping: model, heading in radians, frozen. False if that id is not a script ped.
+bool CopyScriptPedFacts(uint32_t id, int& model, float& headingRadians, bool& frozen);
+// CClientPed::SetHealth for the local player. Clamped and written through the existing health lock.
+void NoteLocalHealth(float health);
 // Another player shot this ped. Health is reported in the next pure sync.
 void NoteDamage(uint32_t attacker, float amount, uint8_t weapon);
 bool ConsumeDamage(uint32_t& attacker, uint8_t& weapon);
@@ -182,6 +191,9 @@ bool RemoteFacingLocal(uint32_t id, float facing, float reach);
 struct OnFootKeys {
     bool fire = false;
     bool duck = false;
+    // ButtonCross held (CPad::GetSprint) and a ButtonSquare press (jump) to send once.
+    bool sprint = false;
+    bool jump = false;
     int stickX = 0;
     int stickY = 0;
     // CCameraSA::GetCameraRotation: TheCamera.Orientation (libGTASA 2.10, TheCamera+0x154).
@@ -192,6 +204,10 @@ struct OnFootKeys {
     bool padStickZero = false;
 };
 void CopyOnFoot(float heading, float vx, float vy, OnFootKeys& keys);
+// Clears the jump press after an on-foot packet with ButtonSquare was written.
+void ConsumeLocalJump();
+// Clears the attack tap after an on-foot packet with ButtonCircle was written.
+void ConsumeLocalAttack();
 // A server ped from PACKET_ID_PED_SYNC or ENTITY_ADD. Applied on the game thread.
 void NoteRemotePed(uint32_t id, float x, float y, float z, float heading,
     float vx = 0, float vy = 0, float vz = 0, bool applyVelocity = true);
@@ -266,6 +282,11 @@ void ForgetPedNativeTaskState(uint32_t id);
 // CClientPed::SetHealth / SetArmor once (Packet_EntityAdd 4057-4058, Packet_PedStartSync 260-261). Written to the
 // body on the next game tick through the existing one-shot fields (ApplySyncedPlayerFields).
 void SetPedVitals(uint32_t id, float health, float armor);
+// PLAYER_CLOTHES (Packet_PlayerClothes): the clothes of a remote CJ, applied on the game thread.
+void NoteRemoteClothes(uint32_t id, const std::vector<WorldRPG::Entity::PedClothes>& clothes);
+// SFullKeysyncSync button flags of a remote player (0x01 L1, 0x02 R1, 0x04 Square, 0x08 Cross, 0x10 Circle,
+// 0x20 Triangle, 0x40 ShockL, 0x80 PedWalk; SyncStructures.h 1004-1012).
+void NoteRemoteButtons(uint32_t id, uint8_t buttons);
 struct HostedPed {
     uint32_t id = 0;
     float x = 0, y = 0, z = 0, heading = 0;

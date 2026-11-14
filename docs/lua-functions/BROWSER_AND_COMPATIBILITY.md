@@ -5,9 +5,9 @@ Embedded Chromium web pages, browser mouse/keyboard input, Discord Rich Presence
 ## Parity Status
 
 - **Total Functions:** 103
-- **Implemented:** 0 (0.0%)
+- **Implemented:** 4 (3.9%)
 - **Stubs:** 0
-- **Missing:** 103
+- **Missing:** 99
 
 > **Technical Requirement:** Desktop bundles CEF (Chromium Embedded Framework). On Android, this requires an off-screen Android `WebView` rendering to OpenGL texture or native popup.
 
@@ -113,8 +113,8 @@ Embedded Chromium web pages, browser mouse/keyboard input, Discord Rich Presence
 | `setVehicleModel` | Missing | `CLuaCompatibilityDefs.cpp:49` | `CLuaElementDefs::SetElementModel` | Needs reading/writing CVehicle struct fields in libGTASA.so. |
 | `setVehicleRotation` | Missing | `CLuaCompatibilityDefs.cpp:59` | `CLuaElementDefs::SetElementRotation` | Needs reading/writing CVehicle struct fields in libGTASA.so. |
 | `toggleBrowserDevTools` | Missing | `CLuaBrowserDefs.cpp:49` | `ToggleBrowserDevTools` | Needs Android offscreen WebView render-to-texture bridge. |
-| `xmlCreateSubNode` | Missing | `CLuaCompatibilityDefs.cpp:65` | `CLuaXMLDefs::xmlCreateChild` | Needs TinyXML2 client-side parser integration. |
-| `xmlFindSubNode` | Missing | `CLuaCompatibilityDefs.cpp:62` | `CLuaXMLDefs::xmlNodeFindChild` | Needs TinyXML2 client-side parser integration. |
+| `xmlCreateSubNode` | **Implemented** | `CLuaCompatibilityDefs.cpp:65` | `CLuaXMLDefs::xmlCreateChild` | Operational on Android. (l_xmlCreateChild) |
+| `xmlFindSubNode` | **Implemented** | `CLuaCompatibilityDefs.cpp:62` | `CLuaXMLDefs::xmlNodeFindChild` | Operational on Android. (l_xmlFindChild) |
 | `xmlNodeFindChild` | Missing | `CLuaCompatibilityDefs.cpp:66` | `CLuaXMLDefs::xmlNodeFindChild` | Needs TinyXML2 client-side parser integration. |
-| `xmlNodeFindSubNode` | Missing | `CLuaCompatibilityDefs.cpp:64` | `CLuaXMLDefs::xmlNodeFindChild` | Needs TinyXML2 client-side parser integration. |
-| `xmlNodeGetSubNodes` | Missing | `CLuaCompatibilityDefs.cpp:63` | `CLuaXMLDefs::xmlNodeGetChildren` | Needs TinyXML2 client-side parser integration. |
+| `xmlNodeFindSubNode` | **Implemented** | `CLuaCompatibilityDefs.cpp:64` | `CLuaXMLDefs::xmlNodeFindChild` | Operational on Android. (l_xmlFindChild) |
+| `xmlNodeGetSubNodes` | **Implemented** | `CLuaCompatibilityDefs.cpp:63` | `CLuaXMLDefs::xmlNodeGetChildren` | Operational on Android. (l_xmlNodeGetChildren) |

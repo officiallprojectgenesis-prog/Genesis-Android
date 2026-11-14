@@ -2,6 +2,7 @@
 
 #include "LuaApiExtra.h"
 #include "LuaVMStub.h"
+#include "LuaStoredElementApi.h"
 #include "../gtasa/GameEngine.h"
 
 extern "C" {
@@ -1444,6 +1445,10 @@ static int DestroyElementDispatch(lua_State* L) {
     }
     const uint32_t id = ElementIdOf(L, 1);
     if (WorldRPG::Game::ReleaseScriptPed(id)) {
+        lua_pushboolean(L, 1);
+        return 1;
+    }
+    if (ReleaseStoredElement(id)) {
         lua_pushboolean(L, 1);
         return 1;
     }

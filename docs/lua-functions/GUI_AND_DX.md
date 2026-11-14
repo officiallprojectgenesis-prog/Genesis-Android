@@ -40,7 +40,7 @@
 | `dxGetBlendMode` | Missing | `CLuaDrawingDefs.cpp:64` | `DxGetBlendMode` | Needs Android Canvas / OpenGL ES draw line routing. |
 | `dxGetFontHeight` | **Implemented** | `CLuaDrawingDefs.cpp:42` | `DxGetFontHeight` | Operational on Android. (DxGetFontHeight) |
 | `dxGetMaterialSize` | Missing | `CLuaDrawingDefs.cpp:48` | `DxGetMaterialSize` | Needs Android Canvas / OpenGL ES draw line routing. |
-| `dxGetPixelColor` | **Implemented** | `CLuaDrawingDefs.cpp:61` | `DxGetPixelColor` | Operational on Android. Plain pixels only, same as desktop. (DxGetPixelColor) |
+| `dxGetPixelColor` | **Implemented** | `CLuaDrawingDefs.cpp:61` | `DxGetPixelColor` | Operational on Android. (DxGetPixelColor) |
 | `dxGetPixelsFormat` | **Implemented** | `CLuaDrawingDefs.cpp:59` | `DxGetPixelsFormat` | Operational on Android. (DxGetPixelsFormat) |
 | `dxGetPixelsSize` | Missing | `CLuaDrawingDefs.cpp:58` | `DxGetPixelsSize` | Needs Android Canvas / OpenGL ES draw line routing. |
 | `dxGetStatus` | Missing | `CLuaDrawingDefs.cpp:54` | `DxGetStatus` | Needs Android Canvas / OpenGL ES draw line routing. |
@@ -50,7 +50,7 @@
 | `dxIsAspectRatioAdjustmentEnabled` | Missing | `CLuaDrawingDefs.cpp:66` | `DxIsAspectRatioAdjustmentEnabled` | Needs Android Canvas / OpenGL ES draw line routing. |
 | `dxSetAspectRatioAdjustmentEnabled` | Missing | `CLuaDrawingDefs.cpp:65` | `DxSetAspectRatioAdjustmentEnabled` | Needs Android Canvas / OpenGL ES draw line routing. |
 | `dxSetBlendMode` | Missing | `CLuaDrawingDefs.cpp:63` | `DxSetBlendMode` | Needs Android Canvas / OpenGL ES draw line routing. |
-| `dxSetPixelColor` | **Implemented** | `CLuaDrawingDefs.cpp:62` | `DxSetPixelColor` | Operational on Android. Plain pixels only, same as desktop. (DxSetPixelColor) |
+| `dxSetPixelColor` | **Implemented** | `CLuaDrawingDefs.cpp:62` | `DxSetPixelColor` | Operational on Android. (DxSetPixelColor) |
 | `dxSetRenderTarget` | Missing | `CLuaDrawingDefs.cpp:52` | `DxSetRenderTarget` | Needs Android Canvas / OpenGL ES draw line routing. |
 | `dxSetShaderTessellation` | Missing | `CLuaDrawingDefs.cpp:50` | `DxSetShaderTessellation` | Needs GLSL ES 3.0 shader pipeline (translating desktop D3DX9 HLSL). |
 | `dxSetShaderTransform` | Missing | `CLuaDrawingDefs.cpp:51` | `DxSetShaderTransform` | Needs GLSL ES 3.0 shader pipeline (translating desktop D3DX9 HLSL). |

@@ -15,6 +15,8 @@
 #include "LuaApiExtra.h"
 #include "LuaGuiApi.h"
 #include "LuaVMStub.h"
+#include "LuaCameraApi.h"
+#include "LuaStoredElementApi.h"
 #include "ResourceLoader.h"
 #include "ServerWorld.h"
 #include "../gtasa/GameEngine.h"
@@ -199,7 +201,9 @@ bool KnownElement(uint32_t id) {
     if (id == 0) return false;
     if (Find(id)) return true;
     if (id == ServerWorld::LocalPlayer() || id == ServerWorld::LastResourceRoot() || GuiIsElement(id)) return true;
-    if (Game::ScriptPedAlive(id) || SoundElementAlive(id)) return true;
+    if (Game::ScriptPedAlive(id) || SoundElementAlive(id) || CameraElementAlive(id) || FoliageElementAlive(id) ||
+        EffectElementAlive(id))
+        return true;
     float x = 0, y = 0, z = 0;
     return ServerWorld::ElementPose(id, x, y, z) || Game::CopyRemotePose(id, x, y, z);
 }
@@ -766,8 +770,16 @@ int GetElementType(lua_State* L) {
         lua_pushstring(L, gui);
         return 1;
     }
+    if (CameraElementAlive(id)) {
+        lua_pushstring(L, "camera");
+        return 1;
+    }
     if (SoundElementAlive(id)) {
         lua_pushstring(L, "sound");
+        return 1;
+    }
+    if (const char* stored = StoredElementType(id)) {
+        lua_pushstring(L, stored);
         return 1;
     }
     if (Game::ScriptPedAlive(id)) {
@@ -784,6 +796,10 @@ int GetElementType(lua_State* L) {
 // GUI ids are handled by DestroyElementDispatch before this binding runs.
 int DestroyElement(lua_State* L) {
     const uint32_t id = ElementIdOf(L, 1);
+    if (ReleaseStoredElement(id)) {
+        lua_pushboolean(L, 1);
+        return 1;
+    }
     if (!KnownElement(id) || !Find(id)) {
         PushFail(L);
         return 1;

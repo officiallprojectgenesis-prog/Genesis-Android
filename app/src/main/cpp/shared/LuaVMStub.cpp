@@ -1,5 +1,13 @@
 #include "DebugFlags.h"
 #include "LuaVMStub.h"
+#include "LuaCameraApi.h"
+#include "LuaFieldApi.h"
+#include "LuaUtilApi.h"
+#include "LuaFileApi.h"
+#include "LuaXmlApi.h"
+#include "LuaStoredElementApi.h"
+#include "LuaClothesApi.h"
+#include "LuaWeaponApi.h"
 #include "LuaApiExtra.h"
 #include "LuaGuiApi.h"
 #include "ResourceLoader.h"
@@ -42,7 +50,15 @@ struct DxRuntime {
     std::unordered_map<std::string, std::vector<int>> handlers;
     // Resource that registered each handler, keyed by registry ref ("" for core scripts).
     std::unordered_map<int, std::string> handlerOwner;
-    struct Timer { int ref = 0; int times = 1; int interval = 50; std::uint64_t next = 0; std::string owner; };
+    struct Timer {
+        int ref = 0;
+        int times = 1;
+        int interval = 50;
+        std::uint64_t next = 0;
+        std::uint64_t left = 0;
+        bool paused = false;
+        std::string owner;
+    };
     std::vector<Timer> timers;
     struct PendingChat { std::string text; int r = 255, g = 255, b = 255; };
     std::vector<PendingChat> pendingChat;
@@ -62,7 +78,19 @@ static std::mutex g_inputMutex;
 static std::vector<ScriptInput> g_inputQueue;
 // playSound handles. The login music is an http URL (login_audio_client.lua).
 constexpr uint32_t kFirstSoundId = 0x61000001u;
-struct SoundSlot { uint32_t id = 0; bool alive = false; float volume = 1.f; };
+struct SoundSlot {
+    uint32_t id = 0;
+    bool alive = false;
+    float volume = 1.f;
+    bool loop = false;
+    bool paused = false;
+    double position = 0;
+    std::uint64_t positionAt = 0;
+    float minDistance = 5.f;
+    float maxDistance = 20.f;
+    float speed = 1.f;
+    float pan = 0.f;
+};
 static std::mutex g_soundMu;
 static SoundSlot g_sounds[8];
 static uint32_t g_nextSound = kFirstSoundId;
@@ -273,6 +301,46 @@ static int l_addEventHandler(lua_State* L) {
     return 0;
 }
 
+static int l_getEventHandlers(lua_State* L) {
+    // CLuaFunctionDefs::GetEventHandlers (142-171). Handlers are kept by event name.
+    const char* name = lua_tostring(L, 1);
+    if (!name || ElementIdOf(L, 2) == 0) {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+    lua_newtable(L);
+    const auto found = g_dx.handlers.find(name);
+    if (found == g_dx.handlers.end()) return 1;
+    int index = 0;
+    for (int ref : found->second) {
+        lua_pushinteger(L, ++index);
+        lua_rawgeti(L, LUA_REGISTRYINDEX, ref);
+        lua_settable(L, -3);
+    }
+    return 1;
+}
+
+static int l_triggerEvent(lua_State* L) {
+    // CLuaFunctionDefs::TriggerEvent (174-201). Calls the handlers stored for the name.
+    const char* name = lua_tostring(L, 1);
+    const uint32_t id = ElementIdOf(L, 2);
+    if (!name || id == 0) {
+        lua_pushnil(L);
+        return 1;
+    }
+    const int top = lua_gettop(L);
+    const int nargs = top - 2;
+    lua_getglobal(L, "source");
+    PushElement(L, id);
+    lua_setglobal(L, "source");
+    for (int i = 3; i <= top; ++i) lua_pushvalue(L, i);
+    g_eventCancelled = false;
+    fireHandlers(name, nargs);
+    lua_setglobal(L, "source");
+    lua_pushboolean(L, g_eventCancelled ? 0 : 1);
+    return 1;
+}
+
 static int l_dxDrawRectangle(lua_State* L) {
     char line[96];
     std::snprintf(line, sizeof(line), "R %.1f %.1f %.1f %.1f %u\n",
@@ -432,6 +500,18 @@ static int l_getCursorPosition(lua_State* L) {
     return 5;
 }
 
+static int l_setCursorPosition(lua_State* L) {
+    // CLuaFunctionDefs::SetCursorPosition writes absolute pixels. The phone keeps that point for getCursorPosition.
+    if (!lua_isnumber(L, 1) || !lua_isnumber(L, 2)) {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+    g_cursorX = static_cast<float>(lua_tonumber(L, 1));
+    g_cursorY = static_cast<float>(lua_tonumber(L, 2));
+    lua_pushboolean(L, 1);
+    return 1;
+}
+
 // Desktop setPlayerHudComponentVisible(component, show) and its old name showPlayerHudComponent.
 static int l_setPlayerHudComponentVisible(lua_State* L) {
     const char* component = luaL_optstring(L, 1, "");
@@ -468,9 +548,137 @@ static int l_setTimer(lua_State* L) {
     timer.times = times == 0 ? -1 : times;
     timer.interval = interval;
     timer.next = DxNow() + static_cast<std::uint64_t>(interval);
+    timer.left = static_cast<std::uint64_t>(interval);
     timer.owner = g_dx.owner;
     g_dx.timers.push_back(timer);
     lua_pushinteger(L, timer.ref);
+    return 1;
+}
+
+// CLuaTimerDefs::IsTimer (209-224). The phone's setTimer returns the registry ref,
+// which is the handle these two functions accept.
+static DxRuntime::Timer* FindTimer(int ref) {
+    for (auto& timer : g_dx.timers)
+        if (timer.ref == ref && timer.times != 0) return &timer;
+    return nullptr;
+}
+
+static int l_isTimer(lua_State* L) {
+    if (!lua_isinteger(L, 1) && !lua_isnumber(L, 1)) {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+    lua_pushboolean(L, FindTimer(static_cast<int>(lua_tointeger(L, 1))) ? 1 : 0);
+    return 1;
+}
+
+static int l_killTimer(lua_State* L) {
+    // CLuaTimerDefs::KillTimer (95-118). Removing the timer also drops its callback.
+    if (!lua_isinteger(L, 1) && !lua_isnumber(L, 1)) {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+    const int ref = static_cast<int>(lua_tointeger(L, 1));
+    DxRuntime::Timer* timer = FindTimer(ref);
+    if (!timer) {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+    timer->times = 0;
+    luaL_unref(L, LUA_REGISTRYINDEX, ref);
+    lua_pushboolean(L, 1);
+    return 1;
+}
+
+static int l_resetTimer(lua_State* L) {
+    if (!lua_isnumber(L, 1)) {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+    DxRuntime::Timer* timer = FindTimer(static_cast<int>(lua_tointeger(L, 1)));
+    if (!timer) {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+    timer->left = static_cast<std::uint64_t>(timer->interval);
+    timer->next = DxNow() + timer->left;
+    lua_pushboolean(L, 1);
+    return 1;
+}
+
+static int l_setTimerPaused(lua_State* L) {
+    if (!lua_isnumber(L, 1) || lua_type(L, 2) != LUA_TBOOLEAN) {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+    DxRuntime::Timer* timer = FindTimer(static_cast<int>(lua_tointeger(L, 1)));
+    if (!timer) {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+    const bool pause = lua_toboolean(L, 2) != 0;
+    const auto now = DxNow();
+    if (pause && !timer->paused)
+        timer->left = timer->next > now ? timer->next - now : 0;
+    else if (!pause && timer->paused)
+        timer->next = now + timer->left;
+    timer->paused = pause;
+    lua_pushboolean(L, 1);
+    return 1;
+}
+
+static int l_isTimerPaused(lua_State* L) {
+    if (!lua_isnumber(L, 1)) {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+    DxRuntime::Timer* timer = FindTimer(static_cast<int>(lua_tointeger(L, 1)));
+    if (!timer) {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+    lua_pushboolean(L, timer->paused ? 1 : 0);
+    return 1;
+}
+
+static int l_getTimerDetails(lua_State* L) {
+    if (!lua_isnumber(L, 1)) {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+    DxRuntime::Timer* timer = FindTimer(static_cast<int>(lua_tointeger(L, 1)));
+    if (!timer) {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+    const auto now = DxNow();
+    const auto left = timer->paused ? timer->left : (timer->next > now ? timer->next - now : 0);
+    lua_pushinteger(L, static_cast<lua_Integer>(left));
+    lua_pushinteger(L, timer->times < 0 ? 0 : timer->times);
+    lua_pushinteger(L, timer->interval);
+    return 3;
+}
+
+static int l_getTimers(lua_State* L) {
+    double limit = 0;
+    if (!lua_isnoneornil(L, 1)) {
+        if (!lua_isnumber(L, 1)) {
+            lua_pushboolean(L, 0);
+            return 1;
+        }
+        limit = lua_tonumber(L, 1);
+    }
+    const auto now = DxNow();
+    lua_newtable(L);
+    int index = 0;
+    for (const auto& timer : g_dx.timers) {
+        if (timer.times == 0) continue;
+        const auto left = timer.paused ? timer.left : (timer.next > now ? timer.next - now : 0);
+        if (limit != 0 && static_cast<double>(left) > limit) continue;
+        lua_pushinteger(L, ++index);
+        lua_pushinteger(L, timer.ref);
+        lua_settable(L, -3);
+    }
     return 1;
 }
 
@@ -603,14 +811,6 @@ static int l_getGroundPosition(lua_State* L) {
     }
     lua_pushnumber(L, static_cast<lua_Number>(ground));
     return 1;
-}
-
-// Desktop MTA getElementRotation(): rx, ry, rz. Not tracked on the phone yet.
-static int l_getElementRotation(lua_State* L) {
-    lua_pushnumber(L, 0.0);
-    lua_pushnumber(L, 0.0);
-    lua_pushnumber(L, 0.0);
-    return 3;
 }
 
 // Desktop MTA getDistanceBetweenPoints2D/3D(x1, y1, [z1], x2, y2, [z2]).
@@ -1047,6 +1247,10 @@ static int l_playSound(lua_State* L) {
             if (slot.alive) continue;
             slot.alive = true;
             slot.volume = 1.f;
+            slot.loop = loop;
+            slot.paused = false;
+            slot.position = 0;
+            slot.positionAt = DxNow();
             slot.id = g_nextSound++;
             if (g_nextSound < kFirstSoundId) g_nextSound = kFirstSoundId;
             id = slot.id;
@@ -1116,6 +1320,200 @@ static int l_getSoundVolume(lua_State* L) {
     return 1;
 }
 
+// CLuaAudioDefs::SetSoundLooped / IsSoundLooped (764-771). The player form of
+// pause is voice chat, which this phone does not have, so a player returns false.
+static SoundSlot* FindSound(uint32_t id) {
+    for (auto& slot : g_sounds)
+        if (slot.alive && slot.id == id) return &slot;
+    return nullptr;
+}
+
+static int l_setSoundLooped(lua_State* L) {
+    const uint32_t id = ElementIdOf(L, 1);
+    if (lua_type(L, 2) != LUA_TBOOLEAN) {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+    std::lock_guard<std::mutex> lock(g_soundMu);
+    SoundSlot* slot = FindSound(id);
+    if (!slot) {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+    slot->loop = lua_toboolean(L, 2) != 0;
+    char line[32];
+    std::snprintf(line, sizeof(line), "%u|%d", id, slot->loop ? 1 : 0);
+    ::WorldRPG::JniBridge::PostGameLine(14, line);
+    lua_pushboolean(L, 1);
+    return 1;
+}
+
+static int l_isSoundLooped(lua_State* L) {
+    const uint32_t id = ElementIdOf(L, 1);
+    std::lock_guard<std::mutex> lock(g_soundMu);
+    const SoundSlot* slot = FindSound(id);
+    if (!slot) {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+    lua_pushboolean(L, slot->loop ? 1 : 0);
+    return 1;
+}
+
+static int l_setSoundPaused(lua_State* L) {
+    const uint32_t id = ElementIdOf(L, 1);
+    if (lua_type(L, 2) != LUA_TBOOLEAN) {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+    std::lock_guard<std::mutex> lock(g_soundMu);
+    SoundSlot* slot = FindSound(id);
+    if (!slot) {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+    const bool pause = lua_toboolean(L, 2) != 0;
+    const auto now = DxNow();
+    if (pause && !slot->paused)
+        slot->position += static_cast<double>(now - slot->positionAt) / 1000.0;
+    else if (!pause && slot->paused)
+        slot->positionAt = now;
+    slot->paused = pause;
+    char line[32];
+    std::snprintf(line, sizeof(line), "%u|%d", id, slot->paused ? 1 : 0);
+    ::WorldRPG::JniBridge::PostGameLine(15, line);
+    lua_pushboolean(L, 1);
+    return 1;
+}
+
+static int l_isSoundPaused(lua_State* L) {
+    const uint32_t id = ElementIdOf(L, 1);
+    std::lock_guard<std::mutex> lock(g_soundMu);
+    const SoundSlot* slot = FindSound(id);
+    if (!slot) {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+    lua_pushboolean(L, slot->paused ? 1 : 0);
+    return 1;
+}
+
+static double SoundPosition(const SoundSlot& slot) {
+    if (slot.paused) return slot.position;
+    return slot.position + static_cast<double>(DxNow() - slot.positionAt) / 1000.0;
+}
+
+static int l_getSoundPosition(lua_State* L) {
+    const uint32_t id = ElementIdOf(L, 1);
+    std::lock_guard<std::mutex> lock(g_soundMu);
+    const SoundSlot* slot = FindSound(id);
+    if (!slot) {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+    lua_pushnumber(L, SoundPosition(*slot));
+    return 1;
+}
+
+static int l_setSoundPosition(lua_State* L) {
+    const uint32_t id = ElementIdOf(L, 1);
+    if (!lua_isnumber(L, 2)) {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+    double seconds = lua_tonumber(L, 2);
+    if (!std::isfinite(seconds) || seconds < 0) {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+    std::lock_guard<std::mutex> lock(g_soundMu);
+    SoundSlot* slot = FindSound(id);
+    if (!slot) {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+    slot->position = seconds;
+    slot->positionAt = DxNow();
+    char line[64];
+    std::snprintf(line, sizeof(line), "%u|%.3f", id, seconds);
+    ::WorldRPG::JniBridge::PostGameLine(16, line);
+    lua_pushboolean(L, 1);
+    return 1;
+}
+
+static bool g_diagFrontEnd = false;
+
+static int l_playSoundFrontEnd(lua_State* L) {
+    // CLuaAudioDefs::PlaySoundFrontEnd 2491-2516. Ids above 101 are rejected.
+    // The frontend bank is not hooked, so a valid id is accepted and logged once.
+    if (!lua_isnumber(L, 1)) {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+    const int id = static_cast<int>(lua_tointeger(L, 1));
+    if (id < 0 || id > 101) {
+        LUA_LOGE("playSoundFrontEnd: invalid sound ID. Valid sound IDs are 0 - 101.");
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+    if (!g_diagFrontEnd) {
+        g_diagFrontEnd = true;
+        LUA_LOGE("DIAG playSoundFrontEnd: CAudioEngine::PlayFrontEndSound is not hooked");
+    }
+    lua_pushboolean(L, 1);
+    return 1;
+}
+
+static bool g_diagSoundSpace = false;
+
+static int SetSoundNumber(lua_State* L, float SoundSlot::*field, float minValue, float maxValue) {
+    const uint32_t id = ElementIdOf(L, 1);
+    if (!lua_isnumber(L, 2)) {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+    const float value = static_cast<float>(lua_tonumber(L, 2));
+    if (!std::isfinite(value) || value < minValue || value > maxValue) {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+    std::lock_guard<std::mutex> lock(g_soundMu);
+    SoundSlot* slot = FindSound(id);
+    if (!slot) {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+    slot->*field = value;
+    if (!g_diagSoundSpace) {
+        g_diagSoundSpace = true;
+        LUA_LOGE("DIAG sound distance/speed/pan: the MediaPlayer has no 3D mixer; the value is stored");
+    }
+    lua_pushboolean(L, 1);
+    return 1;
+}
+
+static int l_setSoundMaxDistance(lua_State* L) { return SetSoundNumber(L, &SoundSlot::maxDistance, 0.f, 1.0e6f); }
+static int l_setSoundMinDistance(lua_State* L) { return SetSoundNumber(L, &SoundSlot::minDistance, 0.f, 1.0e6f); }
+static int l_setSoundSpeed(lua_State* L) { return SetSoundNumber(L, &SoundSlot::speed, 0.0001f, 100.f); }
+static int l_setSoundPan(lua_State* L) { return SetSoundNumber(L, &SoundSlot::pan, -1.f, 1.f); }
+
+static int GetSoundNumber(lua_State* L, float SoundSlot::*field) {
+    const uint32_t id = ElementIdOf(L, 1);
+    std::lock_guard<std::mutex> lock(g_soundMu);
+    const SoundSlot* slot = FindSound(id);
+    if (!slot) {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+    lua_pushnumber(L, slot->*field);
+    return 1;
+}
+
+static int l_getSoundMaxDistance(lua_State* L) { return GetSoundNumber(L, &SoundSlot::maxDistance); }
+static int l_getSoundMinDistance(lua_State* L) { return GetSoundNumber(L, &SoundSlot::minDistance); }
+static int l_getSoundSpeed(lua_State* L) { return GetSoundNumber(L, &SoundSlot::speed); }
+static int l_getSoundPan(lua_State* L) { return GetSoundNumber(L, &SoundSlot::pan); }
+
 static int l_setWeather(lua_State* L) {
     if (!lua_isnumber(L, 1)) {
         lua_pushboolean(L, 0);
@@ -1140,6 +1538,21 @@ static void installWardrobeBindings(lua_State* L) {
         {"stopSound", l_stopSound},
         {"setSoundVolume", l_setSoundVolume},
         {"getSoundVolume", l_getSoundVolume},
+        {"setSoundLooped", l_setSoundLooped},
+        {"isSoundLooped", l_isSoundLooped},
+        {"setSoundPaused", l_setSoundPaused},
+        {"isSoundPaused", l_isSoundPaused},
+        {"getSoundPosition", l_getSoundPosition},
+        {"setSoundPosition", l_setSoundPosition},
+        {"playSoundFrontEnd", l_playSoundFrontEnd},
+        {"setSoundMaxDistance", l_setSoundMaxDistance},
+        {"getSoundMaxDistance", l_getSoundMaxDistance},
+        {"setSoundMinDistance", l_setSoundMinDistance},
+        {"getSoundMinDistance", l_getSoundMinDistance},
+        {"setSoundSpeed", l_setSoundSpeed},
+        {"getSoundSpeed", l_getSoundSpeed},
+        {"setSoundPan", l_setSoundPan},
+        {"getSoundPan", l_getSoundPan},
     };
     for (const auto& bind : binds) {
         lua_pushcfunction(L, bind.fn);
@@ -1153,6 +1566,8 @@ static void installDxBindings(lua_State* L) {
         {"cancelEvent", l_cancelEvent},
         {"wasEventCancelled", l_wasEventCancelled},
         {"addEventHandler", l_addEventHandler},
+        {"getEventHandlers", l_getEventHandlers},
+        {"triggerEvent", l_triggerEvent},
         {"removeEventHandler", l_removeEventHandler},
         {"dxDrawRectangle", l_dxDrawRectangle},
         {"dxDrawText", l_dxDrawText},
@@ -1161,6 +1576,7 @@ static void installDxBindings(lua_State* L) {
         {"tocolor", l_tocolor},
         {"guiGetScreenSize", l_guiGetScreenSize},
         {"getCursorPosition", l_getCursorPosition},
+        {"setCursorPosition", l_setCursorPosition},
         {"getTickCount", l_getTickCount},
         {"getNetworkStats", l_getNetworkStats},
         {"getNetworkUsageData", l_getNetworkUsageData},
@@ -1173,12 +1589,16 @@ static void installDxBindings(lua_State* L) {
         {"getPlayerWantedLevel", l_num0},
         {"getElementModel", l_num0},
         {"getElementVelocity", l_getElementVelocity},
-        {"getElementRotation", l_getElementRotation},
         {"getPlayerName", l_getPlayerName},
         {"bindKey", l_true},
         {"unbindKey", l_true},
-        {"isTimer", l_false},
-        {"killTimer", l_true},
+        {"isTimer", l_isTimer},
+        {"killTimer", l_killTimer},
+        {"resetTimer", l_resetTimer},
+        {"setTimerPaused", l_setTimerPaused},
+        {"isTimerPaused", l_isTimerPaused},
+        {"getTimerDetails", l_getTimerDetails},
+        {"getTimers", l_getTimers},
         {"getDistanceBetweenPoints3D", l_getDistanceBetweenPoints3D},
         {"getDistanceBetweenPoints2D", l_getDistanceBetweenPoints2D},
         {"getPedMoveState", l_getPedMoveState},
@@ -1276,6 +1696,14 @@ static void installDxBindings(lua_State* L) {
     InstallExtraBindings(L);
     installWardrobeBindings(L);
     InstallCategoryLua(L);
+    InstallCameraLua(L);
+    InstallFieldLua(L);
+    InstallUtilLua(L);
+    InstallFileLua(L);
+    InstallXmlLua(L);
+    InstallStoredElementLua(L);
+    InstallClothesLua(L);
+    InstallWeaponLua(L);
     // These two stay on this file even if extra bindings register the same names.
     lua_pushcfunction(L, l_getNetworkStats);
     lua_setglobal(L, "getNetworkStats");
@@ -1763,7 +2191,7 @@ std::string LuaVMStub::pumpDx() {
     const auto now = DxNow();
     // Index loop: a timer callback may call setTimer, which reallocates g_dx.timers.
     for (size_t i = 0; i < g_dx.timers.size(); ++i) {
-        if (g_dx.timers[i].times == 0 || now < g_dx.timers[i].next) continue;
+        if (g_dx.timers[i].times == 0 || g_dx.timers[i].paused || now < g_dx.timers[i].next) continue;
         {
             OwnerScope scope(g_dx.timers[i].owner);
             lua_rawgeti(pImpl_->L, LUA_REGISTRYINDEX, g_dx.timers[i].ref);
@@ -1781,6 +2209,7 @@ std::string LuaVMStub::pumpDx() {
     ApplyScriptInput();
     PumpEndedSounds();
     g_dx.frame.clear();
+    PulseCamera();
     // login_camera.lua moves the tour in onClientPreRender, before the DX menu.
     fireHandlers("onClientPreRender", 0);
     if (!WorldRPG::Debug::Flag("nodx")) fireHandlers("onClientRender", 0);
@@ -2020,6 +2449,7 @@ void ActiveVmOnResourceStop(const uint8_t* body, size_t length, size_t bits) {
         if (gone.started) RunResourceStop(g_dx.L, gone.name, gone.rootElement);
         else DropResourceState(g_dx.L, gone.name);
     }
+    ReleaseCameraOwner(gone.name);
     LUA_LOGI("LuaVM: resource %s stopped (net id %u, scripts ran: %s)", gone.name.c_str(), static_cast<unsigned>(netId),
              gone.started ? "yes" : "no");
 }

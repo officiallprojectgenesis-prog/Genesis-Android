@@ -100,6 +100,8 @@ public final class EngineHostActivity extends GTASA {
     private native void nativeSoundEnded(int id);
     private final java.util.HashMap<Integer, MediaPlayer> sounds = new java.util.HashMap<>();
     private final java.util.HashMap<Integer, Float> soundVolume = new java.util.HashMap<>();
+    private final java.util.HashMap<Integer, Boolean> soundLoop = new java.util.HashMap<>();
+    private final java.util.HashMap<Integer, Boolean> soundPaused = new java.util.HashMap<>();
     private native boolean nativeSendChat(String text);
     private native void nativeDropConnection();
     private native String nativeMapSnapshot();
@@ -581,6 +583,9 @@ public final class EngineHostActivity extends GTASA {
             player.setOnPreparedListener(ready -> {
                 Float gain = soundVolume.get(id);
                 if (gain != null) ready.setVolume(gain, gain);
+                Boolean looped = soundLoop.get(id);
+                if (looped != null) ready.setLooping(looped);
+                if (Boolean.TRUE.equals(soundPaused.get(id))) return;
                 ready.start();
             });
             player.setOnCompletionListener(done -> nativeSoundEnded(id));
@@ -597,6 +602,8 @@ public final class EngineHostActivity extends GTASA {
         try { id = Integer.parseInt(body); }
         catch (NumberFormatException error) { return; }
         soundVolume.remove(id);
+        soundLoop.remove(id);
+        soundPaused.remove(id);
         MediaPlayer player = sounds.remove(id);
         if (player == null) return;
         player.setOnCompletionListener(null);
@@ -618,6 +625,53 @@ public final class EngineHostActivity extends GTASA {
         MediaPlayer player = sounds.get(id);
         if (player == null) return;
         try { player.setVolume(gain, gain); } catch (Exception ignored) {}
+    }
+
+    private void loopUrlSound(String body) {
+        int bar = body.indexOf('|');
+        if (bar <= 0) return;
+        int id;
+        boolean loop;
+        try {
+            id = Integer.parseInt(body.substring(0, bar));
+            loop = "1".equals(body.substring(bar + 1));
+        } catch (NumberFormatException error) { return; }
+        soundLoop.put(id, loop);
+        MediaPlayer player = sounds.get(id);
+        if (player == null) return;
+        try { player.setLooping(loop); } catch (Exception ignored) {}
+    }
+
+    private void pauseUrlSound(String body) {
+        int bar = body.indexOf('|');
+        if (bar <= 0) return;
+        int id;
+        boolean paused;
+        try {
+            id = Integer.parseInt(body.substring(0, bar));
+            paused = "1".equals(body.substring(bar + 1));
+        } catch (NumberFormatException error) { return; }
+        soundPaused.put(id, paused);
+        MediaPlayer player = sounds.get(id);
+        if (player == null) return;
+        try {
+            if (paused) player.pause();
+            else if (!player.isPlaying()) player.start();
+        } catch (Exception ignored) {}
+    }
+
+    private void seekUrlSound(String body) {
+        int bar = body.indexOf('|');
+        if (bar <= 0) return;
+        int id;
+        float seconds;
+        try {
+            id = Integer.parseInt(body.substring(0, bar));
+            seconds = Float.parseFloat(body.substring(bar + 1));
+        } catch (NumberFormatException error) { return; }
+        MediaPlayer player = sounds.get(id);
+        if (player == null) return;
+        try { player.seekTo(Math.max(0, (int) (seconds * 1000f))); } catch (Exception ignored) {}
     }
 
     private void showDisconnectDialog(String message) {
@@ -668,6 +722,18 @@ public final class EngineHostActivity extends GTASA {
             }
             if (kind == 13) {
                 volumeUrlSound(text);
+                return;
+            }
+            if (kind == 14) {
+                loopUrlSound(text);
+                return;
+            }
+            if (kind == 15) {
+                pauseUrlSound(text);
+                return;
+            }
+            if (kind == 16) {
+                seekUrlSound(text);
                 return;
             }
             if (kind == 10) {

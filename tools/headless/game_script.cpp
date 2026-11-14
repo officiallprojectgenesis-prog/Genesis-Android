@@ -370,6 +370,9 @@ void NoteScriptCamera(float, float, float, float, float, float) {}
 void ClearScriptCamera() {}
 bool NoteScriptTime(int, int) { return false; }
 bool NoteScriptWeather(int) { return false; }
+bool CopyScriptWeather(int&) { return false; }
+bool CopyScriptPedFacts(uint32_t, int&, float&, bool&) { return false; }
+void NoteLocalHealth(float) {}
 
 void NoteDamage(uint32_t, float, uint8_t) {}
 bool ConsumeDamage(uint32_t&, uint8_t&) { return false; }
@@ -377,6 +380,8 @@ void NoteRemoteAim(uint32_t, float, float, int, int, bool, bool) {}
 void NoteRemoteWeapon(uint32_t, int) {}
 bool RemoteFacingLocal(uint32_t, float, float) { return false; }
 void CopyOnFoot(float, float, float, OnFootKeys& keys) { keys = {}; }
+void ConsumeLocalJump() {}
+void ConsumeLocalAttack() {}
 void NoteRemotePlayerSync(uint32_t, float, float, float, float, float, float, float, bool, int, int, float, bool, bool, bool, float, bool, float) {}
 void NoteRemotePed(uint32_t, float, float, float, float, float, float, float, bool) {}
 void SetPedHost(uint32_t, bool) {}
@@ -519,6 +524,8 @@ void ResolvePedVitalsLockCurrent(uint32_t, float, float) {}
 void UnlockPedVitals(uint32_t) {}
 void ForgetPedNativeTaskState(uint32_t) {}
 void SetPedVitals(uint32_t, float, float) {}
+void NoteRemoteClothes(uint32_t, const std::vector<WorldRPG::Entity::PedClothes>&) {}
+void NoteRemoteButtons(uint32_t, uint8_t) {}
 
 // ---------------------------------------------------------------------------
 // GameEngine class: no libGTASA on the host, every call reports "not available".

@@ -69,11 +69,18 @@ int CopyActors(ActorSpawn* out, int capacity, int pedLimit = -1, int vehicleLimi
 void SetActorHost(uint32_t id, bool host);
 bool ActorHosted(uint32_t id);
 bool ElementPose(uint32_t id, float& x, float& y, float& z);
+bool CopyVisual(uint32_t id, ActorSpawn& out);
 const char* ElementKindName(uint32_t id);
 // Sync time context from ENTITY_ADD (0 when this id has none). Desktop CClientEntity::GetSyncTimeContext.
 uint8_t SyncTimeContext(uint32_t id);
 // The ENTITY_ADD ped body beyond pose and model (PedSpawn.h). False when the id is not a ped from ENTITY_ADD.
 bool CopyPedSpawn(uint32_t id, Entity::PedSpawn& out);
+// PLAYER_QUIT (5): CPacketHandler::Packet_PlayerQuit -> CClientGame::QuitPlayer deletes the player element.
+void OnPlayerQuit(uint32_t id);
+// A remote player this session knows (PLAYER_LIST nick, PLAYER_SPAWN skin, or a body record of kind 1).
+bool IsKnownPlayer(uint32_t id);
+// A PLAYER_PURESYNC came from this id: it is a player (kind 1) even without a PLAYER_LIST or PLAYER_SPAWN record.
+void NotePlayerSeen(uint32_t id);
 
 // Radar blips and the F11 snapshot. Call on the game thread.
 void Tick(float playerX, float playerY, float playerZ);

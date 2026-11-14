@@ -5,9 +5,9 @@ Timers, event handling, network latent transfers, file I/O, XML parsing, JSON se
 ## Parity Status
 
 - **Total Functions:** 195
-- **Implemented:** 39 (20.0%)
-- **Stubs:** 13
-- **Missing:** 143
+- **Implemented:** 150 (76.9%)
+- **Stubs:** 5
+- **Missing:** 40
 
 > **Technical Requirement:** Pure CPU/platform logic. Mostly ported or needs standard library wrappers (e.g. tinyxml2, sha256, zlib).
 
@@ -15,14 +15,14 @@ Timers, event handling, network latent transfers, file I/O, XML parsing, JSON se
 
 | Lua Function | Status | Desktop Source Ref | Desktop Handler | Conversion Requirement / Implementation Notes |
 |---|---|---|---|---|
-| `abortRemoteRequest` | **Implemented** | `CLuaNetworkDefs.cpp:29` | `AbortRemoteRequest` | Operational on Android. Drops the call so a late completion skips the callback. (LuaAbortRemoteRequest) |
-| `addClothingModel` | Missing | `CLuaManager.cpp:193` | `CLuaFunctionDefs::AddClothingModel` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `addCommandHandler` | *Stub* | `CLuaManager.cpp:225` | `CLuaFunctionDefs::AddCommandHandler` | Currently stubbed: `l_true: lua_pushboolean(L, 1)`. Needs native engine wiring. |
+| `abortRemoteRequest` | **Implemented** | `CLuaNetworkDefs.cpp:29` | `AbortRemoteRequest` | Operational on Android. (LuaAbortRemoteRequest) |
+| `addClothingModel` | **Implemented** | `CLuaManager.cpp:193` | `CLuaFunctionDefs::AddClothingModel` | Operational on Android. (l_addClothingModel) |
+| `addCommandHandler` | **Implemented** | `CLuaManager.cpp:225` | `CLuaFunctionDefs::AddCommandHandler` | Operational on Android. (l_addCommandHandler) |
 | `addDebugHook` | Missing | `CLuaManager.cpp:236` | `CLuaFunctionDefs::AddDebugHook` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
 | `addEvent` | *Stub* | `CLuaManager.cpp:163` | `CLuaFunctionDefs::AddEvent` | Currently stubbed: `l_addEvent: lua_pushboolean(L, 1)`. Needs native engine wiring. |
 | `addEventHandler` | **Implemented** | `CLuaManager.cpp:164` | `CLuaFunctionDefs::AddEventHandler` | Operational on Android. (l_addEventHandler) |
-| `base64Decode` | Missing | `CLuaCryptDefs.cpp:28` | `ArgumentParserWarn<false, Base64decode>` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `base64Encode` | Missing | `CLuaCryptDefs.cpp:27` | `ArgumentParserWarn<false, Base64encode>` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
+| `base64Decode` | **Implemented** | `CLuaCryptDefs.cpp:28` | `ArgumentParserWarn<false, Base64decode>` | Operational on Android. (l_base64Decode) |
+| `base64Encode` | **Implemented** | `CLuaCryptDefs.cpp:27` | `ArgumentParserWarn<false, Base64encode>` | Operational on Android. (l_base64Encode) |
 | `bindKey` | *Stub* | `CLuaManager.cpp:209` | `CLuaFunctionDefs::BindKey` | Currently stubbed: `l_true: lua_pushboolean(L, 1)`. Needs native engine wiring. |
 | `bitAnd` | **Implemented** | `CLuaBitDefs.cpp:18` | `bitAnd` | Operational on Android. (BitAnd) |
 | `bitArShift` | **Implemented** | `CLuaBitDefs.cpp:20` | `bitArShift` | Operational on Android. (BitArShift) |
@@ -44,62 +44,62 @@ Timers, event handling, network latent transfers, file I/O, XML parsing, JSON se
 | `createTrayNotification` | Missing | `CLuaManager.cpp:185` | `CLuaFunctionDefs::CreateTrayNotification` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
 | `debugSleep` | Missing | `CLuaUtilDefs.cpp:70` | `DebugSleep` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
 | `decodeString` | Missing | `CLuaCryptDefs.cpp:33` | `DecodeString` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `deref` | Missing | `CLuaUtilDefs.cpp:44` | `Dereference` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `dofile` | Missing | `CLuaMain.cpp:86` | `CLuaUtilDefs::DisabledFunction` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
+| `deref` | **Implemented** | `CLuaUtilDefs.cpp:44` | `Dereference` | Operational on Android. (l_deref) |
+| `dofile` | **Implemented** | `CLuaMain.cpp:86` | `CLuaUtilDefs::DisabledFunction` | Operational on Android. (l_unsafe) |
 | `downloadFile` | Missing | `CLuaManager.cpp:206` | `CLuaFunctionDefs::DownloadFile` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
 | `encodeString` | Missing | `CLuaCryptDefs.cpp:32` | `EncodeString` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `executeCommandHandler` | *Stub* | `CLuaManager.cpp:227` | `CLuaFunctionDefs::ExecuteCommandHandler` | Currently stubbed: `DefaultValue(kFalse)`. Needs native engine wiring. |
-| `fetchRemote` | **Implemented** | `CLuaNetworkDefs.cpp:26` | `FetchRemote` | Operational on Android. Options-table callback reports the HTTP statusCode. https fails in the callback (code 1). Completions run from ResourceLoader::Pump. (LuaFetchRemote) |
-| `fileClose` | *Stub* | `CLuaFileDefs.cpp:47` | `fileClose` | Currently stubbed: `DefaultValue(kTrue)`. Needs native engine wiring. |
-| `fileCopy` | Missing | `CLuaFileDefs.cpp:44` | `fileCopy` | Needs local sandbox file I/O operations. |
-| `fileCreate` | Missing | `CLuaFileDefs.cpp:42` | `fileCreate` | Needs local sandbox file I/O operations. |
-| `fileDelete` | Missing | `CLuaFileDefs.cpp:46` | `fileDelete` | Needs local sandbox file I/O operations. |
-| `fileExists` | Missing | `CLuaFileDefs.cpp:43` | `fileExists` | Needs local sandbox file I/O operations. |
-| `fileFlush` | Missing | `CLuaFileDefs.cpp:48` | `fileFlush` | Needs local sandbox file I/O operations. |
-| `fileGetContents` | Missing | `CLuaFileDefs.cpp:56` | `ArgumentParser<fileGetContents>` | Needs local sandbox file I/O operations. |
-| `fileGetHash` | Missing | `CLuaFileDefs.cpp:57` | `ArgumentParser<fileGetHash>` | Needs local sandbox file I/O operations. |
-| `fileGetPath` | Missing | `CLuaFileDefs.cpp:53` | `fileGetPath` | Needs local sandbox file I/O operations. |
-| `fileGetPos` | Missing | `CLuaFileDefs.cpp:51` | `fileGetPos` | Needs local sandbox file I/O operations. |
-| `fileGetSize` | *Stub* | `CLuaFileDefs.cpp:52` | `fileGetSize` | Currently stubbed: `DefaultValue(kZero)`. Needs native engine wiring. |
-| `fileIsEOF` | Missing | `CLuaFileDefs.cpp:54` | `fileIsEOF` | Needs local sandbox file I/O operations. |
-| `fileOpen` | *Stub* | `CLuaFileDefs.cpp:41` | `fileOpen` | Currently stubbed: `FileOpen: lua_pushnil(L)`. Needs native engine wiring. |
-| `fileRead` | *Stub* | `CLuaFileDefs.cpp:49` | `fileRead` | Currently stubbed: `DefaultValue(kEmptyString)`. Needs native engine wiring. |
-| `fileRename` | Missing | `CLuaFileDefs.cpp:45` | `fileRename` | Needs local sandbox file I/O operations. |
-| `fileSetPos` | Missing | `CLuaFileDefs.cpp:55` | `fileSetPos` | Needs local sandbox file I/O operations. |
-| `fileWrite` | Missing | `CLuaFileDefs.cpp:50` | `fileWrite` | Needs local sandbox file I/O operations. |
+| `executeCommandHandler` | **Implemented** | `CLuaManager.cpp:227` | `CLuaFunctionDefs::ExecuteCommandHandler` | Operational on Android. (l_executeCommandHandler) |
+| `fetchRemote` | **Implemented** | `CLuaNetworkDefs.cpp:26` | `FetchRemote` | Operational on Android. (LuaFetchRemote) |
+| `fileClose` | **Implemented** | `CLuaFileDefs.cpp:47` | `fileClose` | Operational on Android. (l_fileClose) |
+| `fileCopy` | **Implemented** | `CLuaFileDefs.cpp:44` | `fileCopy` | Operational on Android. (l_fileCopy) |
+| `fileCreate` | **Implemented** | `CLuaFileDefs.cpp:42` | `fileCreate` | Operational on Android. (l_fileCreate) |
+| `fileDelete` | **Implemented** | `CLuaFileDefs.cpp:46` | `fileDelete` | Operational on Android. (l_fileDelete) |
+| `fileExists` | **Implemented** | `CLuaFileDefs.cpp:43` | `fileExists` | Operational on Android. (l_fileExists) |
+| `fileFlush` | **Implemented** | `CLuaFileDefs.cpp:48` | `fileFlush` | Operational on Android. (l_fileFlush) |
+| `fileGetContents` | **Implemented** | `CLuaFileDefs.cpp:56` | `ArgumentParser<fileGetContents>` | Operational on Android. (l_fileGetContents) |
+| `fileGetHash` | **Implemented** | `CLuaFileDefs.cpp:57` | `ArgumentParser<fileGetHash>` | Operational on Android. (l_fileGetHash) |
+| `fileGetPath` | **Implemented** | `CLuaFileDefs.cpp:53` | `fileGetPath` | Operational on Android. (l_fileGetPath) |
+| `fileGetPos` | **Implemented** | `CLuaFileDefs.cpp:51` | `fileGetPos` | Operational on Android. (l_fileGetPos) |
+| `fileGetSize` | **Implemented** | `CLuaFileDefs.cpp:52` | `fileGetSize` | Operational on Android. (l_fileGetSize) |
+| `fileIsEOF` | **Implemented** | `CLuaFileDefs.cpp:54` | `fileIsEOF` | Operational on Android. (l_fileIsEOF) |
+| `fileOpen` | **Implemented** | `CLuaFileDefs.cpp:41` | `fileOpen` | Operational on Android. (l_fileOpen) |
+| `fileRead` | **Implemented** | `CLuaFileDefs.cpp:49` | `fileRead` | Operational on Android. (l_fileRead) |
+| `fileRename` | **Implemented** | `CLuaFileDefs.cpp:45` | `fileRename` | Operational on Android. (l_fileRename) |
+| `fileSetPos` | **Implemented** | `CLuaFileDefs.cpp:55` | `fileSetPos` | Operational on Android. (l_fileSetPos) |
+| `fileWrite` | **Implemented** | `CLuaFileDefs.cpp:50` | `fileWrite` | Operational on Android. (l_fileWrite) |
 | `fromJSON` | **Implemented** | `CLuaUtilDefs.cpp:62` | `fromJSON` | Operational on Android. (FromJson) |
 | `generateKeyPair` | Missing | `CLuaCryptDefs.cpp:30` | `ArgumentParser<GenerateKeyPair>` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
 | `getAnalogControlState` | Missing | `CLuaManager.cpp:212` | `CLuaFunctionDefs::GetAnalogControlState` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `getBodyPartName` | Missing | `CLuaManager.cpp:189` | `CLuaFunctionDefs::GetBodyPartName` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
+| `getBodyPartName` | **Implemented** | `CLuaManager.cpp:189` | `CLuaFunctionDefs::GetBodyPartName` | Operational on Android. (l_getBodyPartName) |
 | `getBoundKeys` | Missing | `CLuaManager.cpp:215` | `CLuaFunctionDefs::GetBoundKeys` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `getClothesByTypeIndex` | Missing | `CLuaManager.cpp:190` | `CLuaFunctionDefs::GetClothesByTypeIndex` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `getClothesTypeName` | Missing | `CLuaManager.cpp:192` | `CLuaFunctionDefs::GetClothesTypeName` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `getColorFromString` | Missing | `CLuaUtilDefs.cpp:52` | `GetColorFromString` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `getCommandHandlers` | Missing | `CLuaManager.cpp:228` | `CLuaFunctionDefs::GetCommandHandlers` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
+| `getClothesByTypeIndex` | **Implemented** | `CLuaManager.cpp:190` | `CLuaFunctionDefs::GetClothesByTypeIndex` | Operational on Android. (l_getClothesByTypeIndex) |
+| `getClothesTypeName` | **Implemented** | `CLuaManager.cpp:192` | `CLuaFunctionDefs::GetClothesTypeName` | Operational on Android. (l_getClothesTypeName) |
+| `getColorFromString` | **Implemented** | `CLuaUtilDefs.cpp:52` | `GetColorFromString` | Operational on Android. (l_getColorFromString) |
+| `getCommandHandlers` | **Implemented** | `CLuaManager.cpp:228` | `CLuaFunctionDefs::GetCommandHandlers` | Operational on Android. (l_getCommandHandlers) |
 | `getCommandsBoundToKey` | Missing | `CLuaManager.cpp:218` | `CLuaFunctionDefs::GetCommandsBoundToKey` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `getCursorAlpha` | Missing | `CLuaManager.cpp:201` | `CLuaFunctionDefs::GetCursorAlpha` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
+| `getCursorAlpha` | **Implemented** | `CLuaManager.cpp:201` | `CLuaFunctionDefs::GetCursorAlpha` | Operational on Android. (l_getCursorAlpha) |
 | `getCursorPosition` | **Implemented** | `CLuaManager.cpp:197` | `CLuaFunctionDefs::GetCursorPosition` | Operational on Android. (l_getCursorPosition) |
-| `getDevelopmentMode` | Missing | `CLuaManager.cpp:235` | `CLuaFunctionDefs::GetDevelopmentMode` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
+| `getDevelopmentMode` | **Implemented** | `CLuaManager.cpp:235` | `CLuaFunctionDefs::GetDevelopmentMode` | Operational on Android. (l_getDevelopmentMode) |
 | `getDistanceBetweenPoints2D` | **Implemented** | `CLuaUtilDefs.cpp:55` | `GetDistanceBetweenPoints2D` | Operational on Android. (l_getDistanceBetweenPoints2D) |
 | `getDistanceBetweenPoints3D` | **Implemented** | `CLuaUtilDefs.cpp:56` | `GetDistanceBetweenPoints3D` | Operational on Android. (l_getDistanceBetweenPoints3D) |
-| `getEasingValue` | Missing | `CLuaUtilDefs.cpp:57` | `GetEasingValue` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `getEventHandlers` | Missing | `CLuaManager.cpp:166` | `CLuaFunctionDefs::GetEventHandlers` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
+| `getEasingValue` | **Implemented** | `CLuaUtilDefs.cpp:57` | `GetEasingValue` | Operational on Android. (l_getEasingValue) |
+| `getEventHandlers` | **Implemented** | `CLuaManager.cpp:166` | `CLuaFunctionDefs::GetEventHandlers` | Operational on Android. (l_getEventHandlers) |
 | `getFunctionsBoundToKey` | Missing | `CLuaManager.cpp:216` | `CLuaFunctionDefs::GetFunctionsBoundToKey` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
 | `getKeyBoundToCommand` | Missing | `CLuaManager.cpp:219` | `CLuaFunctionDefs::GetKeyBoundToCommand` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
 | `getKeyBoundToFunction` | Missing | `CLuaManager.cpp:217` | `CLuaFunctionDefs::GetKeyBoundToFunction` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
 | `getKeyState` | Missing | `CLuaManager.cpp:211` | `CLuaFunctionDefs::GetKeyState` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `getKeyboardLayout` | Missing | `CLuaManager.cpp:244` | `CLuaFunctionDefs::GetKeyboardLayout` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
+| `getKeyboardLayout` | **Implemented** | `CLuaManager.cpp:244` | `CLuaFunctionDefs::GetKeyboardLayout` | Operational on Android. (l_getKeyboardLayout) |
 | `getLatentEventHandles` | Missing | `CLuaManager.cpp:172` | `CLuaFunctionDefs::GetLatentEventHandles` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
 | `getLatentEventStatus` | Missing | `CLuaManager.cpp:173` | `CLuaFunctionDefs::GetLatentEventStatus` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `getLocalization` | Missing | `CLuaManager.cpp:243` | `CLuaFunctionDefs::GetLocalization` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `getNeonClientSetting` | Missing | `CLuaClientDefs.cpp:28` | `ArgumentParser<GetNeonClientSetting>` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `getNetworkStats` | **Implemented** | `CLuaManager.cpp:232` | `CLuaFunctionDefs::GetNetworkStats` | Operational on Android from RakNetWrapper. packetloss, messagesInSendBuffer, and both limit flags stay 0. encryptionStatus is 1. (l_getNetworkStats) |
-| `getNetworkUsageData` | **Implemented** | `CLuaManager.cpp:231` | `CLuaFunctionDefs::GetNetworkUsageData` | Operational on Android. Slots are the wire packet id. bits are totalBytes * 8. (l_getNetworkUsageData) |
+| `getLocalization` | **Implemented** | `CLuaManager.cpp:243` | `CLuaFunctionDefs::GetLocalization` | Operational on Android. (l_getLocalization) |
+| `getNeonClientSetting` | **Implemented** | `CLuaClientDefs.cpp:28` | `ArgumentParser<GetNeonClientSetting>` | Operational on Android. (l_getNeonClientSetting) |
+| `getNetworkStats` | **Implemented** | `CLuaManager.cpp:232` | `CLuaFunctionDefs::GetNetworkStats` | Operational on Android. (l_getNetworkStats) |
+| `getNetworkUsageData` | **Implemented** | `CLuaManager.cpp:231` | `CLuaFunctionDefs::GetNetworkUsageData` | Operational on Android. (l_getNetworkUsageData) |
 | `getPerformanceStats` | Missing | `CLuaManager.cpp:233` | `CLuaFunctionDefs::GetPerformanceStats` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `getProcessMemoryStats` | Missing | `CLuaUtilDefs.cpp:75` | `ArgumentParser<GetProcessMemoryStats>` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `getRealTime` | Missing | `CLuaUtilDefs.cpp:47` | `GetCTime` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `getRemoteRequestInfo` | **Implemented** | `CLuaNetworkDefs.cpp:28` | `GetRemoteRequestInfo` | Operational on Android. resource is false. (LuaGetRemoteRequestInfo) |
-| `getRemoteRequests` | **Implemented** | `CLuaNetworkDefs.cpp:27` | `GetRemoteRequests` | Operational on Android. Handles are {id, remoteRequest=true}. (LuaGetRemoteRequests) |
+| `getProcessMemoryStats` | **Implemented** | `CLuaUtilDefs.cpp:75` | `ArgumentParser<GetProcessMemoryStats>` | Operational on Android. (l_getProcessMemoryStats) |
+| `getRealTime` | **Implemented** | `CLuaUtilDefs.cpp:47` | `GetCTime` | Operational on Android. (l_getRealTime) |
+| `getRemoteRequestInfo` | **Implemented** | `CLuaNetworkDefs.cpp:28` | `GetRemoteRequestInfo` | Operational on Android. (LuaGetRemoteRequestInfo) |
+| `getRemoteRequests` | **Implemented** | `CLuaNetworkDefs.cpp:27` | `GetRemoteRequests` | Operational on Android. (LuaGetRemoteRequests) |
 | `getResourceConfig` | Missing | `CLuaResourceDefs.cpp:22` | `GetResourceConfig` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
 | `getResourceDynamicElementRoot` | Missing | `CLuaResourceDefs.cpp:27` | `GetResourceDynamicElementRoot` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
 | `getResourceExportedFunctions` | Missing | `CLuaResourceDefs.cpp:28` | `GetResourceExportedFunctions` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
@@ -109,104 +109,104 @@ Timers, event handling, network latent transfers, file I/O, XML parsing, JSON se
 | `getResourceRootElement` | Missing | `CLuaResourceDefs.cpp:25` | `GetResourceRootElement` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
 | `getResourceState` | Missing | `CLuaResourceDefs.cpp:30` | `GetResourceState` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
 | `getResources` | Missing | `CLuaResourceDefs.cpp:29` | `ArgumentParser<GetResources>` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `getServerIp` | **Implemented** | `CLuaNetworkDefs.cpp:30` | `ArgumentParser<GetServerIp>` | Operational on Android against the live RakNetWrapper. The headless wrapper stays on the stack, so that build returns an empty string. (LuaGetServerIp) |
+| `getServerIp` | **Implemented** | `CLuaNetworkDefs.cpp:30` | `ArgumentParser<GetServerIp>` | Operational on Android. (LuaGetServerIp) |
 | `getThisResource` | Missing | `CLuaResourceDefs.cpp:21` | `GetThisResource` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
 | `getTickCount` | **Implemented** | `CLuaUtilDefs.cpp:46` | `GetTickCount_` | Operational on Android. (l_getTickCount) |
-| `getTimerDetails` | Missing | `CLuaTimerDefs.cpp:25` | `GetTimerDetails` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `getTimers` | Missing | `CLuaTimerDefs.cpp:23` | `GetTimers` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `getTypeIndexFromClothes` | Missing | `CLuaManager.cpp:191` | `CLuaFunctionDefs::GetTypeIndexFromClothes` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `getUserdataType` | Missing | `CLuaUtilDefs.cpp:50` | `GetUserdataType` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
+| `getTimerDetails` | **Implemented** | `CLuaTimerDefs.cpp:25` | `GetTimerDetails` | Operational on Android. (l_getTimerDetails) |
+| `getTimers` | **Implemented** | `CLuaTimerDefs.cpp:23` | `GetTimers` | Operational on Android. (l_getTimers) |
+| `getTypeIndexFromClothes` | **Implemented** | `CLuaManager.cpp:191` | `CLuaFunctionDefs::GetTypeIndexFromClothes` | Operational on Android. (l_getTypeIndexFromClothes) |
+| `getUserdataType` | **Implemented** | `CLuaUtilDefs.cpp:50` | `GetUserdataType` | Operational on Android. (l_getUserdataType) |
 | `getValidPedModels` | Missing | `CLuaManager.cpp:205` | `CLuaFunctionDefs::GetValidPedModels` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `getVersion` | Missing | `CLuaManager.cpp:240` | `CLuaFunctionDefs::GetVersion` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `getfenv` | Missing | `CLuaMain.cpp:90` | `CLuaUtilDefs::DisabledFunction` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `gettok` | Missing | `CLuaUtilDefs.cpp:73` | `GetTok` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `hash` | Missing | `CLuaCryptDefs.cpp:24` | `ArgumentParserWarn<false, Hash>` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `interpolateBetween` | Missing | `CLuaUtilDefs.cpp:58` | `InterpolateBetween` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `isCapsLockEnabled` | Missing | `CLuaClientDefs.cpp:27` | `ArgumentParser<IsCapsLockEnabled>` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `isChatInputBlocked` | Missing | `CLuaClientDefs.cpp:24` | `ArgumentParser<IsChatInputBlocked>` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
+| `getVersion` | **Implemented** | `CLuaManager.cpp:240` | `CLuaFunctionDefs::GetVersion` | Operational on Android. (l_getVersion) |
+| `getfenv` | **Implemented** | `CLuaMain.cpp:90` | `CLuaUtilDefs::DisabledFunction` | Operational on Android. (l_unsafe) |
+| `gettok` | **Implemented** | `CLuaUtilDefs.cpp:73` | `GetTok` | Operational on Android. (l_gettok) |
+| `hash` | **Implemented** | `CLuaCryptDefs.cpp:24` | `ArgumentParserWarn<false, Hash>` | Operational on Android. (l_hash) |
+| `interpolateBetween` | **Implemented** | `CLuaUtilDefs.cpp:58` | `InterpolateBetween` | Operational on Android. (l_interpolateBetween) |
+| `isCapsLockEnabled` | **Implemented** | `CLuaClientDefs.cpp:27` | `ArgumentParser<IsCapsLockEnabled>` | Operational on Android. (l_isCapsLockEnabled) |
+| `isChatInputBlocked` | **Implemented** | `CLuaClientDefs.cpp:24` | `ArgumentParser<IsChatInputBlocked>` | Operational on Android. (l_isChatInputBlocked) |
 | `isChatVisible` | **Implemented** | `CLuaClientDefs.cpp:23` | `ArgumentParserWarn<false, IsChatVisible>` | Operational on Android. (IsChatVisible) |
 | `isControlEnabled` | *Stub* | `CLuaManager.cpp:214` | `CLuaFunctionDefs::IsControlEnabled` | Currently stubbed: `DefaultValue(kTrue)`. Needs native engine wiring. |
 | `isCursorShowing` | **Implemented** | `CLuaManager.cpp:199` | `CLuaFunctionDefs::IsCursorShowing` | Operational on Android. (IsCursorShowing) |
 | `isMTAWindowFocused` | Missing | `CLuaClientDefs.cpp:26` | `ArgumentParser<IsMTAWindowFocused>` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `isOOPEnabled` | Missing | `CLuaUtilDefs.cpp:49` | `IsOOPEnabled` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `isTimer` | *Stub* | `CLuaTimerDefs.cpp:24` | `IsTimer` | Currently stubbed: `l_false: lua_pushboolean(L, 0)`. Needs native engine wiring. |
-| `isTimerPaused` | Missing | `CLuaTimerDefs.cpp:22` | `ArgumentParser<IsTimerPaused>` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `isTransferBoxAlwaysVisible` | Missing | `CLuaClientDefs.cpp:21` | `ArgumentParser<IsTransferBoxAlwaysVisible>` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `isTransferBoxVisible` | Missing | `CLuaClientDefs.cpp:20` | `ArgumentParser<IsTransferBoxVisible>` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `isTrayNotificationEnabled` | Missing | `CLuaManager.cpp:186` | `CLuaFunctionDefs::IsTrayNotificationEnabled` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `isVoiceEnabled` | Missing | `CLuaManager.cpp:247` | `CLuaFunctionDefs::IsVoiceEnabled` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `killTimer` | *Stub* | `CLuaTimerDefs.cpp:19` | `KillTimer` | Currently stubbed: `l_true: lua_pushboolean(L, 1)`. Needs native engine wiring. |
+| `isOOPEnabled` | **Implemented** | `CLuaUtilDefs.cpp:49` | `IsOOPEnabled` | Operational on Android. (l_isOOPEnabled) |
+| `isTimer` | **Implemented** | `CLuaTimerDefs.cpp:24` | `IsTimer` | Operational on Android. (l_isTimer) |
+| `isTimerPaused` | **Implemented** | `CLuaTimerDefs.cpp:22` | `ArgumentParser<IsTimerPaused>` | Operational on Android. (l_isTimerPaused) |
+| `isTransferBoxAlwaysVisible` | **Implemented** | `CLuaClientDefs.cpp:21` | `ArgumentParser<IsTransferBoxAlwaysVisible>` | Operational on Android. (l_isTransferBoxAlwaysVisible) |
+| `isTransferBoxVisible` | **Implemented** | `CLuaClientDefs.cpp:20` | `ArgumentParser<IsTransferBoxVisible>` | Operational on Android. (l_isTransferBoxVisible) |
+| `isTrayNotificationEnabled` | **Implemented** | `CLuaManager.cpp:186` | `CLuaFunctionDefs::IsTrayNotificationEnabled` | Operational on Android. (l_isTrayNotificationEnabled) |
+| `isVoiceEnabled` | **Implemented** | `CLuaManager.cpp:247` | `CLuaFunctionDefs::IsVoiceEnabled` | Operational on Android. (l_isVoiceEnabled) |
+| `killTimer` | **Implemented** | `CLuaTimerDefs.cpp:19` | `KillTimer` | Operational on Android. (l_killTimer) |
 | `load` | Missing | `CLuaResourceDefs.cpp:32` | `Load` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `loadfile` | Missing | `CLuaMain.cpp:87` | `CLuaUtilDefs::DisabledFunction` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `loadlib` | Missing | `CLuaMain.cpp:89` | `CLuaUtilDefs::DisabledFunction` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `loadstring` | Missing | `CLuaResourceDefs.cpp:31` | `LoadString` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `md5` | Missing | `CLuaCryptDefs.cpp:22` | `ArgumentParserWarn<false, Md5>` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `newproxy` | Missing | `CLuaMain.cpp:91` | `CLuaUtilDefs::DisabledFunction` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
+| `loadfile` | **Implemented** | `CLuaMain.cpp:87` | `CLuaUtilDefs::DisabledFunction` | Operational on Android. (l_unsafe) |
+| `loadlib` | **Implemented** | `CLuaMain.cpp:89` | `CLuaUtilDefs::DisabledFunction` | Operational on Android. (l_unsafe) |
+| `loadstring` | **Implemented** | `CLuaResourceDefs.cpp:31` | `LoadString` | Operational on Android. (l_loadstring) |
+| `md5` | **Implemented** | `CLuaCryptDefs.cpp:22` | `ArgumentParserWarn<false, Md5>` | Operational on Android. (l_md5) |
+| `newproxy` | **Implemented** | `CLuaMain.cpp:91` | `CLuaUtilDefs::DisabledFunction` | Operational on Android. (l_unsafe) |
 | `outputChatBox` | **Implemented** | `CLuaManager.cpp:178` | `CLuaFunctionDefs::OutputChatBox` | Operational on Android. (OutputChatBox) |
-| `outputConsole` | Missing | `CLuaManager.cpp:177` | `CLuaFunctionDefs::OutputConsole` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
+| `outputConsole` | **Implemented** | `CLuaManager.cpp:177` | `CLuaFunctionDefs::OutputConsole` | Operational on Android. (l_outputConsole) |
 | `outputDebugString` | **Implemented** | `CLuaManager.cpp:179` | `CLuaFunctionDefs::OutputClientDebugString` | Operational on Android. (l_debug) |
 | `passwordHash` | Missing | `CLuaCryptDefs.cpp:29` | `ArgumentParserWarn<false, PasswordHash>` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
 | `passwordVerify` | Missing | `CLuaCryptDefs.cpp:31` | `PasswordVerify` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `pathIsDirectory` | Missing | `CLuaPathDefs.cpp:28` | `ArgumentParser<pathIsDirectory>` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `pathIsFile` | Missing | `CLuaPathDefs.cpp:27` | `ArgumentParser<pathIsFile>` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `pathListDir` | Missing | `CLuaPathDefs.cpp:26` | `ArgumentParser<pathListDir>` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `pregFind` | Missing | `CLuaUtilDefs.cpp:65` | `PregFind` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `pregMatch` | Missing | `CLuaUtilDefs.cpp:67` | `PregMatch` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `pregReplace` | Missing | `CLuaUtilDefs.cpp:66` | `PregReplace` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `print` | Missing | `CLuaUtilDefs.cpp:51` | `luaB_print` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `ref` | Missing | `CLuaUtilDefs.cpp:45` | `Reference` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `removeClothingModel` | Missing | `CLuaManager.cpp:194` | `CLuaFunctionDefs::RemoveClothingModel` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `removeCommandHandler` | Missing | `CLuaManager.cpp:226` | `CLuaFunctionDefs::RemoveCommandHandler` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
+| `pathIsDirectory` | **Implemented** | `CLuaPathDefs.cpp:28` | `ArgumentParser<pathIsDirectory>` | Operational on Android. (l_pathIsDirectory) |
+| `pathIsFile` | **Implemented** | `CLuaPathDefs.cpp:27` | `ArgumentParser<pathIsFile>` | Operational on Android. (l_pathIsFile) |
+| `pathListDir` | **Implemented** | `CLuaPathDefs.cpp:26` | `ArgumentParser<pathListDir>` | Operational on Android. (l_pathListDir) |
+| `pregFind` | **Implemented** | `CLuaUtilDefs.cpp:65` | `PregFind` | Operational on Android. (l_pregFind) |
+| `pregMatch` | **Implemented** | `CLuaUtilDefs.cpp:67` | `PregMatch` | Operational on Android. (l_pregMatch) |
+| `pregReplace` | **Implemented** | `CLuaUtilDefs.cpp:66` | `PregReplace` | Operational on Android. (l_pregReplace) |
+| `print` | **Implemented** | `CLuaUtilDefs.cpp:51` | `luaB_print` | Operational on Android. (l_print) |
+| `ref` | **Implemented** | `CLuaUtilDefs.cpp:45` | `Reference` | Operational on Android. (l_ref) |
+| `removeClothingModel` | **Implemented** | `CLuaManager.cpp:194` | `CLuaFunctionDefs::RemoveClothingModel` | Operational on Android. (l_removeClothingModel) |
+| `removeCommandHandler` | **Implemented** | `CLuaManager.cpp:226` | `CLuaFunctionDefs::RemoveCommandHandler` | Operational on Android. (l_removeCommandHandler) |
 | `removeDebugHook` | Missing | `CLuaManager.cpp:237` | `CLuaFunctionDefs::RemoveDebugHook` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
 | `removeEventHandler` | **Implemented** | `CLuaManager.cpp:165` | `CLuaFunctionDefs::RemoveEventHandler` | Operational on Android. (l_removeEventHandler) |
-| `require` | Missing | `CLuaMain.cpp:88` | `CLuaUtilDefs::DisabledFunction` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `resetNeonClientSettings` | Missing | `CLuaClientDefs.cpp:30` | `ArgumentParser<ResetNeonClientSettings>` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `resetTimer` | Missing | `CLuaTimerDefs.cpp:20` | `ResetTimer` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
+| `require` | **Implemented** | `CLuaMain.cpp:88` | `CLuaUtilDefs::DisabledFunction` | Operational on Android. (l_unsafe) |
+| `resetNeonClientSettings` | **Implemented** | `CLuaClientDefs.cpp:30` | `ArgumentParser<ResetNeonClientSettings>` | Operational on Android. (l_resetNeonClientSettings) |
+| `resetTimer` | **Implemented** | `CLuaTimerDefs.cpp:20` | `ResetTimer` | Operational on Android. (l_resetTimer) |
 | `setAnalogControlState` | Missing | `CLuaManager.cpp:213` | `CLuaFunctionDefs::SetAnalogControlState` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `setClipboard` | Missing | `CLuaManager.cpp:180` | `CLuaFunctionDefs::SetClipboard` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `setCursorAlpha` | Missing | `CLuaManager.cpp:202` | `CLuaFunctionDefs::SetCursorAlpha` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `setCursorPosition` | Missing | `CLuaManager.cpp:198` | `CLuaFunctionDefs::SetCursorPosition` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `setDevelopmentMode` | Missing | `CLuaManager.cpp:234` | `CLuaFunctionDefs::SetDevelopmentMode` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `setNeonClientSetting` | Missing | `CLuaClientDefs.cpp:29` | `ArgumentParser<SetNeonClientSetting>` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
+| `setClipboard` | **Implemented** | `CLuaManager.cpp:180` | `CLuaFunctionDefs::SetClipboard` | Operational on Android. (l_setClipboard) |
+| `setCursorAlpha` | **Implemented** | `CLuaManager.cpp:202` | `CLuaFunctionDefs::SetCursorAlpha` | Operational on Android. (l_setCursorAlpha) |
+| `setCursorPosition` | **Implemented** | `CLuaManager.cpp:198` | `CLuaFunctionDefs::SetCursorPosition` | Operational on Android. (l_setCursorPosition) |
+| `setDevelopmentMode` | **Implemented** | `CLuaManager.cpp:234` | `CLuaFunctionDefs::SetDevelopmentMode` | Operational on Android. (l_setDevelopmentMode) |
+| `setNeonClientSetting` | **Implemented** | `CLuaClientDefs.cpp:29` | `ArgumentParser<SetNeonClientSetting>` | Operational on Android. (l_setNeonClientSetting) |
 | `setTimer` | **Implemented** | `CLuaTimerDefs.cpp:18` | `SetTimer` | Operational on Android. (l_setTimer) |
-| `setTimerPaused` | Missing | `CLuaTimerDefs.cpp:21` | `ArgumentParser<SetTimerPaused>` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `setTransferBoxVisible` | Missing | `CLuaClientDefs.cpp:19` | `ArgumentParser<SetTransferBoxVisible>` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
+| `setTimerPaused` | **Implemented** | `CLuaTimerDefs.cpp:21` | `ArgumentParser<SetTimerPaused>` | Operational on Android. (l_setTimerPaused) |
+| `setTransferBoxVisible` | **Implemented** | `CLuaClientDefs.cpp:19` | `ArgumentParser<SetTransferBoxVisible>` | Operational on Android. (l_setTransferBoxVisible) |
 | `setWindowFlashing` | Missing | `CLuaManager.cpp:181` | `CLuaFunctionDefs::SetWindowFlashing` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `sha256` | Missing | `CLuaCryptDefs.cpp:23` | `ArgumentParserWarn<false, Sha256>` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
+| `sha256` | **Implemented** | `CLuaCryptDefs.cpp:23` | `ArgumentParserWarn<false, Sha256>` | Operational on Android. (l_sha256) |
 | `showChat` | **Implemented** | `CLuaClientDefs.cpp:22` | `ArgumentParserWarn<false, ShowChat>` | Operational on Android. (ShowChat) |
 | `showCursor` | **Implemented** | `CLuaManager.cpp:200` | `CLuaFunctionDefs::ShowCursor` | Operational on Android. (ShowCursor) |
-| `split` | Missing | `CLuaUtilDefs.cpp:48` | `Split` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `teaDecode` | Missing | `CLuaCryptDefs.cpp:26` | `ArgumentParserWarn<false, TeaDecode>` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `teaEncode` | Missing | `CLuaCryptDefs.cpp:25` | `ArgumentParserWarn<false, TeaEncode>` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
+| `split` | **Implemented** | `CLuaUtilDefs.cpp:48` | `Split` | Operational on Android. (l_split) |
+| `teaDecode` | **Implemented** | `CLuaCryptDefs.cpp:26` | `ArgumentParserWarn<false, TeaDecode>` | Operational on Android. (l_teaDecode) |
+| `teaEncode` | **Implemented** | `CLuaCryptDefs.cpp:25` | `ArgumentParserWarn<false, TeaEncode>` | Operational on Android. (l_teaEncode) |
 | `toJSON` | **Implemented** | `CLuaUtilDefs.cpp:61` | `toJSON` | Operational on Android. (ToJson) |
 | `tocolor` | **Implemented** | `CLuaUtilDefs.cpp:74` | `tocolor` | Operational on Android. (l_tocolor) |
 | `toggleAllControls` | Missing | `CLuaManager.cpp:222` | `CLuaFunctionDefs::ToggleAllControls` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
 | `toggleControl` | *Stub* | `CLuaManager.cpp:221` | `CLuaFunctionDefs::ToggleControl` | Currently stubbed: `DefaultValue(kTrue)`. Needs native engine wiring. |
-| `triggerEvent` | Missing | `CLuaManager.cpp:167` | `CLuaFunctionDefs::TriggerEvent` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
+| `triggerEvent` | **Implemented** | `CLuaManager.cpp:167` | `CLuaFunctionDefs::TriggerEvent` | Operational on Android. (l_triggerEvent) |
 | `triggerLatentServerEvent` | Missing | `CLuaManager.cpp:171` | `CLuaFunctionDefs::TriggerLatentServerEvent` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
 | `triggerServerEvent` | **Implemented** | `CLuaManager.cpp:168` | `CLuaFunctionDefs::TriggerServerEvent` | Operational on Android. (l_triggerServerEvent) |
 | `unbindKey` | *Stub* | `CLuaManager.cpp:210` | `CLuaFunctionDefs::UnbindKey` | Currently stubbed: `l_true: lua_pushboolean(L, 1)`. Needs native engine wiring. |
-| `utfChar` | Missing | `CLuaUTFDefs.cpp:95` | `ArgumentParserWarn<nullptr, UtfChar>` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `utfCode` | Missing | `CLuaUTFDefs.cpp:95` | `ArgumentParserWarn<false, UtfCode>` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `utfLen` | Missing | `CLuaUTFDefs.cpp:94` | `ArgumentParserWarn<false, UtfLen>` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `utfSeek` | Missing | `CLuaUTFDefs.cpp:94` | `ArgumentParserWarn<false, UtfSeek>` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `utfSub` | Missing | `CLuaUTFDefs.cpp:94` | `ArgumentParserWarn<false, UtfSub>` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
+| `utfChar` | **Implemented** | `CLuaUTFDefs.cpp:95` | `ArgumentParserWarn<nullptr, UtfChar>` | Operational on Android. (l_utfChar) |
+| `utfCode` | **Implemented** | `CLuaUTFDefs.cpp:95` | `ArgumentParserWarn<false, UtfCode>` | Operational on Android. (l_utfCode) |
+| `utfLen` | **Implemented** | `CLuaUTFDefs.cpp:94` | `ArgumentParserWarn<false, UtfLen>` | Operational on Android. (l_utfLen) |
+| `utfSeek` | **Implemented** | `CLuaUTFDefs.cpp:94` | `ArgumentParserWarn<false, UtfSeek>` | Operational on Android. (l_utfSeek) |
+| `utfSub` | **Implemented** | `CLuaUTFDefs.cpp:94` | `ArgumentParserWarn<false, UtfSub>` | Operational on Android. (l_utfSub) |
 | `wasEventCancelled` | **Implemented** | `CLuaManager.cpp:170` | `CLuaFunctionDefs::WasEventCancelled` | Operational on Android. (l_wasEventCancelled) |
-| `xmlCopyFile` | Missing | `CLuaXMLDefs.cpp:21` | `xmlCopyFile` | Needs TinyXML2 client-side parser integration. |
-| `xmlCreateChild` | Missing | `CLuaXMLDefs.cpp:24` | `xmlCreateChild` | Needs TinyXML2 client-side parser integration. |
-| `xmlCreateFile` | Missing | `CLuaXMLDefs.cpp:18` | `xmlCreateFile` | Needs TinyXML2 client-side parser integration. |
-| `xmlDestroyNode` | Missing | `CLuaXMLDefs.cpp:25` | `xmlDestroyNode` | Needs TinyXML2 client-side parser integration. |
-| `xmlFindChild` | Missing | `CLuaXMLDefs.cpp:26` | `xmlNodeFindChild` | Needs TinyXML2 client-side parser integration. |
-| `xmlLoadFile` | Missing | `CLuaXMLDefs.cpp:19` | `xmlLoadFile` | Needs TinyXML2 client-side parser integration. |
-| `xmlLoadString` | Missing | `CLuaXMLDefs.cpp:20` | `xmlLoadString` | Needs TinyXML2 client-side parser integration. |
-| `xmlNodeGetAttribute` | Missing | `CLuaXMLDefs.cpp:32` | `xmlNodeGetAttribute` | Needs TinyXML2 client-side parser integration. |
-| `xmlNodeGetAttributes` | Missing | `CLuaXMLDefs.cpp:31` | `xmlNodeGetAttributes` | Needs TinyXML2 client-side parser integration. |
-| `xmlNodeGetChildren` | Missing | `CLuaXMLDefs.cpp:28` | `xmlNodeGetChildren` | Needs TinyXML2 client-side parser integration. |
-| `xmlNodeGetName` | Missing | `CLuaXMLDefs.cpp:33` | `xmlNodeGetName` | Needs TinyXML2 client-side parser integration. |
-| `xmlNodeGetParent` | Missing | `CLuaXMLDefs.cpp:29` | `xmlNodeGetParent` | Needs TinyXML2 client-side parser integration. |
-| `xmlNodeGetValue` | Missing | `CLuaXMLDefs.cpp:30` | `xmlNodeGetValue` | Needs TinyXML2 client-side parser integration. |
-| `xmlNodeSetAttribute` | Missing | `CLuaXMLDefs.cpp:36` | `xmlNodeSetAttribute` | Needs TinyXML2 client-side parser integration. |
-| `xmlNodeSetName` | Missing | `CLuaXMLDefs.cpp:37` | `xmlNodeSetName` | Needs TinyXML2 client-side parser integration. |
-| `xmlNodeSetValue` | Missing | `CLuaXMLDefs.cpp:35` | `xmlNodeSetValue` | Needs TinyXML2 client-side parser integration. |
-| `xmlSaveFile` | Missing | `CLuaXMLDefs.cpp:22` | `xmlSaveFile` | Needs TinyXML2 client-side parser integration. |
-| `xmlUnloadFile` | Missing | `CLuaXMLDefs.cpp:23` | `xmlUnloadFile` | Needs TinyXML2 client-side parser integration. |
+| `xmlCopyFile` | **Implemented** | `CLuaXMLDefs.cpp:21` | `xmlCopyFile` | Operational on Android. (l_xmlCopyFile) |
+| `xmlCreateChild` | **Implemented** | `CLuaXMLDefs.cpp:24` | `xmlCreateChild` | Operational on Android. (l_xmlCreateChild) |
+| `xmlCreateFile` | **Implemented** | `CLuaXMLDefs.cpp:18` | `xmlCreateFile` | Operational on Android. (l_xmlCreateFile) |
+| `xmlDestroyNode` | **Implemented** | `CLuaXMLDefs.cpp:25` | `xmlDestroyNode` | Operational on Android. (l_xmlDestroyNode) |
+| `xmlFindChild` | **Implemented** | `CLuaXMLDefs.cpp:26` | `xmlNodeFindChild` | Operational on Android. (l_xmlFindChild) |
+| `xmlLoadFile` | **Implemented** | `CLuaXMLDefs.cpp:19` | `xmlLoadFile` | Operational on Android. (l_xmlLoadFile) |
+| `xmlLoadString` | **Implemented** | `CLuaXMLDefs.cpp:20` | `xmlLoadString` | Operational on Android. (l_xmlLoadString) |
+| `xmlNodeGetAttribute` | **Implemented** | `CLuaXMLDefs.cpp:32` | `xmlNodeGetAttribute` | Operational on Android. (l_xmlNodeGetAttribute) |
+| `xmlNodeGetAttributes` | **Implemented** | `CLuaXMLDefs.cpp:31` | `xmlNodeGetAttributes` | Operational on Android. (l_xmlNodeGetAttributes) |
+| `xmlNodeGetChildren` | **Implemented** | `CLuaXMLDefs.cpp:28` | `xmlNodeGetChildren` | Operational on Android. (l_xmlNodeGetChildren) |
+| `xmlNodeGetName` | **Implemented** | `CLuaXMLDefs.cpp:33` | `xmlNodeGetName` | Operational on Android. (l_xmlNodeGetName) |
+| `xmlNodeGetParent` | **Implemented** | `CLuaXMLDefs.cpp:29` | `xmlNodeGetParent` | Operational on Android. (l_xmlNodeGetParent) |
+| `xmlNodeGetValue` | **Implemented** | `CLuaXMLDefs.cpp:30` | `xmlNodeGetValue` | Operational on Android. (l_xmlNodeGetValue) |
+| `xmlNodeSetAttribute` | **Implemented** | `CLuaXMLDefs.cpp:36` | `xmlNodeSetAttribute` | Operational on Android. (l_xmlNodeSetAttribute) |
+| `xmlNodeSetName` | **Implemented** | `CLuaXMLDefs.cpp:37` | `xmlNodeSetName` | Operational on Android. (l_xmlNodeSetName) |
+| `xmlNodeSetValue` | **Implemented** | `CLuaXMLDefs.cpp:35` | `xmlNodeSetValue` | Operational on Android. (l_xmlNodeSetValue) |
+| `xmlSaveFile` | **Implemented** | `CLuaXMLDefs.cpp:22` | `xmlSaveFile` | Operational on Android. (l_xmlSaveFile) |
+| `xmlUnloadFile` | **Implemented** | `CLuaXMLDefs.cpp:23` | `xmlUnloadFile` | Operational on Android. (l_xmlUnloadFile) |

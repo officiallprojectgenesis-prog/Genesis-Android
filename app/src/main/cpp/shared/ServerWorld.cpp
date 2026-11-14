@@ -4,6 +4,7 @@
 #include "../net/raknet/RakNetWrapper.h"
 #include "entity/EntityAddTypes.h"
 #include "entity/PedSyncState.h"
+#include "entity/PedWire.h"
 
 #include <cmath>
 #include <cstring>
@@ -330,6 +331,26 @@ bool ElementPose(uint32_t id, float& x, float& y, float& z) {
     return true;
 }
 
+bool CopyVisual(uint32_t id, ActorSpawn& out) {
+    std::lock_guard<std::mutex> lock(g_lock);
+    auto found = g_visuals.find(id);
+    if (found == g_visuals.end()) return false;
+    out = {};
+    out.id = id;
+    out.kind = found->second.kind;
+    out.model = found->second.model;
+    out.x = found->second.x;
+    out.y = found->second.y;
+    out.z = found->second.z;
+    out.heading = found->second.heading;
+    out.rotX = found->second.rotX;
+    out.rotY = found->second.rotY;
+    out.health = found->second.health;
+    out.hosted = found->second.hosted;
+    out.interior = found->second.interior;
+    return true;
+}
+
 uint8_t SyncTimeContext(uint32_t id) {
     std::lock_guard<std::mutex> lock(g_lock);
     auto found = g_visuals.find(id);
@@ -513,6 +534,36 @@ void OnEntityRemove(const uint8_t* body, size_t length, size_t bits) {
     if (removed > 1) DIAG("ENTITY_REMOVE removed %d element(s)", removed);
 }
 
+void NotePlayerSeen(uint32_t id) {
+    if (id == 0 || id == 0xFFFFFFFFu || id == g_local) return;
+    std::lock_guard<std::mutex> lock(g_lock);
+    auto& stored = g_visuals[id];
+    if (stored.kind == 0) stored.kind = 1;
+}
+
+bool IsKnownPlayer(uint32_t id) {
+    if (id == 0 || id == 0xFFFFFFFFu || id == g_local) return false;
+    std::lock_guard<std::mutex> lock(g_lock);
+    if (g_nicks.count(id)) return true;
+    auto found = g_visuals.find(id);
+    return found != g_visuals.end() && found->second.kind == 1;
+}
+
+void OnPlayerQuit(uint32_t id) {
+    if (id == 0 || id == 0xFFFFFFFFu || id == g_local) return;
+    {
+        std::lock_guard<std::mutex> lock(g_lock);
+        g_visuals.erase(id);
+        g_data.erase(id);
+        g_nicks.erase(id);
+    }
+    WorldRPG::Sync::PedSyncState::Forget(id);
+    Game::ForgetPedNativeTaskState(id);
+    // The body is destroyed on the game thread (ApplyRemotePeds g_forget -> DropBody -> DestroyRemotePlayerPed).
+    Game::ForgetRemote(id);
+    DIAG("PLAYER_QUIT id=%u removed", id);
+}
+
 void OnCustomData(const uint8_t* body, size_t length, size_t bits) {
     Net::BitStreamReader reader(body, length, bits);
     uint32_t id = 0, nameLength = 0;
@@ -527,7 +578,68 @@ void OnCustomData(const uint8_t* body, size_t length, size_t bits) {
 }
 
 void OnPlayerList(const uint8_t* body, size_t length, size_t bits) {
+    {
+        // Ground truth for the mobile-peer layout: the first records decode to ids like 6 and 48384 (device
+        // 2026-11-14), so the wire differs from CPlayerListPacket::Write before the first ElementID. First 96 bytes.
+        static int dumps = 0;
+        if (dumps < 3) {
+            ++dumps;
+            char hex[96 * 2 + 1] = {};
+            const size_t n = length < 96 ? length : 96;
+            for (size_t i = 0; i < n; ++i) std::snprintf(hex + i * 2, 3, "%02x", static_cast<unsigned>(body[i]));
+            DIAG("PLAYER_LIST body bytes=%zu bits=%zu %s", length, bits, hex);
+        }
+    }
+    // Desktop Packet_PlayerList first reads two strings, AC info and SD info (ReadString: ushort length + bytes,
+    // CPacketHandler.cpp 831-834), then the bJustJoined bit. CPlayerListPacket::Write (server) does not write them, so
+    // the net module adds them, and their bytes on the mobile peer are not two plain ReadStrings: the captured body
+    // (device 2026-11-14) starts 03 00 | 02 00 "-1" | 00 00, and the first record decodes at bit 64
+    // (bJustJoined 1, context 1, nick length 17, the real nick). The phone used to start at bit 0, which made every
+    // record garbage (ids 6, 48384), so no player model was stored and a CJ player showed as skin 7 until it respawned.
+    // Each layout is tried and the one whose first record carries a plausible nick is used.
+    auto probe = [&](size_t skip) {
+        Net::BitStreamReader r(body, length, bits);
+        std::vector<uint8_t> dump((skip + 7) / 8 + 1);
+        if (skip && !r.ReadBits(dump.data(), skip)) return false;
+        bool flag = false;
+        uint32_t pid = 0;
+        uint8_t ctx = 0, nl = 0;
+        if (!ReadFlag(r, flag) || !ReadElementId(r, pid) || !r.Read(ctx) || !r.Read(nl)) return false;
+        if (nl < 1 || nl > 32) return false;
+        std::vector<uint8_t> chars(nl);
+        if (!r.ReadBits(chars.data(), nl * 8u)) return false;
+        for (uint8_t c : chars)
+            if (c < 0x20 || c > 0x7e) return false;
+        return true;
+    };
+    auto stringsAt = [&](size_t start, size_t& end) {
+        // Two ReadString from `start` (bits). False when a length runs past the body.
+        Net::BitStreamReader r(body, length, bits);
+        std::vector<uint8_t> dump((start + 7) / 8 + 1);
+        if (start && !r.ReadBits(dump.data(), start)) return false;
+        for (int i = 0; i < 2; ++i) {
+            uint16_t len = 0;
+            if (!r.Read(len) || len > 256 || !SkipBytes(r, len)) return false;
+        }
+        end = r.GetReadOffsetBits();
+        return true;
+    };
+    size_t skip = 0;
+    bool found = false;
+    size_t end = 0;
+    if (stringsAt(0, end) && probe(end)) { skip = end; found = true; }             // desktop: AC, SD
+    if (!found && stringsAt(16, end) && probe(end)) { skip = end; found = true; }  // ushort, then AC, SD (seen live)
+    if (!found && probe(0)) { skip = 0; found = true; }                            // no prefix
+    if (!found) {
+        DIAG("PLAYER_LIST: no layout gives a readable first record (bits=%zu); packet ignored", bits);
+        return;
+    }
+    DIAG("PLAYER_LIST layout: records start at bit %zu", skip);
     Net::BitStreamReader reader(body, length, bits);
+    if (skip) {
+        std::vector<uint8_t> dump((skip + 7) / 8 + 1);
+        if (!reader.ReadBits(dump.data(), skip)) return;
+    }
     bool showInChat = false;
     if (!ReadFlag(reader, showInChat)) return;
     (void)showInChat;
@@ -540,6 +652,8 @@ void OnPlayerList(const uint8_t* body, size_t length, size_t bits) {
             break;
         std::string nick(nickLength, '\0');
         if (nickLength && !reader.ReadBits(reinterpret_cast<uint8_t*>(nick.data()), nickLength * 8)) break;
+        DIAG("PLAYER_LIST record id=%u context=%u nick=%s bit=%zu", id, static_cast<unsigned>(context), nick.c_str(),
+             reader.GetReadOffsetBits());
         uint16_t version = 0;
         uint32_t build = 0;
         if (!reader.Read(version) || !reader.Read(build)) break;
@@ -552,9 +666,16 @@ void OnPlayerList(const uint8_t* body, size_t length, size_t bits) {
             if (!reader.ReadBits(color, 24)) break;
         }
         uint8_t moveAnim = 0;
-        if (!reader.Read(moveAnim)) break;
+        if (!reader.Read(moveAnim)) { DIAG("PLAYER_LIST id=%u stop at moveAnim bit=%zu", id, reader.GetReadOffsetBits()); break; }
+        // bIsSpawned (0x40, the second flag bit): the model, team, pose, dimension, style, alpha, interior, weapons and
+        // animation are only on the wire for a spawned player (CPacketHandler.cpp 934-995 and 1043-1104).
+        if (!(flags & 0x40)) {
+            g_nicks[id] = nick;
+            DIAG("PLAYER_LIST id=%u not spawned; record ends after moveAnim", id);
+            continue;
+        }
         uint32_t model = 0;
-        if (!ReadCompressed(reader, 2, model)) break;
+        if (!ReadCompressed(reader, 2, model)) { DIAG("PLAYER_LIST id=%u stop at model bit=%zu", id, reader.GetReadOffsetBits()); break; }
         Visual visual;
         visual.kind = 1;
         visual.model = static_cast<int>(model);
@@ -582,8 +703,8 @@ void OnPlayerList(const uint8_t* body, size_t length, size_t bits) {
         }
         uint32_t dimension = 0, alpha = 0;
         uint8_t style = 0, interior = 0;
-        if (!ReadCompressed(reader, 2, dimension) || !reader.Read(style)) break;
-        if (!ReadCompressed(reader, 1, alpha) || !reader.Read(interior)) break;
+        if (!ReadCompressed(reader, 2, dimension) || !reader.Read(style)) { DIAG("PLAYER_LIST id=%u stop at dimension/style bit=%zu", id, reader.GetReadOffsetBits()); break; }
+        if (!ReadCompressed(reader, 1, alpha) || !reader.Read(interior)) { DIAG("PLAYER_LIST id=%u stop at alpha/interior bit=%zu", id, reader.GetReadOffsetBits()); break; }
         bool animated = false;
         for (int slot = 0; slot < 16; ++slot) {
             bool occupied = false;
@@ -593,9 +714,27 @@ void OnPlayerList(const uint8_t* body, size_t length, size_t bits) {
                 if (!reader.ReadBits(&weapon, 6)) { animated = true; break; }
             }
         }
-        if (animated || !ReadFlag(reader, animated) || animated) break;
+        if (animated || !ReadFlag(reader, animated)) { DIAG("PLAYER_LIST id=%u stop at weapons bit=%zu", id, reader.GetReadOffsetBits()); break; }
+        // Packet_PlayerList animation block (CPacketHandler.cpp 1084-1104): ReadString block and anim (ushort length +
+        // bytes), int time, looped / updatePosition / interruptable / freezeLastFrame bits, int blendTime, taskRestore
+        // bit, double startTime, float speed. The reader used to stop the whole packet here, so every player listed
+        // after an animated one kept no model (a CJ desktop player then showed as skin 7 after a reconnect).
+        // The animation itself is not applied (SetPedAnimation has no hook yet).
+        if (animated) {
+            std::string block, anim;
+            int32_t time = 0, blend = 0;
+            double startTime = 0;
+            float speed = 0;
+            bool looped = false, updatePosition = false, interruptable = false, freezeLast = false, restore = false;
+            if (!Entity::PedWire::ReadLengthPrefixedString(reader, block) || !Entity::PedWire::ReadLengthPrefixedString(reader, anim) ||
+                !reader.Read(time) || !ReadFlag(reader, looped) || !ReadFlag(reader, updatePosition) ||
+                !ReadFlag(reader, interruptable) || !ReadFlag(reader, freezeLast) || !reader.Read(blend) ||
+                !ReadFlag(reader, restore) || !reader.ReadBits(reinterpret_cast<uint8_t*>(&startTime), 64) || !reader.Read(speed))
+                break;
+            DIAG("PLAYER_LIST id=%u animation %s/%s (not applied)", id, block.c_str(), anim.c_str());
+        }
     }
-    if (players > 0) SW_LOGI("PLAYER_LIST stored %d player model(s)", players);
+    if (players > 0) SW_LOGI("PLAYER_LIST stored %d player model(s), %zu bits left", players, reader.GetRemainingBits());
 }
 
 // Takes the descriptor ParseResourceStart already built for either layout (desktop or mobile shim),
