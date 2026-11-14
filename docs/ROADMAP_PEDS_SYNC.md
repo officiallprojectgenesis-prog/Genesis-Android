@@ -53,6 +53,21 @@ These are suspects ranked by evidence. None of them is confirmed yet. Phase 0 te
 
 ## 3. Phases
 
+### Progress (2026-11-14, host build only, no device run yet)
+
+| Step | State |
+|---|---|
+| 0.1, 0.3, 0.4 | In the tree. Needs a device log. |
+| 0.2 | `shared/MtaIds.h` from compiled enums. The 68/120 vs 76/77/119 question waits for the 0.1 log. |
+| 1.1-1.9 | Kept in `PedSpawn`, host test `CheckPedEntityBody`. 1.10 (model validation) open. |
+| 2.3 health/armor, frozen, 2.10, 2.11, 2.12 | In the tree. |
+| 2.8 seat | Reverted to `DIAG`: crashed on device (fault `0x18f`, `RemoveWeaponWhenEnteringVehicle` needs a `CPlayerInfo` the remote body lacks). |
+| 2.3 collision, 2.4 weapons, 2.5, 2.6 alpha/headless, 2.7, 2.9, 2.13 | `DIAG` only. Weapons need the weapon-model request first. |
+| 3.1, 3.2 (sync state and locks) | In the tree. 3.3 open. |
+| 4.1 health/armor, 4.2 | In the tree. A PED_STOPSYNC stale-health lock was also fixed. |
+| 5.1 | Held back until 6.2. The phone drops SET_ELEMENT_POSITION, so its stored context goes stale and the check would reject every later PED_SYNC. |
+| 5.2-8 | Not started. |
+
 Run the phases in order. A phase is done only after its test passes on a phone, against the live server, with a desktop client connected. A clean compile or a headless pass does not count.
 
 ### Phase 0: measure (logging only, no behavior change)

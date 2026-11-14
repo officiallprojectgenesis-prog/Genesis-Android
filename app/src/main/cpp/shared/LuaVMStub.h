@@ -109,6 +109,10 @@ void ActiveVmQueueCursor(int action, float x, float y);
 void ActiveVmQueueScriptInput(const char* text, int backspaces, const char* key);
 // MediaPlayer finished a playSound id. Any thread.
 void ActiveVmNoteSoundEnded(uint32_t id);
+// True while that playSound id still has a player. isElement uses this, because the
+// element-tree isElement binding runs after the sound binding and would otherwise
+// say the login track is already gone.
+bool SoundElementAlive(uint32_t id);
 // Screen size scripts see (guiGetScreenSize), and the resource whose code is running.
 void ActiveVmScreenSize(int& width, int& height);
 const std::string& ActiveVmOwner();

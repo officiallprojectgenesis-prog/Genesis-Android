@@ -515,6 +515,10 @@ void LockPedHealth(uint32_t, float) {}
 void LockPedArmor(uint32_t, float) {}
 void LockPedHealthCurrent(uint32_t) {}
 void LockPedArmorCurrent(uint32_t) {}
+void ResolvePedVitalsLockCurrent(uint32_t, float, float) {}
+void UnlockPedVitals(uint32_t) {}
+void ForgetPedNativeTaskState(uint32_t) {}
+void SetPedVitals(uint32_t, float, float) {}
 
 // ---------------------------------------------------------------------------
 // GameEngine class: no libGTASA on the host, every call reports "not available".

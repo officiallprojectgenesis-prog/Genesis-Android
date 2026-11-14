@@ -273,6 +273,11 @@ struct RemotePed {
     bool syncArmor = false;
     // Server ped from the ENTITY_ADD actor list (kind 14).
     bool serverPed = false;
+    // ENTITY_ADD ped record (ServerWorld::CopyPedSpawn) applied once per element. A later stream-in keeps the
+    // current state, as desktop _CreateModel restores m_fHealth and friends, not the ENTITY_ADD values.
+    bool spawnApplied = false;
+    // CClientPed::SetFrozen state of the element (ENTITY_ADD bIsFrozen, later SET_ELEMENT_FROZEN).
+    bool frozen = false;
 };
 static std::mutex g_remoteMutex;
 static std::unordered_map<uint32_t, RemotePed> g_remotePeds;
@@ -290,6 +295,8 @@ struct RemoteBody {
     int64_t fenceAtMs = 0;
     // m_remoteStreamInFencePreviousStaticWaitingForCollision (CClientPed.cpp 5934), restored on release (6038).
     bool fencePrevStaticWaiting = false;
+    // m_remoteReplicaPhysicsFenceActive (CClientPed::UpdateRemoteReplicaPhysicsFence, CClientPed.cpp 7140-7152).
+    bool replicaFence = false;
     // Last area code written by ApplyPedInterior. Unset until the first write.
     bool interiorWritten = false;
     uint8_t interior = 0;
@@ -1024,6 +1031,29 @@ static void SetPhysicalFrozen(void* body, bool frozen) {
     else *flags &= ~kDisableFriction;
 }
 
+// CClientPed::ApplyPhysicalFreezeState (CClientPed.cpp 7133-7138): the element freeze, the stream-in fence and the
+// observer replica fence share bDontApplySpeed, so the bit is always the union. The ambient-owner and
+// collision-authority fences belong to native traffic and are not ported.
+static void ApplyPedFreezeState(void* body, const RemoteBody& stored, const RemotePed& ped) {
+    SetPhysicalFrozen(body, ped.frozen || stored.collisionFence || stored.replicaFence);
+}
+
+// CClientPed::UpdateRemoteReplicaPhysicsFence (CClientPed.cpp 7140-7152). An observed server ped (not a player,
+// not owned here, not frozen, not in a vehicle) has GTA's integrator off; interpolation alone moves it.
+// Not tracked yet, so not in the condition: attached, entering or leaving a vehicle, synced position anim,
+// physical native-task presentation (needs bitstream 0x3D).
+static void UpdateRemoteReplicaPhysicsFence(void* body, RemoteBody& stored, const RemotePed& ped, bool seated) {
+    const bool shouldFence = body && ped.serverPed && !ped.hosted && !ped.frozen && !seated;
+    if (shouldFence == stored.replicaFence) return;
+    stored.replicaFence = shouldFence;
+    ApplyPedFreezeState(body, stored, ped);
+    static int noted = 0;
+    if (noted < 8) {
+        ++noted;
+        ENGINE_LOGI("DIAG ped replica physics fence %s", shouldFence ? "fenced" : "released");
+    }
+}
+
 // CClientPed::SetInterior (CClientPed.cpp 1101-1119) writes CEntity::SetAreaCode.
 // CEntryExitManager::SetAreaCodeForVisibleObjects reads and writes the byte at
 // +0x4B (0x3cc420, 0x3cc43c). CTaskSimpleWaitUntilAreaCodesMatch::ProcessPed
@@ -1067,21 +1097,17 @@ static bool HoldPedCollisionFence(void* body, RemoteBody& stored, RemotePed& ped
     if (elapsed >= kTimeoutMs || (elapsed >= kMinMs && loaded)) {
         // ClearRemoteStreamInTransformFence (CClientPed.cpp 6038): restore the flag saved at arm.
         SetStaticWaitingForCollision(body, stored.fencePrevStaticWaiting);
-        // ClearRemoteStreamInTransformFence calls ApplyPhysicalFreezeState while
-        // the fence flag is still set (CClientPed.cpp 6038-6048), so that call
-        // leaves bDontApplySpeed on. The next StreamedInPulse owns the bit through
-        // UpdateRemoteReplicaPhysicsFence (CClientPed.cpp 7140-7152), which is not
-        // ported. This fence also covers a hosted ped; desktop ArmRemoteStreamInTransformFence
-        // returns first when m_bIsSyncing (CClientPed.cpp 5917). Clearing the bit
-        // here lets that ped move after the hold.
-        SetPhysicalFrozen(body, false);
+        // ClearRemoteStreamInTransformFence calls ApplyPhysicalFreezeState while the fence flag is still set
+        // (CClientPed.cpp 6038-6048), and m_remoteStreamInFenceActive is cleared right after (6049). The union is
+        // recomputed here once the flag is off; the replica fence (UpdateRemoteReplicaPhysicsFence) then owns the bit.
+        stored.collisionFence = false;
+        ApplyPedFreezeState(body, stored, ped);
         // CClientPed.cpp 6040-6046: "GTA's stock mission collision gate puts a physical back on the moving list
         // after clearing bStaticWaitingForCollision ... a required resume when construction left it out of the list."
         // Without this the body is never processed after the hold (ROADMAP_PEDS_SYNC suspect 1).
         const bool listedBefore = OnMovingList(body);
         if (!stored.fencePrevStaticWaiting && !IsEntityStatic(body) && !WorldRPG::Debug::Flag("nomovelist"))
             AddToMovingList(body);
-        stored.collisionFence = false;
         static int released = 0;
         if (released < 8) {
             ++released;
@@ -1096,15 +1122,15 @@ static bool HoldPedCollisionFence(void* body, RemoteBody& stored, RemotePed& ped
 }
 
 static void ArmPedCollisionFence(void* body, const RemotePed& ped, RemoteBody& stored) {
-    // ArmRemoteStreamInTransformFence returns for the syncer (CClientPed.cpp 5917, m_bIsSyncing).
-    // The other early-outs (frozen, in a vehicle, attached, synced position anim) are not tracked here yet.
-    if (ped.hosted) return;
+    // ArmRemoteStreamInTransformFence returns for the syncer and for a frozen ped (CClientPed.cpp 5917).
+    // The other early-outs (in a vehicle, attached, synced position anim) are not tracked here yet.
+    if (ped.hosted || ped.frozen) return;
     stored.collisionFence = true;
     stored.fenceAtMs = GameNowMs();
     stored.fencePrevStaticWaiting = IsStaticWaitingForCollision(body);
     SetStaticWaitingForCollision(body, true);
     // ArmRemoteStreamInTransformFence (CClientPed.cpp 5937-5938): static-waiting, then SetFrozen(true).
-    SetPhysicalFrozen(body, true);
+    ApplyPedFreezeState(body, stored, ped);
     auto& cols = ColStore();
     if (!cols.request || !cols.loaded) {
         static bool missing = false;
@@ -1517,6 +1543,10 @@ static void ApplySyncedPlayerFields(uint32_t id, void* body) {
     // branch of InternalSetHealth recreates the ped; that hook is logged below.
     bool healthLocked = false, armorLocked = false;
     float lockedHealth = 0.f, lockedArmor = 0.f;
+    // Packet_PedStopSync: LockHealth(GetHealth()), LockArmor(GetArmor()) (CPedSync.cpp 280-281). The current value is
+    // the body's. Loads only: +0x6AC as RenderHealthBar (0x37d770), +0x6B4 as RenderArmorBar (0x37d93c). Writing the
+    // armor value back below stores the same bits that were loaded.
+    ResolvePedVitalsLockCurrent(id, *reinterpret_cast<float*>(raw + 0x6AC), *reinterpret_cast<float*>(raw + 0x6B4));
     if (!CopyPedVitalsLock(id, healthLocked, lockedHealth, armorLocked, lockedArmor)) return;
     if (healthLocked && std::isfinite(lockedHealth)) {
         auto* current = reinterpret_cast<float*>(raw + 0x6AC);
@@ -1533,6 +1563,58 @@ static void ApplySyncedPlayerFields(uint32_t id, void* body) {
     }
     if (armorLocked && std::isfinite(lockedArmor))
         *reinterpret_cast<float*>(raw + 0x6B4) = lockedArmor;
+}
+
+// The ENTITY_ADD ped record, applied once per element on the game thread before the stream-in fence is armed.
+// Desktop: CPacketHandler::Packet_EntityAdd case PED (CPacketHandler.cpp 4054-4184) stores the state, and
+// CClientPed::_CreateModel (CClientPed.cpp 5669-6224) writes it to the GTA body.
+static void ApplyPedSpawnRecord(uint32_t id, RemotePed& live) {
+    if (live.spawnApplied) return;
+    WorldRPG::Entity::PedSpawn spawn;
+    if (!ServerWorld::CopyPedSpawn(id, spawn)) return;  // not an ENTITY_ADD ped (a player, or already removed)
+    {
+        std::lock_guard<std::mutex> lock(g_remoteMutex);
+        live.spawnApplied = true;
+        // SetFrozen (4068). _CreateModel applies it through ApplyPhysicalFreezeState.
+        live.frozen = spawn.frozen;
+    }
+    // SetHealth, SetArmor (4057-4058): written next tick by ApplySyncedPlayerFields (+0x6AC / +0x6B4, the
+    // store sites already used for player sync). Then LockHealth / LockArmor when bSynced (4059-4063).
+    SetPedVitals(id, spawn.health, spawn.armor);
+    if (spawn.synced) {
+        LockPedHealth(id, spawn.health);
+        LockPedArmor(id, spawn.armor);
+    }
+    // WarpIntoVehicle (4064-4065) is NOT run. Routing it through the seat queue crashed on device (2026-11-14 01:51:17
+    // and 01:51:41, S25, fault addr 0x18f): SeatRemotePedInCar -> CTaskSimpleCarSetPedInAsDriver::ProcessPed ->
+    // CPed::RemoveWeaponWhenEnteringVehicle (0x59ba8c). For a ped whose type word at +0x720 is <= 1 it calls
+    // CPlayerPed::GetPlayerInfoForThisPlayerPed, which returns null for a remote CPlayerPed body, then loads
+    // [x0, #0x18f] (0x59bad4). Needs a CPlayerInfo for remote bodies (desktop multiplayer_sa) before it can run.
+    if (spawn.vehicleId != 0xFFFFFFFFu) {
+        static int seatNoted = 0;
+        if (seatNoted < 4) {
+            ++seatNoted;
+            ENGINE_LOGI("DIAG ped spawn id=%u WarpIntoVehicle(%u, seat %u) not run: driver-warp task needs "
+                        "GetPlayerInfoForThisPlayerPed for a remote body", id, spawn.vehicleId, static_cast<unsigned>(spawn.seat));
+        }
+    }
+    // Steps that need a hook the phone does not have yet. Each keeps its place in the desktop order.
+    static int noted = 0;
+    if (noted < 6) {
+        ++noted;
+        ENGINE_LOGI("DIAG ped spawn record id=%u applied health=%.1f armor=%.1f synced=%d frozen=%d vehicle=%u seat=%u. "
+                    "Not applied (no verified hook): SetUsesCollision=%d (CEntity bUsesCollision), SetHasJetPack=%d, "
+                    "SetHeadless=%d, SetAlpha=%u, SetMoveAnim=%u (CPed::SetMoveAnim needs the move-anim field), "
+                    "clothes=%zu (RebuildModel, model 0 only), weapons=%zu slot=%u (CPedSA::GiveWeapon requests the weapon "
+                    "model first, CPedSA.cpp 616-627; no weapon-model lookup on arm64 yet), anim=%s/%s "
+                    "(SetPedAnimation, CTaskSimpleRunNamedAnim), dimension=%u (not streamed by dimension)",
+                    id, spawn.health, spawn.armor, spawn.synced ? 1 : 0, spawn.frozen ? 1 : 0, spawn.vehicleId,
+                    static_cast<unsigned>(spawn.seat), spawn.collisions ? 1 : 0, spawn.hasJetpack ? 1 : 0,
+                    spawn.headless ? 1 : 0, static_cast<unsigned>(spawn.alpha), static_cast<unsigned>(spawn.moveAnim),
+                    spawn.clothes.size(), spawn.weapons.size(), static_cast<unsigned>(spawn.currentSlot),
+                    spawn.animation.present ? spawn.animation.block.c_str() : "-",
+                    spawn.animation.present ? spawn.animation.name.c_str() : "-", spawn.dimension);
+    }
 }
 
 // #region agent log
@@ -1750,7 +1832,11 @@ static void ApplyRemotePeds() {
             RemoteBody stored;
             ArmRemote(body, stored, ped.weapon);
             stored.ped = body;
-            ArmPedCollisionFence(body, ped, stored);
+            // ENTITY_ADD state first: the fence early-outs read frozen (CClientPed.cpp 5917).
+            ApplyPedSpawnRecord(id, live->second);
+            ArmPedCollisionFence(body, live->second, stored);
+            // A frozen ped skips the fence, so its freeze bit is written here (_CreateModel -> ApplyPhysicalFreezeState).
+            if (!stored.collisionFence) ApplyPedFreezeState(body, stored, live->second);
             {
                 static int spawnLists = 0;
                 if (spawnLists < 8) {
@@ -1786,15 +1872,17 @@ static void ApplyRemotePeds() {
         if (g_seatedPeds.count(id)) {
             ApplySyncedPlayerFields(id, body);
             if (found->second.collisionFence) {
-                SetStaticWaitingForCollision(body, false);
-                SetPhysicalFrozen(body, false);
+                SetStaticWaitingForCollision(body, found->second.fencePrevStaticWaiting);
                 found->second.collisionFence = false;
+                ApplyPedFreezeState(body, found->second, live->second);
             }
         } else if (HoldPedCollisionFence(body, found->second, live->second)) {
             ApplySyncedPlayerFields(id, body);
             DebugPedPose("H5", "fence", id, body, live->second, true);
             continue;
         }
+        // StreamedInPulse -> UpdateRemoteReplicaPhysicsFence (CClientPed.cpp 7140-7152), after the stream-in fence.
+        UpdateRemoteReplicaPhysicsFence(body, found->second, live->second, g_seatedPeds.count(id) != 0);
         ArmRemote(body, found->second, ped.weapon);
         // A seated ped is placed by the seat task (ApplyRemoteSeat), so the on-foot pose below must not move it.
         if (g_seatedPeds.count(id)) continue;
@@ -3077,6 +3165,17 @@ void ForgetRemote(uint32_t id) {
     g_forget.push_back(id);
 }
 
+void SetPedVitals(uint32_t id, float health, float armor) {
+    if (id == 0 || id == 0xFFFFFFFFu || id == ServerWorld::LocalPlayer()) return;
+    if (!std::isfinite(health) || !std::isfinite(armor)) return;
+    std::lock_guard<std::mutex> lock(g_remoteMutex);
+    RemotePed& ped = g_remotePeds[id];
+    ped.health = health;
+    ped.armor = armor;
+    ped.syncHealth = true;
+    ped.syncArmor = true;
+}
+
 // Reconnect (P3.1): the network thread clears the record set; the game thread
 // drops the bodies in ApplyRemotePeds on its next tick.
 void RequestRemoteReset() {
@@ -3306,6 +3405,10 @@ void LockPedHealth(uint32_t, float) {}
 void LockPedArmor(uint32_t, float) {}
 void LockPedHealthCurrent(uint32_t) {}
 void LockPedArmorCurrent(uint32_t) {}
+void ResolvePedVitalsLockCurrent(uint32_t, float, float) {}
+void UnlockPedVitals(uint32_t) {}
+void ForgetPedNativeTaskState(uint32_t) {}
+void SetPedVitals(uint32_t, float, float) {}
 bool CopyPedVitalsLock(uint32_t, bool& healthLocked, float& health, bool& armorLocked, float& armor) {
     healthLocked = false;
     armorLocked = false;

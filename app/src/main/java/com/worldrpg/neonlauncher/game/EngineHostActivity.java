@@ -81,6 +81,7 @@ public final class EngineHostActivity extends GTASA {
     private boolean retryPending = false;
     private DisconnectDialog disconnectDialog;
     private volatile boolean netRunning;
+    private boolean clientReady;
     private Thread netThread;
 
     private native boolean nativeInit();
@@ -89,6 +90,11 @@ public final class EngineHostActivity extends GTASA {
     private native void nativePulse();
     private native void nativeDestroy();
     private native void nativeSetScreenSize(int width, int height);
+
+    private void reportDxScreen(int width, int height) {
+        if (!clientReady || width <= 0 || height <= 0) return;
+        nativeSetScreenSize(width, height);
+    }
     private native void nativeCursorEvent(int action, float x, float y);
     private native void nativeScriptInput(String text, int backspaces, String key);
     private native void nativeSoundEnded(int id);
@@ -158,8 +164,15 @@ public final class EngineHostActivity extends GTASA {
             Log.e(TAG, "MTA client failed to start");
             return;
         }
-        android.util.DisplayMetrics metrics = getResources().getDisplayMetrics();
-        nativeSetScreenSize(metrics.widthPixels, metrics.heightPixels);
+        clientReady = true;
+        int screenW = dxOverlay != null ? dxOverlay.getWidth() : 0;
+        int screenH = dxOverlay != null ? dxOverlay.getHeight() : 0;
+        if (screenW <= 0 || screenH <= 0) {
+            android.util.DisplayMetrics metrics = getResources().getDisplayMetrics();
+            screenW = metrics.widthPixels;
+            screenH = metrics.heightPixels;
+        }
+        nativeSetScreenSize(screenW, screenH);
         String nick = new PreferencesManager(this).getUsername();
         if (nick == null || nick.isEmpty()) nick = BuildConfig.DEFAULT_PLAYER_NICK;
         connectIp = ip;
@@ -220,6 +233,11 @@ public final class EngineHostActivity extends GTASA {
         dxOverlay = new MtaDxView(this);
         dxOverlay.setVisibility(View.GONE);
         dxOverlay.setCursorListener(this::onCursorTouch);
+        dxOverlay.addOnLayoutChangeListener((v, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom) -> {
+            int w = right - left;
+            int h = bottom - top;
+            if (w > 0 && h > 0 && (w != oldRight - oldLeft || h != oldBottom - oldTop)) reportDxScreen(w, h);
+        });
         addContentView(dxOverlay, new FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
 
@@ -322,6 +340,9 @@ public final class EngineHostActivity extends GTASA {
         scriptInput.setSingleLine(true);
         scriptInput.setAlpha(0f);
         scriptInput.setBackgroundColor(Color.TRANSPARENT);
+        scriptInput.setFocusable(true);
+        scriptInput.setFocusableInTouchMode(true);
+        scriptInput.setShowSoftInputOnFocus(true);
         // NEXT: the action key moves to the next DX field (tab) or closes the keyboard.
         // It does not send enter, which the login screen treats as submit.
         scriptInput.setImeOptions(EditorInfo.IME_ACTION_NEXT);
@@ -392,17 +413,23 @@ public final class EngineHostActivity extends GTASA {
         scriptInput.setText("");
         scriptCommitted = "";
         scriptApplying = false;
-        // The tap was handled by the DX overlay, so this runs a frame later. ALWAYS_VISIBLE
-        // plus the insets controller still opens the IME; ADJUST_NOTHING keeps the GL surface put.
+        raiseScriptKeyboard();
+    }
+
+    // The game surface keeps window focus, so a later showSoftInput is ignored.
+    // Called from the tap as well as from the K line.
+    private void raiseScriptKeyboard() {
+        if (scriptInput == null) return;
         getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING
                 | WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_VISIBLE);
+        if (view != null) view.clearFocus();
         scriptInput.requestFocus();
-        InputMethodManager keyboard = (InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
-        if (keyboard != null) keyboard.showSoftInput(scriptInput, InputMethodManager.SHOW_FORCED);
         if (Build.VERSION.SDK_INT >= 30) {
             android.view.WindowInsetsController controller = scriptInput.getWindowInsetsController();
             if (controller != null) controller.show(WindowInsets.Type.ime());
         }
+        InputMethodManager keyboard = (InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
+        if (keyboard != null) keyboard.showSoftInput(scriptInput, InputMethodManager.SHOW_IMPLICIT);
     }
 
     private void hideScriptKeyboard() {
@@ -420,14 +447,21 @@ public final class EngineHostActivity extends GTASA {
         if (keyboard != null) keyboard.hideSoftInputFromWindow(scriptInput.getWindowToken(), 0);
     }
 
-    // A second tap on the field is still inside the gesture, so it can raise the IME if the
-    // frame-later request was ignored.
+    // The login form asks for the keyboard from a server event, which Android ignores.
+    // This down event is the gesture. Lua then keeps the field focused, or the next
+    // frame closes the keyboard if the tap was a button.
     private void onCursorTouch(int action, float x, float y) {
         nativeCursorEvent(action, x, y);
-        if (action != 0 || !scriptKeyboardShown || scriptInput == null) return;
-        scriptInput.requestFocus();
-        InputMethodManager keyboard = (InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
-        if (keyboard != null) keyboard.showSoftInput(scriptInput, InputMethodManager.SHOW_FORCED);
+        // K is already set when the login form is open. This tap is the gesture Android
+        // accepts. A tap before that line exists still queues the click, and the click
+        // calls guiSetInputEnabled, which sends K on the next frame.
+        if (action != 0 || scriptInput == null) return;
+        if (!scriptKeyboardShown) {
+            scriptKeyboardSuppressed = false;
+            return;
+        }
+        scriptKeyboardSuppressed = false;
+        raiseScriptKeyboard();
     }
 
     /** A "K" line in the DX frame means a gui-edit or guiSetInputEnabled(true) wants the keyboard. */

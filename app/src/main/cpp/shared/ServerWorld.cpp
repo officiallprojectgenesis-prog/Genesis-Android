@@ -244,7 +244,10 @@ void ResetSession() {
         g_resourceRoot = 0;
     }
     // Hosted and observer ped state is keyed by ElementID, which the new session reuses.
-    for (uint32_t id : peds) WorldRPG::Sync::PedSyncState::Forget(id);
+    for (uint32_t id : peds) {
+        WorldRPG::Sync::PedSyncState::Forget(id);
+        Game::ForgetPedNativeTaskState(id);
+    }
     SW_LOGI("ServerWorld reset for a new session (%zu ped state(s) forgotten)", peds.size());
 }
 
@@ -502,6 +505,7 @@ void OnEntityRemove(const uint8_t* body, size_t length, size_t bits) {
         // Deleting a CClientPed takes it out of CPedSync (CClientPed::~CClientPed, CClientPed.cpp 926). Without this a reused
         // ElementID inherits the old hosted flag and interpolators.
         WorldRPG::Sync::PedSyncState::Forget(id);
+        Game::ForgetPedNativeTaskState(id);
         // ForgetRemote takes g_remoteMutex and only queues; the body is dropped on the game thread.
         Game::ForgetRemote(id);
         ++removed;

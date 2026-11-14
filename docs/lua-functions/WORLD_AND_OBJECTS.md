@@ -5,9 +5,9 @@
 ## Parity Status
 
 - **Total Functions:** 227
-- **Implemented:** 2 (0.9%)
-- **Stubs:** 15
-- **Missing:** 210
+- **Implemented:** 4 (1.8%)
+- **Stubs:** 11
+- **Missing:** 212
 
 > **Technical Requirement:** Hooks libGTASA.so `CObject`, `CWeather`, `CClock`, `CWaterLevel`, `CWorld`, and particle engine `FxSystem_c`.
 
@@ -51,7 +51,7 @@
 | `getAircraftMaxVelocity` | Missing | `CLuaWorldDefs.cpp:95` | `GetAircraftMaxVelocity` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
 | `getAmbientPedCivilianCoupleCandidate` | Missing | `CLuaWorldDefs.cpp:110` | `GetAmbientPedCivilianCoupleCandidate` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
 | `getAmbientPedGangGroupCandidate` | Missing | `CLuaWorldDefs.cpp:109` | `GetAmbientPedGangGroupCandidate` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `getAmbientPedPopulationProfile` | **Implemented** | `CLuaWorldDefs.cpp:106` | `GetAmbientPedPopulationProfile` | Operational on Android. (GetAmbientPedPopulationProfile) |
+| `getAmbientPedPopulationProfile` | Missing | `CLuaWorldDefs.cpp:106` | `GetAmbientPedPopulationProfile` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
 | `getAmbientPedSpawnCandidate` | Missing | `CLuaWorldDefs.cpp:108` | `GetAmbientPedSpawnCandidate` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
 | `getAmbientVehicleModelCandidate` | Missing | `CLuaWorldDefs.cpp:112` | `GetAmbientVehicleModelCandidate` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
 | `getAmbientVehicleOccupantModelCandidate` | Missing | `CLuaWorldDefs.cpp:113` | `GetAmbientVehicleOccupantModelCandidate` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
@@ -81,7 +81,7 @@
 | `getGaragePosition` | Missing | `CLuaWorldDefs.cpp:76` | `GetGaragePosition` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
 | `getGarageSize` | Missing | `CLuaWorldDefs.cpp:77` | `GetGarageSize` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
 | `getGravity` | Missing | `CLuaWorldDefs.cpp:72` | `GetGravity` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `getGroundPosition` | *Stub* | `CLuaWorldDefs.cpp:65` | `GetGroundPosition` | Currently stubbed: `l_num0: lua_pushinteger(L, 0)`. Needs native engine wiring. |
+| `getGroundPosition` | **Implemented** | `CLuaWorldDefs.cpp:65` | `GetGroundPosition` | Operational on Android. (l_getGroundPosition) |
 | `getHeatHaze` | Missing | `CLuaWorldDefs.cpp:82` | `GetHeatHaze` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
 | `getInteriorFurnitureEnabled` | Missing | `CLuaWorldDefs.cpp:86` | `GetInteriorFurnitureEnabled` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
 | `getInteriorSoundsEnabled` | Missing | `CLuaWorldDefs.cpp:85` | `GetInteriorSoundsEnabled` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
@@ -113,7 +113,7 @@
 | `getWorldFromScreenPosition` | Missing | `CLuaWorldDefs.cpp:68` | `GetWorldFromScreenPosition` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
 | `getWorldProperty` | Missing | `CLuaWorldDefs.cpp:115` | `ArgumentParser<GetWorldProperty>` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
 | `getZoneName` | Missing | `CLuaWorldDefs.cpp:71` | `GetZoneName` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `isAmbientPedSphereVisible` | *Stub* | `CLuaWorldDefs.cpp:107` | `ArgumentParser<IsAmbientPedSphereVisible>` | Currently stubbed: `l_false: lua_pushboolean(L, 0)`. Needs native engine wiring. |
+| `isAmbientPedSphereVisible` | Missing | `CLuaWorldDefs.cpp:107` | `ArgumentParser<IsAmbientPedSphereVisible>` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
 | `isDynamicPedShadowsEnabled` | Missing | `CLuaWorldDefs.cpp:207` | `ArgumentParser<IsDynamicPedShadowsEnabled>` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
 | `isFireDamageEnabled` | Missing | `CLuaFireDefs.cpp:157` | `IsFireDamageEnabled` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
 | `isFireSpreadEnabled` | Missing | `CLuaFireDefs.cpp:161` | `IsFireSpreadEnabled` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
@@ -138,7 +138,7 @@
 | `removeObjectMaterial` | Missing | `CLuaObjectDefs.cpp:44` | `RemoveObjectMaterial` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
 | `removeWorldModel` | *Stub* | `CLuaWorldDefs.cpp:163` | `RemoveWorldBuilding` | Currently stubbed: `DefaultValue(kTrue)`. Needs native engine wiring. |
 | `resetAmbientPedPopulationModels` | *Stub* | `CLuaWorldDefs.cpp:103` | `ArgumentParser<ResetAmbientPedPopulationModels>` | Currently stubbed: `l_true: lua_pushboolean(L, 1)`. Needs native engine wiring. |
-| `resetAmbientPedPopulationZonesToBootstrap` | *Stub* | `CLuaWorldDefs.cpp:104` | `ResetAmbientPedPopulationZonesToBootstrap` | Currently stubbed: `l_true: lua_pushboolean(L, 1)`. Needs native engine wiring. |
+| `resetAmbientPedPopulationZonesToBootstrap` | Missing | `CLuaWorldDefs.cpp:104` | `ResetAmbientPedPopulationZonesToBootstrap` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
 | `resetBlurLevel` | Missing | `CLuaWorldDefs.cpp:192` | `ResetBlurLevel` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
 | `resetColorFilter` | Missing | `CLuaWorldDefs.cpp:178` | `ArgumentParser<ResetColorFilter>` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
 | `resetCoronaReflectionsEnabled` | Missing | `CLuaWorldDefs.cpp:179` | `ArgumentParser<ResetCoronaReflectionsEnabled>` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
@@ -169,7 +169,7 @@
 | `restoreWorldModel` | *Stub* | `CLuaWorldDefs.cpp:165` | `RestoreWorldBuilding` | Currently stubbed: `DefaultValue(kTrue)`. Needs native engine wiring. |
 | `setAircraftMaxHeight` | Missing | `CLuaWorldDefs.cpp:150` | `SetAircraftMaxHeight` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
 | `setAircraftMaxVelocity` | Missing | `CLuaWorldDefs.cpp:151` | `SetAircraftMaxVelocity` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `setAmbientPedPopulationZoneState` | *Stub* | `CLuaWorldDefs.cpp:105` | `SetAmbientPedPopulationZoneState` | Currently stubbed: `l_true: lua_pushboolean(L, 1)`. Needs native engine wiring. |
+| `setAmbientPedPopulationZoneState` | Missing | `CLuaWorldDefs.cpp:105` | `SetAmbientPedPopulationZoneState` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
 | `setBirdsEnabled` | Missing | `CLuaWorldDefs.cpp:155` | `SetBirdsEnabled` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
 | `setBlurLevel` | Missing | `CLuaWorldDefs.cpp:134` | `SetBlurLevel` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
 | `setCloudsEnabled` | Missing | `CLuaWorldDefs.cpp:136` | `SetCloudsEnabled` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
@@ -221,7 +221,7 @@
 | `setSkyGradient` | Missing | `CLuaWorldDefs.cpp:122` | `SetSkyGradient` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
 | `setSunColor` | Missing | `CLuaWorldDefs.cpp:148` | `SetSunColor` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
 | `setSunSize` | Missing | `CLuaWorldDefs.cpp:149` | `SetSunSize` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `setTime` | Missing | `CLuaWorldDefs.cpp:118` | `SetTime` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
+| `setTime` | **Implemented** | `CLuaWorldDefs.cpp:118` | `SetTime` | Operational on Android. (l_setTime) |
 | `setTimeFrozen` | Missing | `CLuaWorldDefs.cpp:169` | `ArgumentParser<SetTimeFrozen>` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
 | `setTrafficLightState` | Missing | `CLuaWorldDefs.cpp:137` | `SetTrafficLightState` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
 | `setTrafficLightsLocked` | Missing | `CLuaWorldDefs.cpp:138` | `SetTrafficLightsLocked` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
@@ -232,7 +232,7 @@
 | `setWaterLevel` | Missing | `CLuaWaterDefs.cpp:24` | `SetWaterLevel` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
 | `setWaterVertexPosition` | Missing | `CLuaWaterDefs.cpp:25` | `SetWaterVertexPosition` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
 | `setWaveHeight` | Missing | `CLuaWorldDefs.cpp:128` | `SetWaveHeight` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `setWeather` | Missing | `CLuaWorldDefs.cpp:124` | `SetWeather` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
+| `setWeather` | **Implemented** | `CLuaWorldDefs.cpp:124` | `SetWeather` | Operational on Android. (l_setWeather) |
 | `setWeatherBlended` | Missing | `CLuaWorldDefs.cpp:125` | `SetWeatherBlended` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
 | `setWindVelocity` | Missing | `CLuaWorldDefs.cpp:139` | `SetWindVelocity` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
 | `setWorldProperty` | Missing | `CLuaWorldDefs.cpp:160` | `ArgumentParser<SetWorldProperty>` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |

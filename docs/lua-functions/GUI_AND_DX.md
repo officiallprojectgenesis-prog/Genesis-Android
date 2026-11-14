@@ -5,9 +5,9 @@
 ## Parity Status
 
 - **Total Functions:** 199
-- **Implemented:** 42 (21.1%)
-- **Stubs:** 6
-- **Missing:** 151
+- **Implemented:** 49 (24.6%)
+- **Stubs:** 5
+- **Missing:** 145
 
 > **Technical Requirement:** Desktop uses CEGUI and Direct3D9. Mobile uses `MtaDxView.java` (Android Canvas) + `LuaGuiApi.cpp`. Missing shaders (HLSL -> GLSL ES) and complex CEGUI widgets (gridlist, tabpanel, scrollpane).
 
@@ -23,8 +23,8 @@
 | `dxCreateShader` | Missing | `CLuaDrawingDefs.cpp:45` | `DxCreateShader` | Needs GLSL ES 3.0 shader pipeline (translating desktop D3DX9 HLSL). |
 | `dxCreateTexture` | Missing | `CLuaDrawingDefs.cpp:44` | `DxCreateTexture` | Needs Android Canvas / OpenGL ES draw line routing. |
 | `dxDrawCircle` | *Stub* | `CLuaDrawingDefs.cpp:31` | `DxDrawCircle` | Currently stubbed: `DefaultValue(kTrue)`. Needs native engine wiring. |
-| `dxDrawImage` | *Stub* | `CLuaDrawingDefs.cpp:32` | `DxDrawImage` | Currently stubbed: `DefaultValue(kTrue)`. Needs native engine wiring. |
-| `dxDrawImageSection` | Missing | `CLuaDrawingDefs.cpp:33` | `DxDrawImageSection` | Needs Android Canvas / OpenGL ES draw line routing. |
+| `dxDrawImage` | **Implemented** | `CLuaDrawingDefs.cpp:32` | `DxDrawImage` | Operational on Android. (l_dxDrawImage) |
+| `dxDrawImageSection` | **Implemented** | `CLuaDrawingDefs.cpp:33` | `DxDrawImageSection` | Operational on Android. (l_dxDrawImageSection) |
 | `dxDrawLine` | Missing | `CLuaDrawingDefs.cpp:25` | `DxDrawLine` | Needs Android Canvas / OpenGL ES draw line routing. |
 | `dxDrawLine3D` | Missing | `CLuaDrawingDefs.cpp:28` | `DxDrawLine3D` | Needs Android Canvas / OpenGL ES draw line routing. |
 | `dxDrawMaterialLine3D` | Missing | `CLuaDrawingDefs.cpp:26` | `DxDrawMaterialLine3D` | Needs Android Canvas / OpenGL ES draw line routing. |

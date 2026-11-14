@@ -5,8 +5,8 @@ Camera matrix (pos/lookAt), camera target, field of view (FOV), screen shake, fa
 ## Parity Status
 
 - **Total Functions:** 47
-- **Implemented:** 1 (2.1%)
-- **Stubs:** 5
+- **Implemented:** 3 (6.4%)
+- **Stubs:** 3
 - **Missing:** 41
 
 > **Technical Requirement:** Requires hooking libGTASA.so `TheCamera` (`CCamera`) at `0x71...` in ARM64, and matrix interpolation routines.
@@ -50,8 +50,8 @@ Camera matrix (pos/lookAt), camera target, field of view (FOV), screen shake, fa
 | `setCameraFieldOfView` | *Stub* | `CLuaCameraDefs.cpp:79` | `SetCameraFieldOfView` | Currently stubbed: `DefaultValue(kTrue)`. Needs native engine wiring. |
 | `setCameraGoggleEffect` | Missing | `CLuaCameraDefs.cpp:86` | `SetCameraGoggleEffect` | Needs reading/writing CCamera singleton in libGTASA.so. |
 | `setCameraInterior` | *Stub* | `CLuaCameraDefs.cpp:81` | `SetCameraInterior` | Currently stubbed: `DefaultValue(kTrue)`. Needs native engine wiring. |
-| `setCameraMatrix` | *Stub* | `CLuaCameraDefs.cpp:78` | `SetCameraMatrix` | Currently stubbed: `l_true: lua_pushboolean(L, 1)`. Needs native engine wiring. |
-| `setCameraTarget` | *Stub* | `CLuaCameraDefs.cpp:80` | `SetCameraTarget` | Currently stubbed: `DefaultValue(kTrue)`. Needs native engine wiring. |
+| `setCameraMatrix` | **Implemented** | `CLuaCameraDefs.cpp:78` | `SetCameraMatrix` | Operational on Android. (l_setCameraMatrix) |
+| `setCameraTarget` | **Implemented** | `CLuaCameraDefs.cpp:80` | `SetCameraTarget` | Operational on Android. (l_setCameraTarget) |
 | `setCameraViewMode` | Missing | `CLuaCameraDefs.cpp:85` | `ArgumentParserWarn<false, SetCameraViewMode>` | Needs reading/writing CCamera singleton in libGTASA.so. |
 | `setScriptCameraFixed` | Missing | `CLuaCameraDefs.cpp:97` | `ArgumentParser<SetScriptCameraFixed>` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
 | `setScriptCameraNearClip` | Missing | `CLuaCameraDefs.cpp:107` | `ArgumentParser<SetScriptCameraNearClip>` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |

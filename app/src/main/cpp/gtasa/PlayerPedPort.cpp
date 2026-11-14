@@ -315,6 +315,8 @@ using ProcessControlFn = void (*)(void*);
 using GetPadFn = void* (*)(int);
 ProcessControlFn g_originalControl = nullptr;
 GetPadFn g_getPad = nullptr;
+using FindLocalPedFn = void* (*)(int);
+FindLocalPedFn g_controlFindPlayerPed = nullptr;
 bool g_controlHook = false;
 
 RemoteStick* FindStick(void* ped) {
@@ -324,12 +326,19 @@ RemoteStick* FindStick(void* ped) {
     return nullptr;
 }
 
-// Replacement for CPlayerPed::ProcessControl. Only a remote ped with a stick set
-// swaps the pad. Everything else calls the original untouched.
+// Replacement for CPlayerPed::ProcessControl.
+// Desktop SwitchContext (multiplayer_keysync.cpp 942-995) gives every CPlayerPed that is not the local player its own
+// pad: MemCpyFast(pLocalPadInterface, &data->m_pad, ...), where m_pad starts zeroed (CRemoteDataSA.h 28) and only
+// SetControllerState fills it. A server ped therefore sees no input. The phone used to run the original untouched for
+// any body without a keysync stick, so every server ped read the local pad and played the walk cycle whenever the
+// local player moved (device 2026-11-14 02:00, after the moving-list fix let those peds be processed).
+// Only the left stick (+0 / +2) is swapped; the rest of the mobile CPad is not mapped, and fire/jump on libGTASA 2.10
+// come from CTouchInterface, not the pad (see above).
 void RemotePlayerProcessControl(void* self) {
     if (!g_originalControl) return;
+    const bool local = !g_controlFindPlayerPed || self == g_controlFindPlayerPed(-1);
     RemoteStick* entry = FindStick(self);
-    if (!entry || !g_getPad) {
+    if (local || !g_getPad) {
         g_originalControl(self);
         return;
     }
@@ -338,10 +347,12 @@ void RemotePlayerProcessControl(void* self) {
         g_originalControl(self);
         return;
     }
+    const short stickX = entry ? entry->x : 0;
+    const short stickY = entry ? entry->y : 0;
     unsigned char saved[kPadBytes];
     std::memcpy(saved, pad, kPadBytes);
-    std::memcpy(pad + 0, &entry->x, sizeof entry->x);
-    std::memcpy(pad + 2, &entry->y, sizeof entry->y);
+    std::memcpy(pad + 0, &stickX, sizeof stickX);
+    std::memcpy(pad + 2, &stickY, sizeof stickY);
     g_originalControl(self);
     std::memcpy(pad, saved, kPadBytes);
 }
@@ -355,6 +366,9 @@ bool InstallRemoteControlHook() {
     if (!handle) return false;
     void* target = dlsym(handle, "_ZN10CPlayerPed14ProcessControlEv");
     g_getPad = reinterpret_cast<GetPadFn>(dlsym(handle, "_ZN4CPad6GetPadEi"));
+    g_controlFindPlayerPed = reinterpret_cast<FindLocalPedFn>(dlsym(handle, "_Z13FindPlayerPedi"));
+    if (!g_controlFindPlayerPed)
+        ENGINE_LOGE("DIAG remote control hook: FindPlayerPed missing; every CPlayerPed reads the local pad");
     if (!target || !g_getPad) {
         ENGINE_LOGE("Remote control hook: missing ProcessControl=%p GetPad=%p",
             target, reinterpret_cast<void*>(g_getPad));

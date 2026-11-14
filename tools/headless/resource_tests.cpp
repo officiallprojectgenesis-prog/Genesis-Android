@@ -227,6 +227,14 @@ void CheckHelpers(WorldRPG::Script::LuaVMStub& vm) {
         assert(getVehicleType(400) == "Automobile" and getVehicleType(460) == "Plane", "vehicle type")
         assert(getVehicleType(481) == "BMX" and getVehicleType(520) == "Plane", "more types")
         assert(getVehicleType(700) == "" and getVehicleType("nope") == false, "bad vehicle type")
+        local sound = playSound("http://example/login.mp3", false)
+        assert(type(sound) == "table" and isElement(sound) == true, "playSound stays an element")
+        assert(getElementType(sound) == "sound", "sound type")
+        assert(setSoundVolume(sound, 0.65) == true, "setSoundVolume")
+        local volume = getSoundVolume(sound)
+        assert(type(volume) == "number" and math.abs(volume - 0.65) < 0.01, "getSoundVolume")
+        assert(stopSound(sound) == true and isElement(sound) == false, "stopSound removes it")
+        assert(stopSound(sound) == false, "stopSound on a stopped sound")
     )LUA");
 }
 

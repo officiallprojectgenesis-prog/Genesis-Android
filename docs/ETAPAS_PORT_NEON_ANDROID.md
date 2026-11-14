@@ -22,8 +22,8 @@ The [full architectural plan](PLANO_PORT_NEON_ANDROID.md) details audits, depend
 | **P3.1 Disconnect Recovery** | P1B.2, P3 | When the server drops the session, show a dialog with **Retry** and **Quit** (same flow as the MTA desktop client). Retry runs a fresh join (`PLAYER_JOIN` → `MOD_NAME` → `PLAYER_JOINDATA` → `SERVER_JOIN_COMPLETE`) and spawns the character in the world as on a first connection: remote peds, vehicles and the local player are rebuilt, nothing is kept from the old session. Quit returns to the server browser. Also handles `ForceReconnect` (server RPC). | Implemented and verified on the S25: `/disconnect` shows the dialog and Retry rejoins with a fresh spawn |
 | **P3.2 Chat Layout** | P2 | The chat does not match the MTA desktop client: lines are spaced too far apart and the layout differs. Match the desktop chat box (line height, padding, font, colour codes, and the line limit) so both clients show the same chat. Verify with a screenshot of the desktop and the phone side by side. | Implemented (line step = font height, one background box); side-by-side desktop screenshot pending |
 | **P4. Lua, DX, GUI & Browser** | P2, P3 | RenderWare 2D DX draw calls, custom UI interactions, CEGUI/WebView bindings. | In Progress (Desktop Tahoma 15px text scaling matched in MtaDxView; GUI element model with window, button, edit, static text, setVisible, destroyElement; showCursor touch routing to onClientClick; mobile HUD component toggles via CWidgetPlayerInfo::Draw NOP patching. Open: CEGUI complex widgets like memo/gridlist/tabpanel, CEF webview browser) |
-| **P4.1 Wardrobe preview** | P4 | Registration clothes preview matches the desktop client. Port order and desktop line ranges: [ROADMAP_WARDROBE_PREVIEW.md](ROADMAP_WARDROBE_PREVIEW.md). | Not started. `createPed` returns false, `setTime` and `setWeather` are unbound, `setCameraMatrix` does not move the camera, clothes and `setElementRotation` are not applied. The DX menu already draws. |
-| **P5. Neon Parity Matrix** | P3, P4 | Complete API matrix, events, and elements matching MTA Neon desktop capabilities. | In Progress (Derived from source via tools/parity_matrix.py -> docs/PARITY_MATRIX.md. 2026-11-13: Lua functions 60 implemented / 196 stub / 1325 missing of 1581; client events 6/144; inbound packets 22/62; outbound 9/31; element types 13/17) |
+| **P4.1 Wardrobe preview** | P4 | Registration clothes preview matches the desktop client. Port order and desktop line ranges: [ROADMAP_WARDROBE_PREVIEW.md](ROADMAP_WARDROBE_PREVIEW.md). | In progress. The eight preview calls are bound. The login cinematic (`setCameraMatrix` from `onClientPreRender`) is confirmed on the S25. Opening music uses `playSound`, `stopSound` and `setSoundVolume`. The clothes preview itself has not been recorded on a device. |
+| **P5. Neon Parity Matrix** | P3, P4 | Complete API matrix, events, and elements matching MTA Neon desktop capabilities. | In Progress (Derived from source via tools/parity_matrix.py -> docs/PARITY_MATRIX.md. 2026-11-14: Lua functions 161 implemented / 178 stub / 1242 missing of 1581 (10.2%); client events 10/144 (6.9%); inbound packets 22/62; outbound 9/31; element types 13/17) |
 | **P6. Release Distribution** | P5 | Reproducible release builds, multi-device hardware validation, automated updates. | Pending |
 
 P1A (Engine/Platform) and P1B (Network Transport) are independent parallel tracks. The approval of the port requires a fully native Android ARM64 session connecting to a live server.
@@ -120,8 +120,8 @@ Derived directly from `mta_neon_source` vs `app/src/main/cpp/` via `tools/parity
 
 | Category | Desktop Total | Android Implemented | Android Stubs | Remaining / Missing | Priority |
 |---|---|---|---|---|---|
-| **Lua Core Functions** | 1,581 | 60 (3.8%) | 196 (12.4%) | 1,325 (83.8%) | High |
-| **Client Events** | 144 | 6 (4.2%) | 0 | 138 (95.8%) | High |
+| **Lua Core Functions** | 1,581 | 161 (10.2%) | 178 (11.3%) | 1,242 (78.6%) | High |
+| **Client Events** | 144 | 10 (6.9%) | 0 | 134 (93.1%) | High |
 | **Inbound Packets (S->C)** | 62 | 22 (35.5%) | 0 | 40 (64.5%) | Medium |
 | **Outbound Packets (C->S)** | 31 | 9 (29.0%) | 0 | 22 (71.0%) | Medium |
 | **Element Types (ENTITY_ADD)**| 17 | 13 (76.5%) | 1 (5.9%) | 3 (17.6%) | Low |
@@ -129,8 +129,8 @@ Derived directly from `mta_neon_source` vs `app/src/main/cpp/` via `tools/parity
 
 ### Critical Missing Subsystems:
 1. **Audio / Voice System**:
-   - Desktop uses BASS audio library with 3D spatial positioning (`playSound3D`, `setSoundPosition`).
-   - Mobile has Opus codec compiled, but lacks audio output device streaming (AudioTrack/OpenSL ES) and packet routing for `PACKET_ID_VOICE_DATA`.
+   - `playSound`, `stopSound`, `setSoundVolume` and `getSoundVolume` play the login http tracks through Android `MediaPlayer`. That is 4 of 57 `CLuaAudioDefs` (7.0%). `playSound3D` and `playSoundFrontEnd` are still stubs.
+   - Desktop 3D positioning (`setSoundPosition`) and voice (`PACKET_ID_VOICE_DATA`) are still missing. Opus is compiled; there is no voice output path.
 2. **Ped & Player Animation / Tasks**:
    - Vehicle enter/exit animations and jacking states (`CTaskComplexEnterCarAsDriver`, `CTaskComplexEnterCarAsPassenger`).
    - Melee combat animation states (`CTaskSimpleFight`).

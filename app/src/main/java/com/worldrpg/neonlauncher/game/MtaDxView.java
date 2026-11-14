@@ -133,14 +133,28 @@ public final class MtaDxView extends View {
         if (p.length < 5) return;
         float x = f(p[0]), y = f(p[1]), w = f(p[2]), h = f(p[3]);
         fill.setColor((int) l(p[4]));
-        // Shared edges stay on the same pixel: round the corners, not x and w apart.
-        canvas.drawRect(Math.round(x), Math.round(y), Math.round(x + w), Math.round(y + h), fill);
+        // Desktop draws the quad through ID3DXSprite, which shifts it half a pixel
+        // up and left. Rounding every edge left the left and top sides one pixel
+        // inside the desktop border; the right edge already landed on the right pixel.
+        float left = (float) Math.floor(x - 0.5f);
+        float top = (float) Math.floor(y - 0.5f);
+        float right = Math.round(x + w);
+        float bottom = Math.round(y + h);
+        if (right < left + 1f) right = left + 1f;
+        if (bottom < top + 1f) bottom = top + 1f;
+        canvas.drawRect(left, top, right, bottom, fill);
     }
 
     private void drawText(Canvas canvas, String body) {
         String[] p = body.split(" ", 8);
         if (p.length < 8) return;
-        float x = f(p[0]), y = f(p[1]), right = f(p[2]), bottom = f(p[3]);
+        // Desktop floors the text box when sub-pixel positioning is off
+        // (CGraphics::DrawStringQueued). Extra font padding sat the glyphs inside
+        // the left and top of that box.
+        float x = (float) Math.floor(f(p[0]));
+        float y = (float) Math.floor(f(p[1]));
+        float right = (float) Math.floor(f(p[2]));
+        float bottom = (float) Math.floor(f(p[3]));
         float scale = f(p[4]);
         text.setColor((int) l(p[5]));
         // The draw line is in the pixels that guiGetScreenSize reports (no density factor).
@@ -149,7 +163,7 @@ public final class MtaDxView extends View {
         CharSequence shown = "1".equals(p[6]) ? MtaChatView.colorize(p[7]) : p[7];
         int width = Math.max(1, (int) (right - x));
         StaticLayout layout = StaticLayout.Builder.obtain(shown, 0, shown.length(), text, width)
-                .setMaxLines(3).build();
+                .setIncludePad(false).setMaxLines(3).build();
         canvas.save();
         canvas.translate(x, y + Math.max(0, (bottom - y - layout.getHeight()) / 2f));
         layout.draw(canvas);

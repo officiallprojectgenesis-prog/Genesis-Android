@@ -602,8 +602,6 @@ bool HandlePedStartSync(const uint8_t* body, size_t length, size_t bits) {
         PKT_LOGI("DIAG PED_STARTSYNC id=%u bad health/armor bit=%zu", id, reader.GetReadOffsetBits());
         return false;
     }
-    // Reference sets health/armor after UnlockHealth/UnlockArmor. No engine hook for that yet.
-    (void)fHealth; (void)fArmor;
 
     // Camera rotation and physical takeover exist only from 0x0031 (device evidence 2026-11-12:
     // the server sends PED STARTSYNC at 305 bits to the 0x0030 peer, which ends after health/armor).
@@ -620,7 +618,12 @@ bool HandlePedStartSync(const uint8_t* body, size_t length, size_t bits) {
         }
     }
 
+    // SetPosition, SetCurrentRotation, SetMoveSpeed (CPedSync.cpp 251-253).
     WorldRPG::Game::NoteRemotePed(id, x, y, z, fRotation, vx, vy, vz);
+    // UnlockHealth, UnlockArmor, then SetHealth, SetArmor (CPedSync.cpp 256-261). The values used to be dropped, so
+    // the new owner kept the observer lock and reported the old health back in its first PED_SYNC.
+    WorldRPG::Game::UnlockPedVitals(id);
+    WorldRPG::Game::SetPedVitals(id, fHealth, fArmor);
     WorldRPG::Game::SetPedCameraRotation(id, cameraRotation);
     WorldRPG::Game::SetPedNativeTaskPhysicalTakeover(id, nativeTaskPhysicalTakeover.data.uiMode,
         nativeTaskPhysicalTakeover.data.usAnimGroup, nativeTaskPhysicalTakeover.data.usAnimId,

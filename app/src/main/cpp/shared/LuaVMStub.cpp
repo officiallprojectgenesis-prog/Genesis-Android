@@ -237,6 +237,8 @@ static bool SoundAlive(uint32_t id) {
     return false;
 }
 
+bool SoundElementAlive(uint32_t id) { return SoundAlive(id); }
+
 static void PumpEndedSounds() {
     std::vector<uint32_t> ended;
     {
@@ -1226,7 +1228,8 @@ static void installDxBindings(lua_State* L) {
         {"setPedWeaponSlot", l_true},
         {"setPedWeaponAccuracy", l_true},
         {"setPedWeaponShootingRate", l_true},
-        {"setCameraMatrix", l_true},
+        // setCameraMatrix is installed by installWardrobeBindings, which runs after this
+        // table. A stub here would be the binding the parity scan keeps.
         {"resetAmbientPedPopulationModels", l_true},
         // Not bound on purpose: resetAmbientPedPopulationZonesToBootstrap, setAmbientPedPopulationZoneState,
         // getAmbientPedPopulationProfile and isAmbientPedSphereVisible. The server's native-ped-traffic client

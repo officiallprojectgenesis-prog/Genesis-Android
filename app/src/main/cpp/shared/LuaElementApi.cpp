@@ -199,6 +199,7 @@ bool KnownElement(uint32_t id) {
     if (id == 0) return false;
     if (Find(id)) return true;
     if (id == ServerWorld::LocalPlayer() || id == ServerWorld::LastResourceRoot() || GuiIsElement(id)) return true;
+    if (Game::ScriptPedAlive(id) || SoundElementAlive(id)) return true;
     float x = 0, y = 0, z = 0;
     return ServerWorld::ElementPose(id, x, y, z) || Game::CopyRemotePose(id, x, y, z);
 }
@@ -763,6 +764,14 @@ int GetElementType(lua_State* L) {
     }
     if (const char* gui = GuiElementType(id)) {
         lua_pushstring(L, gui);
+        return 1;
+    }
+    if (SoundElementAlive(id)) {
+        lua_pushstring(L, "sound");
+        return 1;
+    }
+    if (Game::ScriptPedAlive(id)) {
+        lua_pushstring(L, "ped");
         return 1;
     }
     lua_pushstring(L, ServerWorld::ElementKindName(id));

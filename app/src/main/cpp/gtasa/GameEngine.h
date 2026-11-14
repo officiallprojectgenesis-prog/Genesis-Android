@@ -257,6 +257,15 @@ void LockPedArmorCurrent(uint32_t id);
 // Snapshot of the locks Packet_PedSync / ReadPlayerPuresync stored.
 // False when this id has neither lock.
 bool CopyPedVitalsLock(uint32_t id, bool& healthLocked, float& health, bool& armorLocked, float& armor);
+// Game thread: a pending LockPed*Current takes the body's value (CPedSync.cpp 280-281).
+void ResolvePedVitalsLockCurrent(uint32_t id, float bodyHealth, float bodyArmor);
+// UnlockHealth + UnlockArmor (CPedSync.cpp 256-257).
+void UnlockPedVitals(uint32_t id);
+// Drop locks and presentation state for an element that no longer exists.
+void ForgetPedNativeTaskState(uint32_t id);
+// CClientPed::SetHealth / SetArmor once (Packet_EntityAdd 4057-4058, Packet_PedStartSync 260-261). Written to the
+// body on the next game tick through the existing one-shot fields (ApplySyncedPlayerFields).
+void SetPedVitals(uint32_t id, float health, float armor);
 struct HostedPed {
     uint32_t id = 0;
     float x = 0, y = 0, z = 0, heading = 0;

@@ -5,8 +5,8 @@ Core element hierarchy (parent/child), element data (synced/local), collisions, 
 ## Parity Status
 
 - **Total Functions:** 81
-- **Implemented:** 28 (34.6%)
-- **Stubs:** 24
+- **Implemented:** 31 (38.3%)
+- **Stubs:** 21
 - **Missing:** 29
 
 > **Technical Requirement:** Implemented via `ElementManager.cpp` and `ServerWorld.cpp`. Gaps relate to spatial octree lookup, element matrix math, and custom attachments.
@@ -31,7 +31,7 @@ Core element hierarchy (parent/child), element data (synced/local), collisions, 
 | `getElementByIndex` | **Implemented** | `CLuaElementDefs.cpp:25` | `GetElementByIndex` | Type search from the client root (CLuaElementDefs.cpp 318-341, CClientEntity.cpp 929-984). |
 | `getElementChild` | **Implemented** | `CLuaElementDefs.cpp:35` | `GetElementChild` | Child by index (CLuaElementDefs.cpp 724-748, CStaticFunctionDefinitions.cpp 362-376). |
 | `getElementChildren` | **Implemented** | `CLuaElementDefs.cpp:34` | `GetElementChildren` | Direct children, optional type (CLuaElementDefs.cpp 679-721, CClientEntity.cpp 1035-1073). |
-| `getElementChildrenCount` | **Implemented** | `CLuaElementDefs.cpp:36` | `GetElementChildrenCount` | Direct child count (CLuaElementDefs.cpp 751-770). |
+| `getElementChildrenCount` | **Implemented** | `CLuaElementDefs.cpp:36` | `GetElementChildrenCount` | Operational on Android. (GetElementChildrenCount) |
 | `getElementColShape` | Missing | `CLuaElementDefs.cpp:62` | `GetElementColShape` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
 | `getElementCollisionsEnabled` | *Stub* | `CLuaElementDefs.cpp:67` | `GetElementCollisionsEnabled` | Currently stubbed: `DefaultValue(kTrue)`. Needs native engine wiring. |
 | `getElementData` | **Implemented** | `CLuaElementDefs.cpp:26` | `GetElementData` | Operational on Android. (GetElementData) |
@@ -48,7 +48,7 @@ Core element hierarchy (parent/child), element data (synced/local), collisions, 
 | `getElementRadius` | Missing | `CLuaElementDefs.cpp:47` | `GetElementRadius` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
 | `getElementRotation` | *Stub* | `CLuaElementDefs.cpp:30` | `GetElementRotation` | Currently stubbed: `l_getElementRotation: lua_pushnumber(L, 0.0)`. Needs native engine wiring. |
 | `getElementType` | **Implemented** | `CLuaElementDefs.cpp:33` | `GetElementType` | Operational on Android. (l_getElementType) |
-| `getElementVelocity` | *Stub* | `CLuaElementDefs.cpp:31` | `GetElementVelocity` | Currently stubbed: `l_getElementVelocity: lua_pushnumber(L, 0.0)`. Needs native engine wiring. |
+| `getElementVelocity` | **Implemented** | `CLuaElementDefs.cpp:31` | `GetElementVelocity` | Operational on Android. (l_getElementVelocity) |
 | `getElementsByType` | **Implemented** | `CLuaElementDefs.cpp:39` | `GetElementsByType` | Operational on Android. (l_getElementsByType) |
 | `getElementsWithinColShape` | Missing | `CLuaElementDefs.cpp:43` | `GetElementsWithinColShape` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
 | `getElementsWithinRange` | Missing | `CLuaElementDefs.cpp:44` | `ArgumentParserWarn<false, GetElementsWithinRange>` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
@@ -82,7 +82,7 @@ Core element hierarchy (parent/child), element data (synced/local), collisions, 
 | `setElementData` | **Implemented** | `CLuaElementDefs.cpp:80` | `SetElementData` | Operational on Android. (SetElementData) |
 | `setElementDimension` | *Stub* | `CLuaElementDefs.cpp:88` | `SetElementDimension` | Currently stubbed: `l_true: lua_pushboolean(L, 1)`. Needs native engine wiring. |
 | `setElementDoubleSided` | Missing | `CLuaElementDefs.cpp:100` | `SetElementDoubleSided` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `setElementFrozen` | *Stub* | `CLuaElementDefs.cpp:101` | `SetElementFrozen` | Currently stubbed: `DefaultValue(kTrue)`. Needs native engine wiring. |
+| `setElementFrozen` | **Implemented** | `CLuaElementDefs.cpp:101` | `SetElementFrozen` | Operational on Android. (l_setElementFrozen) |
 | `setElementHealth` | *Stub* | `CLuaElementDefs.cpp:93` | `SetElementHealth` | Currently stubbed: `TrueResult: lua_pushboolean(L, 1)`. Needs native engine wiring. |
 | `setElementID` | **Implemented** | `CLuaElementDefs.cpp:78` | `SetElementID` | Renames a local element (CLuaElementDefs.cpp 1741-1762). |
 | `setElementInterior` | *Stub* | `CLuaElementDefs.cpp:87` | `SetElementInterior` | Currently stubbed: `l_true: lua_pushboolean(L, 1)`. Needs native engine wiring. |
@@ -92,7 +92,7 @@ Core element hierarchy (parent/child), element data (synced/local), collisions, 
 | `setElementOnFire` | Missing | `CLuaElementDefs.cpp:105` | `ArgumentParser<SetElementOnFire>` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
 | `setElementParent` | **Implemented** | `CLuaElementDefs.cpp:79` | `SetElementParent` | Local element under a map (CLuaElementDefs.cpp 2040-2066, CStaticFunctionDefinitions.cpp 1253-1295). |
 | `setElementPosition` | *Stub* | `CLuaElementDefs.cpp:83` | `SetElementPosition` | Currently stubbed: `TrueResult: lua_pushboolean(L, 1)`. Needs native engine wiring. |
-| `setElementRotation` | *Stub* | `CLuaElementDefs.cpp:84` | `SetElementRotation` | Currently stubbed: `DefaultValue(kTrue)`. Needs native engine wiring. |
+| `setElementRotation` | **Implemented** | `CLuaElementDefs.cpp:84` | `SetElementRotation` | Operational on Android. (l_setElementRotation) |
 | `setElementStreamable` | Missing | `CLuaElementDefs.cpp:95` | `SetElementStreamable` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
 | `setElementVelocity` | *Stub* | `CLuaElementDefs.cpp:85` | `SetElementVelocity` | Currently stubbed: `DefaultValue(kTrue)`. Needs native engine wiring. |
 | `setLowLODElement` | Missing | `CLuaElementDefs.cpp:102` | `ArgumentParser<SetLowLodElement>` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |

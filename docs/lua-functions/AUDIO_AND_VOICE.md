@@ -5,9 +5,9 @@
 ## Parity Status
 
 - **Total Functions:** 57
-- **Implemented:** 0 (0.0%)
-- **Stubs:** 8
-- **Missing:** 49
+- **Implemented:** 4 (7.0%)
+- **Stubs:** 5
+- **Missing:** 48
 
 > **Technical Requirement:** Desktop uses BASS library. Mobile has Opus 1.4 compiled; requires OpenSL ES / AudioTrack output mixer, URL streaming, and 3D listener attenuation math.
 
@@ -32,7 +32,7 @@
 | `getSoundPosition` | Missing | `CLuaAudioDefs.cpp:194` | `GetSoundPosition` | Needs AudioTrack / OpenSL ES audio playback mixer. |
 | `getSoundProperties` | Missing | `CLuaAudioDefs.cpp:206` | `GetSoundProperties` | Needs AudioTrack / OpenSL ES audio playback mixer. |
 | `getSoundSpeed` | Missing | `CLuaAudioDefs.cpp:204` | `GetSoundSpeed` | Needs AudioTrack / OpenSL ES audio playback mixer. |
-| `getSoundVolume` | Missing | `CLuaAudioDefs.cpp:202` | `GetSoundVolume` | Needs AudioTrack / OpenSL ES audio playback mixer. |
+| `getSoundVolume` | **Implemented** | `CLuaAudioDefs.cpp:202` | `GetSoundVolume` | Operational on Android. (l_getSoundVolume) |
 | `getSoundWaveData` | Missing | `CLuaAudioDefs.cpp:208` | `GetSoundWaveData` | Needs AudioTrack / OpenSL ES audio playback mixer. |
 | `isAmbientSoundEnabled` | Missing | `CLuaAudioDefs.cpp:173` | `IsAmbientSoundEnabled` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
 | `isMissionAudioFinished` | Missing | `CLuaAudioDefs.cpp:184` | `ArgumentParser<IsMissionAudioFinished>` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
@@ -46,7 +46,7 @@
 | `playMissionPassedTune` | Missing | `CLuaAudioDefs.cpp:171` | `ArgumentParser<PlayMissionPassedTune>` | Needs AudioTrack / OpenSL ES audio playback mixer. |
 | `playSFX` | Missing | `CLuaAudioDefs.cpp:178` | `PlaySFX` | Needs AudioTrack / OpenSL ES audio playback mixer. |
 | `playSFX3D` | Missing | `CLuaAudioDefs.cpp:179` | `PlaySFX3D` | Needs AudioTrack / OpenSL ES audio playback mixer. |
-| `playSound` | *Stub* | `CLuaAudioDefs.cpp:190` | `PlaySound` | Currently stubbed: `DefaultValue(kFalse)`. Needs native engine wiring. |
+| `playSound` | **Implemented** | `CLuaAudioDefs.cpp:190` | `PlaySound` | Operational on Android. (l_playSound) |
 | `playSound3D` | *Stub* | `CLuaAudioDefs.cpp:191` | `PlaySound3D` | Currently stubbed: `DefaultValue(kFalse)`. Needs native engine wiring. |
 | `playSoundFrontEnd` | *Stub* | `CLuaAudioDefs.cpp:170` | `PlaySoundFrontEnd` | Currently stubbed: `DefaultValue(kFalse)`. Needs native engine wiring. |
 | `releaseMissionAudio` | Missing | `CLuaAudioDefs.cpp:185` | `ArgumentParser<ReleaseMissionAudio>` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
@@ -68,7 +68,7 @@
 | `setSoundPosition` | *Stub* | `CLuaAudioDefs.cpp:193` | `SetSoundPosition` | Currently stubbed: `DefaultValue(kTrue)`. Needs native engine wiring. |
 | `setSoundProperties` | Missing | `CLuaAudioDefs.cpp:205` | `SetSoundProperties` | Needs AudioTrack / OpenSL ES audio playback mixer. |
 | `setSoundSpeed` | Missing | `CLuaAudioDefs.cpp:203` | `SetSoundSpeed` | Needs AudioTrack / OpenSL ES audio playback mixer. |
-| `setSoundVolume` | *Stub* | `CLuaAudioDefs.cpp:201` | `SetSoundVolume` | Currently stubbed: `DefaultValue(kTrue)`. Needs native engine wiring. |
+| `setSoundVolume` | **Implemented** | `CLuaAudioDefs.cpp:201` | `SetSoundVolume` | Operational on Android. (l_setSoundVolume) |
 | `setWorldSoundEnabled` | Missing | `CLuaAudioDefs.cpp:175` | `SetWorldSoundEnabled` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
 | `showSound` | Missing | `CLuaAudioDefs.cpp:231` | `ArgumentParser<ShowSound>` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `stopSound` | *Stub* | `CLuaAudioDefs.cpp:192` | `StopSound` | Currently stubbed: `DefaultValue(kTrue)`. Needs native engine wiring. |
+| `stopSound` | **Implemented** | `CLuaAudioDefs.cpp:192` | `StopSound` | Operational on Android. (l_stopSound) |

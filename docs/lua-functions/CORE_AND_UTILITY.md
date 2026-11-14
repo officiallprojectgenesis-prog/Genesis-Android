@@ -5,9 +5,9 @@ Timers, event handling, network latent transfers, file I/O, XML parsing, JSON se
 ## Parity Status
 
 - **Total Functions:** 195
-- **Implemented:** 35 (17.9%)
-- **Stubs:** 15
-- **Missing:** 145
+- **Implemented:** 39 (20.0%)
+- **Stubs:** 13
+- **Missing:** 143
 
 > **Technical Requirement:** Pure CPU/platform logic. Mostly ported or needs standard library wrappers (e.g. tinyxml2, sha256, zlib).
 
@@ -37,9 +37,9 @@ Timers, event handling, network latent transfers, file I/O, XML parsing, JSON se
 | `bitTest` | **Implemented** | `CLuaBitDefs.cpp:18` | `bitTest` | Operational on Android. (BitTest) |
 | `bitXor` | **Implemented** | `CLuaBitDefs.cpp:18` | `bitXor` | Operational on Android. (BitXor) |
 | `call` | Missing | `CLuaResourceDefs.cpp:20` | `Call` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `cancelEvent` | Missing | `CLuaManager.cpp:169` | `CLuaFunctionDefs::CancelEvent` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
+| `cancelEvent` | **Implemented** | `CLuaManager.cpp:169` | `CLuaFunctionDefs::CancelEvent` | Operational on Android. (l_cancelEvent) |
 | `cancelLatentEvent` | Missing | `CLuaManager.cpp:174` | `CLuaFunctionDefs::CancelLatentEvent` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `clearChatBox` | Missing | `CLuaManager.cpp:182` | `CLuaFunctionDefs::ClearChatBox` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
+| `clearChatBox` | **Implemented** | `CLuaManager.cpp:182` | `CLuaFunctionDefs::ClearChatBox` | Operational on Android. (ClearChatBox) |
 | `clearDebugBox` | Missing | `CLuaClientDefs.cpp:25` | `ArgumentParser<ClearDebug>` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
 | `createTrayNotification` | Missing | `CLuaManager.cpp:185` | `CLuaFunctionDefs::CreateTrayNotification` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
 | `debugSleep` | Missing | `CLuaUtilDefs.cpp:70` | `DebugSleep` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
@@ -124,7 +124,7 @@ Timers, event handling, network latent transfers, file I/O, XML parsing, JSON se
 | `interpolateBetween` | Missing | `CLuaUtilDefs.cpp:58` | `InterpolateBetween` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
 | `isCapsLockEnabled` | Missing | `CLuaClientDefs.cpp:27` | `ArgumentParser<IsCapsLockEnabled>` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
 | `isChatInputBlocked` | Missing | `CLuaClientDefs.cpp:24` | `ArgumentParser<IsChatInputBlocked>` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `isChatVisible` | Missing | `CLuaClientDefs.cpp:23` | `ArgumentParserWarn<false, IsChatVisible>` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
+| `isChatVisible` | **Implemented** | `CLuaClientDefs.cpp:23` | `ArgumentParserWarn<false, IsChatVisible>` | Operational on Android. (IsChatVisible) |
 | `isControlEnabled` | *Stub* | `CLuaManager.cpp:214` | `CLuaFunctionDefs::IsControlEnabled` | Currently stubbed: `DefaultValue(kTrue)`. Needs native engine wiring. |
 | `isCursorShowing` | **Implemented** | `CLuaManager.cpp:199` | `CLuaFunctionDefs::IsCursorShowing` | Operational on Android. (IsCursorShowing) |
 | `isMTAWindowFocused` | Missing | `CLuaClientDefs.cpp:26` | `ArgumentParser<IsMTAWindowFocused>` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
@@ -153,7 +153,7 @@ Timers, event handling, network latent transfers, file I/O, XML parsing, JSON se
 | `pregFind` | Missing | `CLuaUtilDefs.cpp:65` | `PregFind` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
 | `pregMatch` | Missing | `CLuaUtilDefs.cpp:67` | `PregMatch` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
 | `pregReplace` | Missing | `CLuaUtilDefs.cpp:66` | `PregReplace` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `print` | **Implemented** | `CLuaUtilDefs.cpp:51` | `luaB_print` | Operational on Android. (lua_custom_print) |
+| `print` | Missing | `CLuaUtilDefs.cpp:51` | `luaB_print` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
 | `ref` | Missing | `CLuaUtilDefs.cpp:45` | `Reference` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
 | `removeClothingModel` | Missing | `CLuaManager.cpp:194` | `CLuaFunctionDefs::RemoveClothingModel` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
 | `removeCommandHandler` | Missing | `CLuaManager.cpp:226` | `CLuaFunctionDefs::RemoveCommandHandler` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
@@ -173,7 +173,7 @@ Timers, event handling, network latent transfers, file I/O, XML parsing, JSON se
 | `setTransferBoxVisible` | Missing | `CLuaClientDefs.cpp:19` | `ArgumentParser<SetTransferBoxVisible>` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
 | `setWindowFlashing` | Missing | `CLuaManager.cpp:181` | `CLuaFunctionDefs::SetWindowFlashing` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
 | `sha256` | Missing | `CLuaCryptDefs.cpp:23` | `ArgumentParserWarn<false, Sha256>` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `showChat` | *Stub* | `CLuaClientDefs.cpp:22` | `ArgumentParserWarn<false, ShowChat>` | Currently stubbed: `DefaultValue(kTrue)`. Needs native engine wiring. |
+| `showChat` | **Implemented** | `CLuaClientDefs.cpp:22` | `ArgumentParserWarn<false, ShowChat>` | Operational on Android. (ShowChat) |
 | `showCursor` | **Implemented** | `CLuaManager.cpp:200` | `CLuaFunctionDefs::ShowCursor` | Operational on Android. (ShowCursor) |
 | `split` | Missing | `CLuaUtilDefs.cpp:48` | `Split` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
 | `teaDecode` | Missing | `CLuaCryptDefs.cpp:26` | `ArgumentParserWarn<false, TeaDecode>` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
@@ -191,7 +191,7 @@ Timers, event handling, network latent transfers, file I/O, XML parsing, JSON se
 | `utfLen` | Missing | `CLuaUTFDefs.cpp:94` | `ArgumentParserWarn<false, UtfLen>` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
 | `utfSeek` | Missing | `CLuaUTFDefs.cpp:94` | `ArgumentParserWarn<false, UtfSeek>` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
 | `utfSub` | Missing | `CLuaUTFDefs.cpp:94` | `ArgumentParserWarn<false, UtfSub>` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `wasEventCancelled` | *Stub* | `CLuaManager.cpp:170` | `CLuaFunctionDefs::WasEventCancelled` | Currently stubbed: `DefaultValue(kFalse)`. Needs native engine wiring. |
+| `wasEventCancelled` | **Implemented** | `CLuaManager.cpp:170` | `CLuaFunctionDefs::WasEventCancelled` | Operational on Android. (l_wasEventCancelled) |
 | `xmlCopyFile` | Missing | `CLuaXMLDefs.cpp:21` | `xmlCopyFile` | Needs TinyXML2 client-side parser integration. |
 | `xmlCreateChild` | Missing | `CLuaXMLDefs.cpp:24` | `xmlCreateChild` | Needs TinyXML2 client-side parser integration. |
 | `xmlCreateFile` | Missing | `CLuaXMLDefs.cpp:18` | `xmlCreateFile` | Needs TinyXML2 client-side parser integration. |
