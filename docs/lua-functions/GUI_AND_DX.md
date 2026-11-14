@@ -5,9 +5,9 @@
 ## Parity Status
 
 - **Total Functions:** 199
-- **Implemented:** 22 (11.1%)
+- **Implemented:** 42 (21.1%)
 - **Stubs:** 6
-- **Missing:** 171
+- **Missing:** 151
 
 > **Technical Requirement:** Desktop uses CEGUI and Direct3D9. Mobile uses `MtaDxView.java` (Android Canvas) + `LuaGuiApi.cpp`. Missing shaders (HLSL -> GLSL ES) and complex CEGUI widgets (gridlist, tabpanel, scrollpane).
 
@@ -40,8 +40,8 @@
 | `dxGetBlendMode` | Missing | `CLuaDrawingDefs.cpp:64` | `DxGetBlendMode` | Needs Android Canvas / OpenGL ES draw line routing. |
 | `dxGetFontHeight` | **Implemented** | `CLuaDrawingDefs.cpp:42` | `DxGetFontHeight` | Operational on Android. (DxGetFontHeight) |
 | `dxGetMaterialSize` | Missing | `CLuaDrawingDefs.cpp:48` | `DxGetMaterialSize` | Needs Android Canvas / OpenGL ES draw line routing. |
-| `dxGetPixelColor` | Missing | `CLuaDrawingDefs.cpp:61` | `DxGetPixelColor` | Needs Android Canvas / OpenGL ES draw line routing. |
-| `dxGetPixelsFormat` | Missing | `CLuaDrawingDefs.cpp:59` | `DxGetPixelsFormat` | Needs Android Canvas / OpenGL ES draw line routing. |
+| `dxGetPixelColor` | **Implemented** | `CLuaDrawingDefs.cpp:61` | `DxGetPixelColor` | Operational on Android. Plain pixels only, same as desktop. (DxGetPixelColor) |
+| `dxGetPixelsFormat` | **Implemented** | `CLuaDrawingDefs.cpp:59` | `DxGetPixelsFormat` | Operational on Android. (DxGetPixelsFormat) |
 | `dxGetPixelsSize` | Missing | `CLuaDrawingDefs.cpp:58` | `DxGetPixelsSize` | Needs Android Canvas / OpenGL ES draw line routing. |
 | `dxGetStatus` | Missing | `CLuaDrawingDefs.cpp:54` | `DxGetStatus` | Needs Android Canvas / OpenGL ES draw line routing. |
 | `dxGetTextSize` | Missing | `CLuaDrawingDefs.cpp:41` | `ArgumentParser<DxGetTextSize>` | Needs Android Canvas / OpenGL ES draw line routing. |
@@ -50,7 +50,7 @@
 | `dxIsAspectRatioAdjustmentEnabled` | Missing | `CLuaDrawingDefs.cpp:66` | `DxIsAspectRatioAdjustmentEnabled` | Needs Android Canvas / OpenGL ES draw line routing. |
 | `dxSetAspectRatioAdjustmentEnabled` | Missing | `CLuaDrawingDefs.cpp:65` | `DxSetAspectRatioAdjustmentEnabled` | Needs Android Canvas / OpenGL ES draw line routing. |
 | `dxSetBlendMode` | Missing | `CLuaDrawingDefs.cpp:63` | `DxSetBlendMode` | Needs Android Canvas / OpenGL ES draw line routing. |
-| `dxSetPixelColor` | Missing | `CLuaDrawingDefs.cpp:62` | `DxSetPixelColor` | Needs Android Canvas / OpenGL ES draw line routing. |
+| `dxSetPixelColor` | **Implemented** | `CLuaDrawingDefs.cpp:62` | `DxSetPixelColor` | Operational on Android. Plain pixels only, same as desktop. (DxSetPixelColor) |
 | `dxSetRenderTarget` | Missing | `CLuaDrawingDefs.cpp:52` | `DxSetRenderTarget` | Needs Android Canvas / OpenGL ES draw line routing. |
 | `dxSetShaderTessellation` | Missing | `CLuaDrawingDefs.cpp:50` | `DxSetShaderTessellation` | Needs GLSL ES 3.0 shader pipeline (translating desktop D3DX9 HLSL). |
 | `dxSetShaderTransform` | Missing | `CLuaDrawingDefs.cpp:51` | `DxSetShaderTransform` | Needs GLSL ES 3.0 shader pipeline (translating desktop D3DX9 HLSL). |
@@ -66,24 +66,24 @@
 | `getModel2DFXPosition` | Missing | `CLua2DFXDefs.cpp:571` | `GetModel2DFXPosition` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
 | `getModel2DFXProperty` | Missing | `CLua2DFXDefs.cpp:572` | `GetModel2DFXProperty` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
 | `getModel2DFXType` | Missing | `CLua2DFXDefs.cpp:573` | `GetModel2DFXType` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `guiBlur` | Missing | `CLuaGUIDefs.cpp:132` | `GUIBlur` | Needs Android widget state and input handler in LuaGuiApi. |
-| `guiBringToFront` | Missing | `CLuaGUIDefs.cpp:130` | `GUIBringToFront` | Needs Android widget state and input handler in LuaGuiApi. |
-| `guiCheckBoxGetSelected` | Missing | `CLuaGUIDefs.cpp:149` | `GUICheckBoxGetSelected` | Needs Android widget state and input handler in LuaGuiApi. |
-| `guiCheckBoxSetSelected` | Missing | `CLuaGUIDefs.cpp:135` | `GUICheckBoxSetSelected` | Needs Android widget state and input handler in LuaGuiApi. |
-| `guiComboBoxAddItem` | Missing | `CLuaGUIDefs.cpp:188` | `GUIComboBoxAddItem` | Needs Android widget state and input handler in LuaGuiApi. |
-| `guiComboBoxClear` | Missing | `CLuaGUIDefs.cpp:190` | `GUIComboBoxClear` | Needs Android widget state and input handler in LuaGuiApi. |
-| `guiComboBoxGetItemCount` | Missing | `CLuaGUIDefs.cpp:195` | `GUIComboBoxGetItemCount` | Needs Android widget state and input handler in LuaGuiApi. |
-| `guiComboBoxGetItemText` | Missing | `CLuaGUIDefs.cpp:193` | `GUIComboBoxGetItemText` | Needs Android widget state and input handler in LuaGuiApi. |
-| `guiComboBoxGetSelected` | Missing | `CLuaGUIDefs.cpp:191` | `GUIComboBoxGetSelected` | Needs Android widget state and input handler in LuaGuiApi. |
-| `guiComboBoxIsOpen` | Missing | `CLuaGUIDefs.cpp:197` | `GUIComboBoxIsOpen` | Needs Android widget state and input handler in LuaGuiApi. |
-| `guiComboBoxRemoveItem` | Missing | `CLuaGUIDefs.cpp:189` | `GUIComboBoxRemoveItem` | Needs Android widget state and input handler in LuaGuiApi. |
-| `guiComboBoxSetItemText` | Missing | `CLuaGUIDefs.cpp:194` | `GUIComboBoxSetItemText` | Needs Android widget state and input handler in LuaGuiApi. |
-| `guiComboBoxSetOpen` | Missing | `CLuaGUIDefs.cpp:196` | `GUIComboBoxSetOpen` | Needs Android widget state and input handler in LuaGuiApi. |
-| `guiComboBoxSetSelected` | Missing | `CLuaGUIDefs.cpp:192` | `GUIComboBoxSetSelected` | Needs Android widget state and input handler in LuaGuiApi. |
+| `guiBlur` | **Implemented** | `CLuaGUIDefs.cpp:132` | `GUIBlur` | Operational on Android. (GuiBlur) |
+| `guiBringToFront` | **Implemented** | `CLuaGUIDefs.cpp:130` | `GUIBringToFront` | Operational on Android. (GuiBringToFront) |
+| `guiCheckBoxGetSelected` | **Implemented** | `CLuaGUIDefs.cpp:149` | `GUICheckBoxGetSelected` | Operational on Android. (GuiCheckBoxGetSelected) |
+| `guiCheckBoxSetSelected` | **Implemented** | `CLuaGUIDefs.cpp:135` | `GUICheckBoxSetSelected` | Operational on Android. (GuiCheckBoxSetSelected) |
+| `guiComboBoxAddItem` | **Implemented** | `CLuaGUIDefs.cpp:188` | `GUIComboBoxAddItem` | Operational on Android. (GuiComboBoxAddItem) |
+| `guiComboBoxClear` | **Implemented** | `CLuaGUIDefs.cpp:190` | `GUIComboBoxClear` | Operational on Android. (GuiComboBoxClear) |
+| `guiComboBoxGetItemCount` | **Implemented** | `CLuaGUIDefs.cpp:195` | `GUIComboBoxGetItemCount` | Operational on Android. (GuiComboBoxGetItemCount) |
+| `guiComboBoxGetItemText` | **Implemented** | `CLuaGUIDefs.cpp:193` | `GUIComboBoxGetItemText` | Operational on Android. (GuiComboBoxGetItemText) |
+| `guiComboBoxGetSelected` | **Implemented** | `CLuaGUIDefs.cpp:191` | `GUIComboBoxGetSelected` | Operational on Android. (GuiComboBoxGetSelected) |
+| `guiComboBoxIsOpen` | **Implemented** | `CLuaGUIDefs.cpp:197` | `GUIComboBoxIsOpen` | Operational on Android. (GuiComboBoxIsOpen) |
+| `guiComboBoxRemoveItem` | **Implemented** | `CLuaGUIDefs.cpp:189` | `GUIComboBoxRemoveItem` | Operational on Android. (GuiComboBoxRemoveItem) |
+| `guiComboBoxSetItemText` | **Implemented** | `CLuaGUIDefs.cpp:194` | `GUIComboBoxSetItemText` | Operational on Android. (GuiComboBoxSetItemText) |
+| `guiComboBoxSetOpen` | **Implemented** | `CLuaGUIDefs.cpp:196` | `GUIComboBoxSetOpen` | Operational on Android. (GuiComboBoxSetOpen) |
+| `guiComboBoxSetSelected` | **Implemented** | `CLuaGUIDefs.cpp:192` | `GUIComboBoxSetSelected` | Operational on Android. (GuiComboBoxSetSelected) |
 | `guiCreateButton` | **Implemented** | `CLuaGUIDefs.cpp:58` | `GUICreateButton` | Operational on Android. (GuiCreateButton) |
-| `guiCreateCheckBox` | Missing | `CLuaGUIDefs.cpp:67` | `GUICreateCheckBox` | Needs Android widget state and input handler in LuaGuiApi. |
-| `guiCreateComboBox` | Missing | `CLuaGUIDefs.cpp:70` | `GUICreateComboBox` | Needs Android widget state and input handler in LuaGuiApi. |
-| `guiCreateEdit` | Missing | `CLuaGUIDefs.cpp:59` | `GUICreateEdit` | Needs Android widget state and input handler in LuaGuiApi. |
+| `guiCreateCheckBox` | **Implemented** | `CLuaGUIDefs.cpp:67` | `GUICreateCheckBox` | Operational on Android. (GuiCreateCheckBox) |
+| `guiCreateComboBox` | **Implemented** | `CLuaGUIDefs.cpp:70` | `GUICreateComboBox` | Operational on Android. (GuiCreateComboBox) |
+| `guiCreateEdit` | **Implemented** | `CLuaGUIDefs.cpp:59` | `GUICreateEdit` | Operational on Android. (GuiCreateEdit) |
 | `guiCreateFont` | Missing | `CLuaGUIDefs.cpp:71` | `GUICreateFont` | Needs Android widget state and input handler in LuaGuiApi. |
 | `guiCreateGridList` | Missing | `CLuaGUIDefs.cpp:61` | `GUICreateGridList` | Needs native Android ListView / RecyclerView or custom CEGUI widget port. |
 | `guiCreateLabel` | **Implemented** | `CLuaGUIDefs.cpp:57` | `GUICreateLabel` | Operational on Android. (GuiCreateLabel) |
@@ -99,19 +99,19 @@
 | `guiDeleteTab` | Missing | `CLuaGUIDefs.cpp:77` | `GUIDeleteTab` | Needs Android widget state and input handler in LuaGuiApi. |
 | `guiEditGetCaretIndex` | Missing | `CLuaGUIDefs.cpp:158` | `GUIEditGetCaretIndex` | Needs Android widget state and input handler in LuaGuiApi. |
 | `guiEditGetMaxLength` | Missing | `CLuaGUIDefs.cpp:162` | `GUIEditGetMaxLength` | Needs Android widget state and input handler in LuaGuiApi. |
-| `guiEditIsMasked` | Missing | `CLuaGUIDefs.cpp:160` | `GUIEditIsMasked` | Needs Android widget state and input handler in LuaGuiApi. |
+| `guiEditIsMasked` | **Implemented** | `CLuaGUIDefs.cpp:160` | `GUIEditIsMasked` | Operational on Android. (GuiEditIsMasked) |
 | `guiEditIsReadOnly` | Missing | `CLuaGUIDefs.cpp:164` | `GUIEditIsReadOnly` | Needs Android widget state and input handler in LuaGuiApi. |
 | `guiEditSetCaretIndex` | Missing | `CLuaGUIDefs.cpp:157` | `GUIEditSetCaretIndex` | Needs Android widget state and input handler in LuaGuiApi. |
-| `guiEditSetMasked` | Missing | `CLuaGUIDefs.cpp:159` | `GUIEditSetMasked` | Needs Android widget state and input handler in LuaGuiApi. |
+| `guiEditSetMasked` | **Implemented** | `CLuaGUIDefs.cpp:159` | `GUIEditSetMasked` | Operational on Android. (GuiEditSetMasked) |
 | `guiEditSetMaxLength` | Missing | `CLuaGUIDefs.cpp:161` | `GUIEditSetMaxLength` | Needs Android widget state and input handler in LuaGuiApi. |
 | `guiEditSetReadOnly` | Missing | `CLuaGUIDefs.cpp:163` | `GUIEditSetReadOnly` | Needs Android widget state and input handler in LuaGuiApi. |
-| `guiFocus` | Missing | `CLuaGUIDefs.cpp:133` | `GUIFocus` | Needs Android widget state and input handler in LuaGuiApi. |
+| `guiFocus` | **Implemented** | `CLuaGUIDefs.cpp:133` | `GUIFocus` | Operational on Android. (GuiFocus) |
 | `guiGetAlpha` | **Implemented** | `CLuaGUIDefs.cpp:141` | `GUIGetAlpha` | Operational on Android. (GuiGetAlpha) |
 | `guiGetCursorType` | Missing | `CLuaGUIDefs.cpp:147` | `GUIGetCursorType` | Needs Android widget state and input handler in LuaGuiApi. |
 | `guiGetEnabled` | **Implemented** | `CLuaGUIDefs.cpp:138` | `GUIGetEnabled` | Operational on Android. (GuiGetEnabled) |
 | `guiGetFont` | Missing | `CLuaGUIDefs.cpp:143` | `GUIGetFont` | Needs Android widget state and input handler in LuaGuiApi. |
 | `guiGetInputEnabled` | **Implemented** | `CLuaGUIDefs.cpp:40` | `GUIGetInputEnabled` | Operational on Android. (GuiGetInputEnabled) |
-| `guiGetInputMode` | Missing | `CLuaGUIDefs.cpp:42` | `GUIGetInputMode` | Needs Android widget state and input handler in LuaGuiApi. |
+| `guiGetInputMode` | **Implemented** | `CLuaGUIDefs.cpp:42` | `GUIGetInputMode` | Operational on Android. (GuiGetInputMode) |
 | `guiGetPosition` | **Implemented** | `CLuaGUIDefs.cpp:145` | `GUIGetPosition` | Operational on Android. (GuiGetPosition) |
 | `guiGetProperties` | Missing | `CLuaGUIDefs.cpp:140` | `GUIGetProperties` | Needs Android widget state and input handler in LuaGuiApi. |
 | `guiGetProperty` | Missing | `CLuaGUIDefs.cpp:139` | `GUIGetProperty` | Needs Android widget state and input handler in LuaGuiApi. |
@@ -180,7 +180,7 @@
 | `guiSetEnabled` | **Implemented** | `CLuaGUIDefs.cpp:121` | `GUISetEnabled` | Operational on Android. (GuiSetEnabled) |
 | `guiSetFont` | Missing | `CLuaGUIDefs.cpp:125` | `GUISetFont` | Needs Android widget state and input handler in LuaGuiApi. |
 | `guiSetInputEnabled` | **Implemented** | `CLuaGUIDefs.cpp:41` | `GUISetInputEnabled` | Operational on Android. (GuiSetInputEnabled) |
-| `guiSetInputMode` | Missing | `CLuaGUIDefs.cpp:43` | `GUISetInputMode` | Needs Android widget state and input handler in LuaGuiApi. |
+| `guiSetInputMode` | **Implemented** | `CLuaGUIDefs.cpp:43` | `GUISetInputMode` | Operational on Android. (GuiSetInputMode) |
 | `guiSetPosition` | **Implemented** | `CLuaGUIDefs.cpp:127` | `GUISetPosition` | Operational on Android. (GuiSetPosition) |
 | `guiSetProperty` | Missing | `CLuaGUIDefs.cpp:122` | `GUISetProperty` | Needs Android widget state and input handler in LuaGuiApi. |
 | `guiSetSelectedTab` | Missing | `CLuaGUIDefs.cpp:76` | `GUISetSelectedTab` | Needs Android widget state and input handler in LuaGuiApi. |

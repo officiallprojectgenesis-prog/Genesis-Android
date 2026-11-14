@@ -5,9 +5,9 @@ Vehicle physics, handling, sirens, doors, colors, lights, engine state, trailers
 ## Parity Status
 
 - **Total Functions:** 165
-- **Implemented:** 0 (0.0%)
-- **Stubs:** 23
-- **Missing:** 142
+- **Implemented:** 6 (3.6%)
+- **Stubs:** 22
+- **Missing:** 137
 
 > **Technical Requirement:** Requires hooking libGTASA.so `CVehicle` vtable / offsets (`0x3A0000+` in ARM64), handling structures (`tHandlingData`), and vehicle damage packets (33, 56, 58).
 
@@ -51,15 +51,15 @@ Vehicle physics, handling, sirens, doors, colors, lights, engine state, trailers
 | `getVehicleHeadLightColor` | Missing | `CLuaVehicleDefs.cpp:112` | `GetVehicleHeadLightColor` | Needs reading/writing CVehicle struct fields in libGTASA.so. |
 | `getVehicleLandingGearDown` | Missing | `CLuaVehicleDefs.cpp:68` | `GetVehicleLandingGearDown` | Needs reading/writing CVehicle struct fields in libGTASA.so. |
 | `getVehicleLightState` | Missing | `CLuaVehicleDefs.cpp:82` | `GetVehicleLightState` | Needs reading/writing CVehicle struct fields in libGTASA.so. |
-| `getVehicleMaxPassengers` | Missing | `CLuaVehicleDefs.cpp:69` | `GetVehicleMaxPassengers` | Needs reading/writing CVehicle struct fields in libGTASA.so. |
+| `getVehicleMaxPassengers` | **Implemented** | `CLuaVehicleDefs.cpp:69` | `GetVehicleMaxPassengers` | Operational on Android for stock models 400-611. (GetVehicleMaxPassengers) |
 | `getVehicleModelAudioSettings` | Missing | `CLuaVehicleDefs.cpp:140` | `ArgumentParser<GetVehicleModelAudioSettings>` | Needs reading/writing CVehicle struct fields in libGTASA.so. |
 | `getVehicleModelDummyDefaultPosition` | Missing | `CLuaVehicleDefs.cpp:132` | `ArgumentParser<GetVehicleModelDummyDefaultPosition>` | Needs reading/writing CVehicle struct fields in libGTASA.so. |
 | `getVehicleModelDummyPosition` | Missing | `CLuaVehicleDefs.cpp:131` | `GetVehicleModelDummyPosition` | Needs reading/writing CVehicle struct fields in libGTASA.so. |
 | `getVehicleModelExhaustFumesPosition` | Missing | `CLuaVehicleDefs.cpp:130` | `GetVehicleModelExhaustFumesPosition` | Needs reading/writing CVehicle struct fields in libGTASA.so. |
-| `getVehicleModelFromName` | Missing | `CLuaVehicleDefs.cpp:65` | `GetVehicleModelFromName` | Needs reading/writing CVehicle struct fields in libGTASA.so. |
+| `getVehicleModelFromName` | **Implemented** | `CLuaVehicleDefs.cpp:65` | `GetVehicleModelFromName` | Operational on Android. (GetVehicleModelFromName) |
 | `getVehicleModelWheelSize` | Missing | `CLuaVehicleDefs.cpp:135` | `ArgumentParser<GetVehicleModelWheelSize>` | Needs reading/writing CVehicle struct fields in libGTASA.so. |
-| `getVehicleName` | Missing | `CLuaVehicleDefs.cpp:97` | `GetVehicleName` | Needs reading/writing CVehicle struct fields in libGTASA.so. |
-| `getVehicleNameFromModel` | Missing | `CLuaVehicleDefs.cpp:98` | `GetVehicleNameFromModel` | Needs reading/writing CVehicle struct fields in libGTASA.so. |
+| `getVehicleName` | **Implemented** | `CLuaVehicleDefs.cpp:97` | `GetVehicleName` | Operational on Android for stock models 400-611. (GetVehicleName) |
+| `getVehicleNameFromModel` | **Implemented** | `CLuaVehicleDefs.cpp:98` | `GetVehicleNameFromModel` | Operational on Android for stock models 400-611. (GetVehicleNameFromModel) |
 | `getVehicleNativeAutoPilotDiagnostic` | Missing | `CLuaVehicleDefs.cpp:148` | `GetVehicleNativeAutoPilotDiagnostic` | Needs reading/writing CVehicle struct fields in libGTASA.so. |
 | `getVehicleNitroCount` | Missing | `CLuaVehicleDefs.cpp:121` | `GetVehicleNitroCount` | Needs reading/writing CVehicle struct fields in libGTASA.so. |
 | `getVehicleNitroLevel` | Missing | `CLuaVehicleDefs.cpp:122` | `GetVehicleNitroLevel` | Needs reading/writing CVehicle struct fields in libGTASA.so. |
@@ -79,10 +79,10 @@ Vehicle physics, handling, sirens, doors, colors, lights, engine state, trailers
 | `getVehicleTowingVehicle` | Missing | `CLuaVehicleDefs.cpp:87` | `GetVehicleTowingVehicle` | Needs reading/writing CVehicle struct fields in libGTASA.so. |
 | `getVehicleTurnVelocity` | Missing | `CLuaVehicleDefs.cpp:74` | `GetVehicleTurnVelocity` | Needs reading/writing CVehicle struct fields in libGTASA.so. |
 | `getVehicleTurretPosition` | Missing | `CLuaVehicleDefs.cpp:75` | `GetVehicleTurretPosition` | Needs reading/writing CVehicle struct fields in libGTASA.so. |
-| `getVehicleType` | *Stub* | `CLuaVehicleDefs.cpp:64` | `GetVehicleType` | Currently stubbed: `l_num0: lua_pushinteger(L, 0)`. Needs native engine wiring. |
+| `getVehicleType` | **Implemented** | `CLuaVehicleDefs.cpp:64` | `GetVehicleType` | Operational on Android for stock models 400-611. (GetVehicleType) |
 | `getVehicleTyresCanBurst` | Missing | `CLuaVehicleDefs.cpp:146` | `ArgumentParser<GetVehicleTyresCanBurst>` | Needs reading/writing CVehicle struct fields in libGTASA.so. |
 | `getVehicleUpgradeOnSlot` | Missing | `CLuaVehicleDefs.cpp:77` | `GetVehicleUpgradeOnSlot` | Needs reading/writing CVehicle struct fields in libGTASA.so. |
-| `getVehicleUpgradeSlotName` | Missing | `CLuaVehicleDefs.cpp:79` | `GetVehicleUpgradeSlotName` | Needs reading/writing CVehicle struct fields in libGTASA.so. |
+| `getVehicleUpgradeSlotName` | **Implemented** | `CLuaVehicleDefs.cpp:79` | `GetVehicleUpgradeSlotName` | Operational on Android. (GetVehicleUpgradeSlotName) |
 | `getVehicleUpgrades` | Missing | `CLuaVehicleDefs.cpp:78` | `GetVehicleUpgrades` | Needs reading/writing CVehicle struct fields in libGTASA.so. |
 | `getVehicleVariant` | Missing | `CLuaVehicleDefs.cpp:66` | `GetVehicleVariant` | Needs reading/writing CVehicle struct fields in libGTASA.so. |
 | `getVehicleWheelFrictionState` | Missing | `CLuaVehicleDefs.cpp:136` | `ArgumentParser<GetVehicleWheelFrictionState>` | Needs reading/writing CVehicle struct fields in libGTASA.so. |

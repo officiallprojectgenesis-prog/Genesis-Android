@@ -19,6 +19,7 @@
 #include "ResourceLoader.h"
 #include "ResourcePackets.h"
 #include "ServerWorld.h"
+#include "entity/EntityAddTypes.h"
 #include "net/raknet/RakNetWrapper.h"
 
 #include <zlib.h>
@@ -191,6 +192,44 @@ bool Has(const std::string& text, const char* needle) {
     return text.find(needle) != std::string::npos;
 }
 
+// Element, player, bit and vehicle helpers that do not need a GTA native.
+void CheckHelpers(WorldRPG::Script::LuaVMStub& vm) {
+    RunLua(vm, "helpers", R"LUA(
+        local me = {id = 777, element = true}
+        assert(isElement(me) == true, "local player is an element")
+        assert(getPlayerName(me) == "Sam", "nick from the join")
+        assert(getPlayerFromName("sam") == me or getPlayerFromName("sam").id == 777, "case-insensitive nick")
+        assert(getPlayerFromNick("Sam").id == 777, "getPlayerFromNick")
+        assert(getPlayerNametagText(me) == "Sam", "nametag starts as the nick")
+        assert(setPlayerNametagText(me, "Tag") == true, "set nametag")
+        assert(getPlayerNametagText(me) == "Tag", "nametag override")
+        assert(setPlayerNametagText(me, "") == false, "empty nametag rejected")
+        assert(getPlayerNametagText(me) == "Tag", "rejected text is not stored")
+        assert(getPlayerTeam(me) == false, "no team is stored")
+        assert(type(getPlayerPing(me)) == "number", "ping is a number")
+        assert(destroyElement(me) == false and isElement(me) == true, "local player is not deleted")
+        assert(destroyElement(false) == false and destroyElement({}) == false, "non-element")
+        local root = getRootElement()
+        assert(isElement(root) == true and destroyElement(root) == false and isElement(root) == true, "root stays")
+        assert(destroyElement(root) == false, "root is still there")
+        setElementData(me, "coin", 3)
+        setElementData(me, "label", "x")
+        local data = getAllElementData(me)
+        assert(type(data) == "table" and data.coin == 3 and data.label == "x", "own element data")
+        assert(getAllElementData(false) == false, "getAllElementData needs an element")
+        assert(bitAnd(7, 3) == 3 and bitOr(1, 2, 4) == 7 and bitXor(7, 1) == 6, "bit and/or/xor")
+        assert(bitNot(0) == 4294967295, "bitNot")
+        assert(bitTest(1, 1) == true and bitTest(1, 2) == false, "bitTest")
+        assert(bitLShift(1, 4) == 16 and bitRShift(16, 2) == 4, "shifts")
+        assert(bitLRotate(1, 1) == 2 and bitRRotate(1, 1) == 2147483648, "rotates")
+        assert(bitExtract(255, 0, 4) == 15 and bitReplace(255, 0, 0, 4) == 240, "extract and replace")
+        assert(bitAnd(true) == false and bitTest(true) == nil, "bad bit arguments")
+        assert(getVehicleType(400) == "Automobile" and getVehicleType(460) == "Plane", "vehicle type")
+        assert(getVehicleType(481) == "BMX" and getVehicleType(520) == "Plane", "more types")
+        assert(getVehicleType(700) == "" and getVehicleType("nope") == false, "bad vehicle type")
+    )LUA");
+}
+
 // Screen is the default 1920x1080 (no surface size is set in the host build).
 void CheckGui(WorldRPG::Script::LuaVMStub& vm) {
     RunLua(vm, "gui-create", R"LUA(
@@ -258,6 +297,70 @@ void CheckGui(WorldRPG::Script::LuaVMStub& vm) {
     RunLua(vm, "gui-cleanup", "destroyElement(btn)\nassert(not isElement(btn), 'button destroyed')");
     frame = WorldRPG::Script::ActiveVmPump();
     CHECK(!Has(frame, "R 960.0 540.0"));
+
+    // A tap on a gui-edit focuses it, the frame asks for the soft keyboard ("K"), and
+    // typed text stays in the edit (onClientCharacter does not also see it).
+    RunLua(vm, "gui-edit", R"LUA(
+        edit = guiCreateEdit(10, 10, 200, 40, "", false)
+        assert(getElementType(edit) == "gui-edit" and guiGetText(edit) == "", "edit")
+        assert(guiSetInputMode("no_binds") == true and guiGetInputMode() == "no_binds", "no_binds")
+        assert(guiGetInputEnabled() == true, "capture on")
+        assert(guiSetInputMode("nope") == false, "bad mode")
+        assert(guiSetInputMode("no_binds_when_editing") == true, "restore mode")
+        assert(guiGetInputEnabled() == false, "capture off without a focused edit")
+        _G.changed, _G.accepted, _G.focused, _G.blurred = 0, 0, 0, 0
+        _G.chars, _G.keys = "", ""
+        addEventHandler("onClientGUIChanged", root, function() _G.changed = _G.changed + 1 end)
+        addEventHandler("onClientGUIAccepted", root, function() _G.accepted = _G.accepted + 1 end)
+        addEventHandler("onClientGUIFocus", root, function() _G.focused = _G.focused + 1 end)
+        addEventHandler("onClientGUIBlur", root, function() _G.blurred = _G.blurred + 1 end)
+        addEventHandler("onClientCharacter", root, function(c) _G.chars = _G.chars .. c end)
+        addEventHandler("onClientKey", root, function(button, press)
+            if press then _G.keys = _G.keys .. button .. "," end
+        end)
+        showCursor(true)
+    )LUA");
+    WorldRPG::Script::ActiveVmQueueCursor(0, 20.f, 25.f);
+    frame = WorldRPG::Script::ActiveVmPump();
+    CHECK(Has(frame, "\nK\n"));
+    CHECK(Has(frame, "|"));
+    RunLua(vm, "gui-edit-focus", R"LUA(
+        assert(_G.focused == 1 and guiGetInputEnabled() == true, "tap focused the edit")
+        assert(guiFocus(edit) == true, "guiFocus")
+    )LUA");
+    WorldRPG::Script::ActiveVmQueueScriptInput("ab", 0, "");
+    WorldRPG::Script::ActiveVmPump();
+    RunLua(vm, "gui-edit-type", R"LUA(
+        assert(guiGetText(edit) == "ab" and _G.changed == 1, "typed into the edit")
+        assert(_G.chars == "", "a focused edit does not emit onClientCharacter")
+    )LUA");
+    WorldRPG::Script::ActiveVmQueueScriptInput("", 1, "enter");
+    WorldRPG::Script::ActiveVmPump();
+    RunLua(vm, "gui-edit-enter", R"LUA(
+        assert(guiGetText(edit) == "a" and _G.accepted == 1, "backspace and enter")
+        assert(guiEditSetMasked(edit, true) == true and guiEditIsMasked(edit) == true, "masked")
+    )LUA");
+    frame = WorldRPG::Script::ActiveVmPump();
+    CHECK(Has(frame, "**|") == false);
+    CHECK(Has(frame, "*|"));
+
+    // DX edits (the login boxes) are not widgets. guiSetInputEnabled(true) opens the
+    // keyboard and the keystrokes are onClientCharacter / onClientKey.
+    RunLua(vm, "dx-capture", "guiBlur(edit)\nguiSetInputEnabled(true)");
+    WorldRPG::Script::ActiveVmQueueScriptInput("Z", 0, "");
+    WorldRPG::Script::ActiveVmQueueScriptInput("", 1, "");
+    WorldRPG::Script::ActiveVmQueueScriptInput("", 0, "enter");
+    frame = WorldRPG::Script::ActiveVmPump();
+    CHECK(Has(frame, "\nK\n"));
+    RunLua(vm, "dx-keys", R"LUA(
+        assert(_G.chars == "Z", "dx character: " .. _G.chars)
+        assert(_G.keys == "backspace,enter,", "dx keys: " .. _G.keys)
+        assert(_G.blurred == 1, "blur")
+        guiSetInputEnabled(false)
+        destroyElement(edit)
+    )LUA");
+    frame = WorldRPG::Script::ActiveVmPump();
+    CHECK(!Has(frame, "\nK\n"));
 }
 
 void CheckStopLifecycle(WorldRPG::Script::LuaVMStub& vm) {
@@ -849,8 +952,73 @@ void CheckNetworkCalls(WorldRPG::Script::LuaVMStub& vm) {
 
 } // namespace
 
+// ROADMAP_PEDS_SYNC phase 1: every field of the ENTITY_ADD ped body is kept, in the order of
+// CPacketHandler::Packet_EntityAdd case PED (CPacketHandler.cpp 3997-4187), at the 0x0030 widths.
+void CheckPedEntityBody() {
+    using namespace WorldRPG;
+    Net::BitStreamWriter w;
+    auto bits = [&](uint32_t value, size_t count) {
+        uint8_t raw[4] = {static_cast<uint8_t>(value), static_cast<uint8_t>(value >> 8), static_cast<uint8_t>(value >> 16),
+                          static_cast<uint8_t>(value >> 24)};
+        w.WriteBits(raw, count);
+    };
+    bits(static_cast<uint32_t>(100 * 1024), 24);  // SPositionSync x = 100
+    bits(static_cast<uint32_t>(-50 * 1024) & 0xFFFFFFu, 24);  // y = -50
+    w.Write(12.5f);                                // z
+    w.WriteCompressed(61u, 2);                     // model
+    bits(32768, 16);                               // SPedRotationSync, ~0 rad
+    w.Write(static_cast<uint8_t>(255));            // SPlayerHealthSync -> 255
+    w.Write(static_cast<uint8_t>(102));            // SPlayerArmorSync -> 51
+    bits(1, 1);                                    // in vehicle
+    bits(321, 17);                                 // vehicle id
+    bits(2, 4);                                    // seat
+    bits(0, 1); bits(1, 1); bits(1, 1); bits(1, 1);  // jetpack, synced, headless, frozen
+    w.WriteCompressed(55u, 1);                     // alpha raw -> 200
+    w.Write(static_cast<uint8_t>(54));             // move anim
+    w.Write(static_cast<uint8_t>(1));              // one clothes item
+    w.Write(static_cast<uint8_t>(5)); w.WriteBytes(reinterpret_cast<const uint8_t*>("vestw"), 5);
+    w.Write(static_cast<uint8_t>(4)); w.WriteBytes(reinterpret_cast<const uint8_t*>("vest"), 4);
+    w.Write(static_cast<uint8_t>(0));              // clothes type
+    w.Write(static_cast<uint8_t>(2)); w.Write(static_cast<uint8_t>(22)); w.Write(static_cast<uint16_t>(170));  // slot 2: colt, 170
+    w.Write(static_cast<uint8_t>(0xFF));           // end of weapons
+    w.Write(static_cast<uint8_t>(2));              // current slot
+    bits(1, 1);                                    // animation present
+    w.Write(static_cast<uint16_t>(3)); w.WriteBytes(reinterpret_cast<const uint8_t*>("ped"), 3);
+    w.Write(static_cast<uint16_t>(9)); w.WriteBytes(reinterpret_cast<const uint8_t*>("WALK_civi"), 9);
+    w.Write(static_cast<int32_t>(-1));
+    bits(1, 1); bits(1, 1); bits(0, 1); bits(0, 1);  // looped, updatePosition, interruptable, freezeLastFrame
+    w.Write(static_cast<int32_t>(250));
+    bits(1, 1);                                    // taskRestore
+    w.Write(400.f); w.Write(1.5f);                 // elapsed, speed
+
+    Net::BitStreamReader r(w.GetData(), w.GetByteLength(), w.GetBitLength());
+    Entity::EntityCommon common;
+    common.id = 900;
+    common.type = Entity::kTypePed;
+    common.collisions = false;
+    common.dimension = 7;
+    Entity::Visual visual;
+    CHECK(Entity::ReadEntityBodyPed(r, common, visual));
+    CHECK(r.GetRemainingBits() < 8);
+    CHECK(visual.model == 61 && visual.x == 100.f && visual.y == -50.f && visual.z == 12.5f);
+    CHECK(visual.ped != nullptr);
+    if (!visual.ped) return;
+    const Entity::PedSpawn& p = *visual.ped;
+    CHECK(p.health == 255.f && p.armor == 51.f && p.synced);
+    CHECK(p.vehicleId == 321 && p.seat == 2);
+    CHECK(!p.hasJetpack && p.headless && p.frozen);
+    CHECK(p.alpha == 200 && p.moveAnim == 54);
+    CHECK(p.clothes.size() == 1 && p.clothes[0].texture == "vestw" && p.clothes[0].model == "vest" && p.clothes[0].type == 0);
+    CHECK(p.weapons.size() == 1 && p.weapons[0].slot == 2 && p.weapons[0].type == 22 && p.weapons[0].totalAmmo == 170);
+    CHECK(p.currentSlot == 2 && !p.collisions && p.dimension == 7);
+    CHECK(p.animation.present && p.animation.block == "ped" && p.animation.name == "WALK_civi");
+    CHECK(p.animation.time == -1 && p.animation.looped && p.animation.updatePosition && !p.animation.interruptable);
+    CHECK(p.animation.blendTime == 250 && p.animation.taskRestore && p.animation.elapsedTime == 400.f && p.animation.speed == 1.5f);
+}
+
 int main(int argc, char** argv) {
     CheckPacketLayouts();
+    CheckPedEntityBody();
 
     // RESOURCE_START sets the root the phone reports for the resource (shim layout included).
     WorldRPG::Net::ResourceStartInfo root;
@@ -862,9 +1030,21 @@ int main(int argc, char** argv) {
 
     WorldRPG::Script::LuaVMStub vm;
     CHECK(vm.initialize());
+    // Host has no libGTASA. Bad arguments return false (desktop CLuaWorldDefs::GetGroundPosition).
+    // A valid triple also returns false here, because FindGroundZFor3DPosition cannot run.
+    RunLua(vm, "get-ground-position",
+           "assert(getGroundPosition() == false, \"no args\")\n"
+           "assert(getGroundPosition({}) == false, \"table\")\n"
+           "assert(getGroundPosition(1, 2) == false, \"short\")\n"
+           "assert(getGroundPosition(1, 2, \"zz\") == false, \"bad z\")\n"
+           "assert(getGroundPosition(0/0, 1, 2) == false, \"nan\")\n"
+           "assert(getGroundPosition(1, \"2\", 3) == false, \"host has no world\")\n"
+           "assert(getGroundPosition(10, 20, 30) == false, \"host triple\")");
     WorldRPG::ServerWorld::SetLocalPlayer(777);
+    WorldRPG::ServerWorld::NotePlayerNick(777, "Sam");
 
     CheckJson(vm, argc > 1 ? argv[1] : nullptr);
+    CheckHelpers(vm);
     CheckGui(vm);
     CheckStopLifecycle(vm);
     CheckDxImage(vm);

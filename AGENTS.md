@@ -1,5 +1,9 @@
 # Agent rules for the MTA Neon Android port
 
+## Engine crash gate
+
+Before editing `gtasa/GameEngine.cpp`, `gtasa/PlayerPedPort.cpp`, `gtasa/RemoteVehicle.cpp`, `shared/PacketHandler.cpp`, `shared/VehicleSync.cpp`, `shared/entity/PedSyncState.cpp`, `net/NeonJoinProtocol.cpp`, or `shared/entity/EntityAdd*`, read and follow `.cursor/skills/mta-sync-engine-safety/SKILL.md`.
+
 ## Rule: build every sync function exactly as the desktop client does
 
 The reference is the desktop client source in `mta_neon_source` (Client/mods/deathmatch/logic, Shared/sdk/net). Before writing or changing a sync function on Android:
@@ -21,5 +25,27 @@ The reference is the desktop client source in `mta_neon_source` (Client/mods/dea
 | `CUnoccupiedVehicleSync::Packet_UnoccupiedVehicleSync` | CUnoccupiedVehicleSync.cpp:178-208 | `HandleUnoccupiedVehicleSync` / `RemoteVehicle::ApplyUnoccupied` | Converted: desktop order (target position, target rotation, move speed, turn speed, health, engine on, derailed for trains). Removed the invented hosted and derailed gates. Gap: `CanUpdateSync` time context. Engine effects log only. |
 | `CUnoccupiedVehicleSync::Packet_UnoccupiedVehicleStartSync` | CUnoccupiedVehicleSync.cpp:104-158 | `HandleVehicleStartSync` / `NoteVehicleStartSync` / `ApplyCarSeed` | Converted: position, rotation, move speed, turn speed and health written to the body once, then hosted. Position and rotation are set at once, not interpolated. Not yet run on a device. |
 | `CNetAPI::WriteKeysync` (vehicle form) with `IsSmallKeySyncNeeded` | CNetAPI.cpp:462-547, 729-828 | `SendDriverKeySync` / `VehicleSync::WriteDriverKeysync` | Converted for seat 0. Gaps: hydraulics right stick (no upgrade tracking), turret angle 0, weapon written as fists. Not yet run against the live server. |
+| `CPedSync::DoPulse` + `Update` + `WritePedInformation` | CPedSync.cpp:125-165, 733-767, 924-1133 | `SendPedSync` | Converted at bitstream 0x0030. Change flags, sync time context, health and armour from the body. Camera, on fire, in water, reloading and synced-anim kill are not read. Not yet run on a device. |
+| `CClientPed::SetPosition` + `SetCurrentRotation` + `_CreateModel` matrix | CClientPed.cpp:1064-1098, 5298-5321, 5772-5776; CPacketHandler.cpp:4054-4056; CMatrix.h:253-279 | `PlaceRemotePlayerPed` / `SetRemotePedHeading` | Converted: network Z, upright Z-only matrix, `fCurrentRotation`/`fTargetRotation` at +0x6C4/+0x6C8. Stream-in hold uses `bIsStaticWaitingForCollision` and `CColStore::RequestCollision` (CClientPed.cpp:62-63, 5914-5945). `CPhysicalSA::SetFrozen` writes `bDontApplySpeed` and `bDisableFriction` (flag word +0x64, mass +0xB0). `CClientPed::SetInterior` writes the area byte at +0x4B. The element-interior event and `CWorld::SetCurrentArea` log only. The hold clears the freeze bit on release (`UpdateRemoteReplicaPhysicsFence` is not ported). Not yet run on a device. |
+| `CClientPed::StreamedInPulse` health and armor lock | CClientPed.cpp:4738-4748; InternalSetHealth 3677-3718; CPedSA.h:407-410 | `ApplySyncedPlayerFields` | Converted: a locked health and armor are written to `CPed` +0x6AC / +0x6B4 every game tick. `Packet_PedSync` locks those fields even when the packet has no position (CPedSync.cpp:439-442). Dead-to-alive `ReCreateModel` logs only. Not yet run on a device. |
+| `CNetAPI::WritePlayerPuresync` on foot + `DoPulse` keysync skip | CNetAPI.cpp:326-397, 1116-1304; SyncStructures.h:189-193, 557-594, 671-694 | `SendPureSync` / `SendKeySync` | On foot only. Pad left stick of 0 is written as stick 0 with the walk bit clear, and the release writes a zero `SVelocitySync` plus one keysync unless that pulse already sent pure sync. Camera is `TheCamera+0x154` (`GetCameraRotation`). Health is `SPlayerHealthSync`. Time context stays 0. Jetpack, contact, weapon, aim, armor and `WriteCameraOrientation` log only. Bitstream stays 0x0030. Driver branch unchanged. |
+| `CNetAPI::ReadPlayerPuresync` | CNetAPI.cpp:830-1021 | `HandlePlayerPureSync` / `NoteRemotePlayerSync` | Controller (including the stick), `SetMoveSpeed` (zero included), health and armor at `CPed` +0x6AC/+0x6B4, target position, `SetTargetRotation(float)`. `CanUpdateSync`, latency, jetpack, contact, choking, on fire, weapon/aim, climb and swim log only. |
+| `CNetAPI::ReadKeysync` on foot | CNetAPI.cpp:573-727; CClientPed.cpp:1460-1484, 5332-5339 | `HandleKeySync` / `NoteRemoteAim` | Replaces the controller, including a zero stick. Camera and duck are stored. Weapon aim, choking and the `TheCamera+0x154` context-switch write log only. |
+| `CClientPed::UpdateTargetPosition` | CClientPed.cpp:8657-8822 | `ApplyRemotePeds` position step | Not wired. The 0.35 position blend stays. No second algorithm. Player heading uses `SetTargetRotation(float)` immediately. |
+
+## Wardrobe preview
+
+Not converted. Port in this order, one row at a time. The desktop line ranges and the done check are in `docs/ROADMAP_WARDROBE_PREVIEW.md`. Do not mark a row done until its desktop function was read and compared line by line.
+
+| Order | Function | Desktop reference | Android | State |
+|---|---|---|---|---|
+| 1 | `createPed` | CLuaPedDefs.cpp:2870-2906; CStaticFunctionDefinitions.cpp:2815-2852; CClientPed.cpp:1256-1258 | `NoteScriptPed` / `CreateRemotePlayerPed` | Ported. Model 0 stays CJ. Not yet run on a device. |
+| 2 | `setTime` | CLuaWorldDefs.cpp:1452-1465; CStaticFunctionDefinitions.cpp:6651-6655; CClockSA.cpp:18-25 | `NoteScriptTime` | Ported via `CClock::SetGameClock` when the symbol exists. Not yet run on a device. |
+| 3 | `setWeather` | CStaticFunctionDefinitions.cpp:7076-7087; CBlendedWeather.cpp:71-78 | `NoteScriptWeather` | Ported via `CWeather::ForceWeather` when the symbol exists. Not yet run on a device. |
+| 4 | `setCameraMatrix` | CLuaCameraDefs.cpp:241-289; CStaticFunctionDefinitions.cpp:5183-5213 | `NoteScriptCamera` | Ported via `SetCamPositionForFixedMode` and `TakeControlNoEntity`. Not yet run on a device. |
+| 5 | `setCameraTarget` | CStaticFunctionDefinitions.cpp:5216-5236 | `ClearScriptCamera` | Ported via `CCamera::Restore` when the symbol exists. Not yet run on a device. |
+| 6 | `addPedClothes` | CLuaPedDefs.cpp:2200-2214; CStaticFunctionDefinitions.cpp:2466-2482; CClientPlayerClothes.cpp:344-360; CClientPed.cpp:6584-6622 | `NoteScriptClothes` | Ported for slots 0-3, one `RebuildPlayer` per frame. Not yet run on a device. |
+| 7 | `removePedClothes` | CLuaPedDefs.cpp:2227-2238; CStaticFunctionDefinitions.cpp:2485-2501; CClientPlayerClothes.cpp:384-417 | `NoteScriptClothes` | Ported. Clears the slot then rebuilds. Not yet run on a device. |
+| 8 | `setElementRotation` | CLuaElementDefs.cpp:1913-1929; CStaticFunctionDefinitions.cpp:1084-1109 | `NoteScriptRotation` | Ported for the script ped, Z only. Not yet run on a device. |
 
 Everything else in the roadmap is not yet converted. Do not mark a row done until its desktop function was read and compared line by line.

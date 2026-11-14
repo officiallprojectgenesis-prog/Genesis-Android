@@ -426,6 +426,22 @@ Java_com_worldrpg_neonlauncher_game_EngineHostActivity_nativeCursorEvent(
 }
 
 JNIEXPORT void JNICALL
+Java_com_worldrpg_neonlauncher_game_EngineHostActivity_nativeSoundEnded(
+    JNIEnv*, jobject, jint id) {
+    WorldRPG::Script::ActiveVmNoteSoundEnded(static_cast<uint32_t>(id));
+}
+
+JNIEXPORT void JNICALL
+Java_com_worldrpg_neonlauncher_game_EngineHostActivity_nativeScriptInput(
+    JNIEnv* env, jobject, jstring text, jint backspaces, jstring key) {
+    const char* chars = text ? env->GetStringUTFChars(text, nullptr) : nullptr;
+    const char* name = key ? env->GetStringUTFChars(key, nullptr) : nullptr;
+    WorldRPG::Script::ActiveVmQueueScriptInput(chars ? chars : "", backspaces, name ? name : "");
+    if (chars) env->ReleaseStringUTFChars(text, chars);
+    if (name) env->ReleaseStringUTFChars(key, name);
+}
+
+JNIEXPORT void JNICALL
 Java_com_worldrpg_neonlauncher_game_EngineHostActivity_nativeSetScreenSize(
     JNIEnv*, jobject, jint width, jint height) {
     WorldRPG::Script::ActiveVmSetScreen(width, height);

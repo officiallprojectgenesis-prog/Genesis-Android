@@ -103,6 +103,12 @@ void ActiveVmSetScreen(int width, int height);
 // Touch on the DX overlay while the cursor is showing. Any thread. action: 0 down, 1 up, 2 move;
 // x and y are in the pixels guiGetScreenSize reports.
 void ActiveVmQueueCursor(int action, float x, float y);
+// Soft-keyboard edit from the UI thread. text is the characters inserted since the
+// previous value, backspaces is how many characters were removed before that, and
+// key is "enter" or empty. Applied on the VM thread in pumpDx.
+void ActiveVmQueueScriptInput(const char* text, int backspaces, const char* key);
+// MediaPlayer finished a playSound id. Any thread.
+void ActiveVmNoteSoundEnded(uint32_t id);
 // Screen size scripts see (guiGetScreenSize), and the resource whose code is running.
 void ActiveVmScreenSize(int& width, int& height);
 const std::string& ActiveVmOwner();

@@ -5,9 +5,9 @@ Ped animations, tasks, fighting styles, bone transforms, clothes, stats, voice, 
 ## Parity Status
 
 - **Total Functions:** 206
-- **Implemented:** 8 (3.9%)
+- **Implemented:** 20 (9.7%)
 - **Stubs:** 82
-- **Missing:** 116
+- **Missing:** 104
 
 > **Technical Requirement:** Requires hooking libGTASA.so `CPed` / `CPlayerPed` (`_ZN10CPlayerPed...`), `CPedIK`, `CTask` hierarchy (wander, fight, duck), and clothing pools.
 
@@ -81,20 +81,20 @@ Ped animations, tasks, fighting styles, bone transforms, clothes, stats, voice, 
 | `getPedWeaponAccuracy` | *Stub* | `CLuaPedDefs.cpp:420` | `ArgumentParser<GetPedWeaponAccuracy>` | Currently stubbed: `l_num0: lua_pushinteger(L, 0)`. Needs native engine wiring. |
 | `getPedWeaponShootingRate` | *Stub* | `CLuaPedDefs.cpp:419` | `ArgumentParser<GetPedWeaponShootingRate>` | Currently stubbed: `l_num0: lua_pushinteger(L, 0)`. Needs native engine wiring. |
 | `getPedWeaponSlot` | *Stub* | `CLuaPedDefs.cpp:380` | `GetPedWeaponSlot` | Currently stubbed: `l_num0: lua_pushinteger(L, 0)`. Needs native engine wiring. |
-| `getPlayerFromName` | Missing | `CLuaPlayerDefs.cpp:108` | `GetPlayerFromName` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `getPlayerFromNick` | Missing | `CLuaPlayerDefs.cpp:107` | `GetPlayerFromName` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
+| `getPlayerFromName` | **Implemented** | `CLuaPlayerDefs.cpp:108` | `GetPlayerFromName` | Operational on Android. Case-insensitive nick from the join or PLAYER_LIST. (GetPlayerFromName) |
+| `getPlayerFromNick` | **Implemented** | `CLuaPlayerDefs.cpp:107` | `GetPlayerFromName` | Operational on Android. Same function as getPlayerFromName. (GetPlayerFromName) |
 | `getPlayerHudComponentProperty` | Missing | `CLuaPlayerDefs.cpp:137` | `ArgumentParser<GetPlayerHudComponentProperty>` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
 | `getPlayerMapBoundingBox` | Missing | `CLuaPlayerDefs.cpp:135` | `GetPlayerMapBoundingBox` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
 | `getPlayerMapOpacity` | Missing | `CLuaPlayerDefs.cpp:136` | `ArgumentParser<GetPlayerMapOpacity>` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
 | `getPlayerMoney` | **Implemented** | `CLuaPlayerDefs.cpp:110` | `GetPlayerMoney` | Operational on Android. (l_getPlayerMoney) |
-| `getPlayerName` | **Implemented** | `CLuaPlayerDefs.cpp:101` | `GetPlayerName` | Operational on Android. (l_getPlayerName) |
-| `getPlayerNametagColor` | Missing | `CLuaPlayerDefs.cpp:103` | `GetPlayerNametagColor` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `getPlayerNametagText` | Missing | `CLuaPlayerDefs.cpp:102` | `GetPlayerNametagText` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `getPlayerPing` | Missing | `CLuaPlayerDefs.cpp:105` | `GetPlayerPing` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
+| `getPlayerName` | **Implemented** | `CLuaPlayerDefs.cpp:101` | `GetPlayerName` | Operational on Android. Nick from the join or PLAYER_LIST; "Player" until a nick is stored. (GetPlayerName) |
+| `getPlayerNametagColor` | **Implemented** | `CLuaPlayerDefs.cpp:103` | `GetPlayerNametagColor` | Operational on Android. (GetPlayerNametagColor) Override or white; no team is stored, so there is no team color. |
+| `getPlayerNametagText` | **Implemented** | `CLuaPlayerDefs.cpp:102` | `GetPlayerNametagText` | Operational on Android. Override, otherwise the nick. (GetPlayerNametagText) |
+| `getPlayerPing` | **Implemented** | `CLuaPlayerDefs.cpp:105` | `GetPlayerPing` | Operational on Android. Local player uses RakNetWrapper::GetPing. Remote ping stays 0; latency is not stored. (GetPlayerPing) |
 | `getPlayerScriptDebugLevel` | Missing | `CLuaPlayerDefs.cpp:112` | `ArgumentParser<GetPlayerScriptDebugLevel>` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `getPlayerSerial` | Missing | `CLuaPlayerDefs.cpp:129` | `GetPlayerSerial` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `getPlayerTeam` | Missing | `CLuaPlayerDefs.cpp:106` | `GetPlayerTeam` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `getPlayerUserName` | Missing | `CLuaPlayerDefs.cpp:128` | `GetPlayerUserName` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
+| `getPlayerSerial` | **Implemented** | `CLuaPlayerDefs.cpp:129` | `GetPlayerSerial` | Operational on Android. (GetPlayerSerial) Reads RakNetWrapper::GetSerial. |
+| `getPlayerTeam` | **Implemented** | `CLuaPlayerDefs.cpp:106` | `GetPlayerTeam` | Operational on Android. No team is stored, so this returns false. (GetPlayerTeam) |
+| `getPlayerUserName` | **Implemented** | `CLuaPlayerDefs.cpp:128` | `GetPlayerUserName` | Operational on Android. (GetPlayerUserName) Desktop CLuaPlayerDefs.cpp:764-768 returns false. |
 | `getPlayerWantedLevel` | *Stub* | `CLuaPlayerDefs.cpp:111` | `GetPlayerWantedLevel` | Currently stubbed: `l_num0: lua_pushinteger(L, 0)`. Needs native engine wiring. |
 | `givePedWeapon` | Missing | `CLuaPedDefs.cpp:276` | `GivePedWeapon` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
 | `givePlayerMoney` | Missing | `CLuaPlayerDefs.cpp:119` | `GivePlayerMoney` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
@@ -127,7 +127,7 @@ Ped animations, tasks, fighting styles, bone transforms, clothes, stats, voice, 
 | `isPlayerHudComponentVisible` | **Implemented** | `CLuaPlayerDefs.cpp:109` | `IsPlayerHudComponentVisible` | Operational on Android. (l_isPlayerHudComponentVisible) |
 | `isPlayerMapForced` | Missing | `CLuaPlayerDefs.cpp:133` | `IsPlayerMapForced` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
 | `isPlayerMapVisible` | Missing | `CLuaPlayerDefs.cpp:134` | `IsPlayerMapVisible` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `isPlayerNametagShowing` | Missing | `CLuaPlayerDefs.cpp:104` | `IsPlayerNametagShowing` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
+| `isPlayerNametagShowing` | **Implemented** | `CLuaPlayerDefs.cpp:104` | `IsPlayerNametagShowing` | Operational on Android. (IsPlayerNametagShowing) Defaults to showing. |
 | `killPed` | Missing | `CLuaPedDefs.cpp:269` | `KillPed` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
 | `killPedTask` | Missing | `CLuaPedDefs.cpp:439` | `ArgumentParser<killPedTask>` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
 | `pickUpPedObject` | Missing | `CLuaPedDefs.cpp:328` | `PickUpPedObject` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
@@ -207,9 +207,9 @@ Ped animations, tasks, fighting styles, bone transforms, clothes, stats, voice, 
 | `setPlayerHudComponentProperty` | Missing | `CLuaPlayerDefs.cpp:124` | `ArgumentParser<SetPlayerHudComponentProperty>` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
 | `setPlayerHudComponentVisible` | **Implemented** | `CLuaPlayerDefs.cpp:117` | `ShowPlayerHudComponent` | Operational on Android. (l_setPlayerHudComponentVisible) |
 | `setPlayerMoney` | Missing | `CLuaPlayerDefs.cpp:118` | `SetPlayerMoney` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `setPlayerNametagColor` | Missing | `CLuaPlayerDefs.cpp:122` | `SetPlayerNametagColor` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `setPlayerNametagShowing` | Missing | `CLuaPlayerDefs.cpp:123` | `SetPlayerNametagShowing` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `setPlayerNametagText` | Missing | `CLuaPlayerDefs.cpp:121` | `SetPlayerNametagText` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
+| `setPlayerNametagColor` | **Implemented** | `CLuaPlayerDefs.cpp:122` | `SetPlayerNametagColor` | Operational on Android. (SetPlayerNametagColor) (player, r, g, b) sets an override; (player, false) clears it. |
+| `setPlayerNametagShowing` | **Implemented** | `CLuaPlayerDefs.cpp:123` | `SetPlayerNametagShowing` | Operational on Android. (SetPlayerNametagShowing) |
+| `setPlayerNametagText` | **Implemented** | `CLuaPlayerDefs.cpp:121` | `SetPlayerNametagText` | Operational on Android. Rejects empty text and characters below 32. Length 1-64 UTF-16 units. (SetPlayerNametagText) |
 | `showMissionBigText` | Missing | `CLuaPlayerDefs.cpp:143` | `ArgumentParser<ShowMissionBigText>` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
 | `showMissionHelp` | Missing | `CLuaPlayerDefs.cpp:142` | `ArgumentParser<ShowMissionHelp>` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
 | `showMissionText` | Missing | `CLuaPlayerDefs.cpp:141` | `ArgumentParser<ShowMissionText>` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |

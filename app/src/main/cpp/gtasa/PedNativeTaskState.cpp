@@ -123,4 +123,15 @@ void LockPedArmorCurrent(uint32_t id) {
     StateFor(id).armorLocked = true;
 }
 
+bool CopyPedVitalsLock(uint32_t id, bool& healthLocked, float& health, bool& armorLocked, float& armor) {
+    std::lock_guard<std::mutex> lock(gPedNativeTaskMutex);
+    auto found = gPedNativeTaskStates.find(id);
+    if (found == gPedNativeTaskStates.end()) return false;
+    healthLocked = found->second.healthLocked;
+    health = found->second.health;
+    armorLocked = found->second.armorLocked;
+    armor = found->second.armor;
+    return healthLocked || armorLocked;
+}
+
 } // namespace WorldRPG::Game

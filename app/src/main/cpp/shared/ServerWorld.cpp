@@ -29,6 +29,9 @@ uint32_t g_local = 0;
 uint32_t g_resourceRoot = 0;
 std::unordered_map<uint32_t, Visual> g_visuals;
 std::unordered_map<uint32_t, std::unordered_map<std::string, Datum>> g_data;
+// Player nicks. PLAYER_LIST reads the nick and this keeps it. The local nick is
+// noted at join. Not part of Visual, so noting the local nick does not invent a pose.
+std::unordered_map<uint32_t, std::string> g_nicks;
 // Radar blip handles of a session that ended (ResetSession). CRadar is only touched on the game thread, so Tick
 // clears them. Guarded by g_lock.
 std::vector<int> g_staleBlips;
@@ -237,6 +240,7 @@ void ResetSession() {
         }
         g_visuals.clear();
         g_data.clear();
+        g_nicks.clear();
         g_resourceRoot = 0;
     }
     // Hosted and observer ped state is keyed by ElementID, which the new session reuses.
@@ -248,13 +252,20 @@ void SetLocalPlayer(uint32_t id) { g_local = id; }
 uint32_t LocalPlayer() { return g_local; }
 uint32_t LastResourceRoot() { return g_resourceRoot; }
 
-int CopyActors(ActorSpawn* out, int capacity) {
+int CopyActors(ActorSpawn* out, int capacity, int pedLimit, int vehicleLimit) {
     if (!out || capacity <= 0) return 0;
+    // Desktop streams peds and vehicles apart (CClientManager.cpp 27-28): a ped uses the player
+    // streamer (CClientPed.cpp 591-604) and stops at 110 (CClientPlayerManager::IsPlayerLimitReached,
+    // CClientPlayerManager.cpp 172-174; MAX_PEDS_MTA, Common.h 17). A vehicle uses its own streamer
+    // (CClientVehicle.cpp 81-82) and stops at 64 (CClientVehicleManager::IsVehicleLimitReached,
+    // CClientVehicleManager.cpp 780-784; MAX_VEHICLES_MTA, Common.h 16). Callers pass the phone caps.
+    // Both limits negative keeps the old shared buffer for a caller that has not split.
+    const bool shared = pedLimit < 0 && vehicleLimit < 0;
+    if (pedLimit < 0) pedLimit = 0;
+    if (vehicleLimit < 0) vehicleLimit = 0;
     std::lock_guard<std::mutex> lock(g_lock);
     int count = 0;
-    for (const auto& [id, visual] : g_visuals) {
-        if (visual.kind != 14 && visual.kind != 2) continue;
-        if (count >= capacity) break;
+    auto write = [&](uint32_t id, const Visual& visual) {
         ActorSpawn& slot = out[count++];
         slot.id = id;
         slot.kind = visual.kind;
@@ -267,6 +278,28 @@ int CopyActors(ActorSpawn* out, int capacity) {
         slot.rotY = visual.rotY;
         slot.health = visual.health;
         slot.hosted = visual.hosted;
+        slot.interior = visual.interior;
+    };
+    if (shared) {
+        for (const auto& [id, visual] : g_visuals) {
+            if (visual.kind != 14 && visual.kind != 2) continue;
+            if (count >= capacity) break;
+            write(id, visual);
+        }
+        return count;
+    }
+    // Peds first. A short buffer then still holds peds when the vehicle quota would have filled it.
+    for (int pass = 0; pass < 2; ++pass) {
+        const int kind = pass == 0 ? 14 : 2;
+        const int limit = pass == 0 ? pedLimit : vehicleLimit;
+        int used = 0;
+        if (limit <= 0) continue;
+        for (const auto& [id, visual] : g_visuals) {
+            if (count >= capacity || used >= limit) break;
+            if (visual.kind != kind) continue;
+            ++used;
+            write(id, visual);
+        }
     }
     return count;
 }
@@ -291,6 +324,21 @@ bool ElementPose(uint32_t id, float& x, float& y, float& z) {
     x = found->second.x;
     y = found->second.y;
     z = found->second.z;
+    return true;
+}
+
+uint8_t SyncTimeContext(uint32_t id) {
+    std::lock_guard<std::mutex> lock(g_lock);
+    auto found = g_visuals.find(id);
+    if (found == g_visuals.end()) return 0;
+    return found->second.syncTimeContext;
+}
+
+bool CopyPedSpawn(uint32_t id, Entity::PedSpawn& out) {
+    std::lock_guard<std::mutex> lock(g_lock);
+    auto found = g_visuals.find(id);
+    if (found == g_visuals.end() || found->second.kind != 14 || !found->second.ped) return false;
+    out = *found->second.ped;
     return true;
 }
 
@@ -337,6 +385,63 @@ bool GetData(uint32_t id, const char* key, double& number, std::string& text, bo
     return true;
 }
 
+void CopyElementData(uint32_t id, std::vector<std::pair<std::string, ElementDataValue>>& out) {
+    out.clear();
+    std::lock_guard<std::mutex> lock(g_lock);
+    auto element = g_data.find(id);
+    if (element == g_data.end()) return;
+    out.reserve(element->second.size());
+    for (const auto& [key, datum] : element->second) {
+        ElementDataValue value;
+        value.number = datum.number;
+        value.value = datum.value;
+        value.text = datum.text;
+        out.emplace_back(key, std::move(value));
+    }
+}
+
+void NotePlayerNick(uint32_t id, const std::string& nick) {
+    if (id == 0 || id == 0xFFFFFFFFu) return;
+    std::lock_guard<std::mutex> lock(g_lock);
+    g_nicks[id] = nick;
+}
+
+bool CopyPlayerNick(uint32_t id, std::string& out) {
+    std::lock_guard<std::mutex> lock(g_lock);
+    auto found = g_nicks.find(id);
+    if (found == g_nicks.end()) return false;
+    out = found->second;
+    return true;
+}
+
+static bool SameNick(const std::string& a, const std::string& b) {
+    if (a.size() != b.size()) return false;
+    for (size_t i = 0; i < a.size(); ++i) {
+        unsigned char ca = static_cast<unsigned char>(a[i]);
+        unsigned char cb = static_cast<unsigned char>(b[i]);
+        if (ca >= 'A' && ca <= 'Z') ca = static_cast<unsigned char>(ca - 'A' + 'a');
+        if (cb >= 'A' && cb <= 'Z') cb = static_cast<unsigned char>(cb - 'A' + 'a');
+        if (ca != cb) return false;
+    }
+    return true;
+}
+
+static bool IsListedPlayer(uint32_t id) {
+    if (id != 0 && id == g_local) return true;
+    auto found = g_visuals.find(id);
+    return found != g_visuals.end() && found->second.kind == 1;
+}
+
+bool FindPlayerByNick(const std::string& nick, uint32_t& id) {
+    std::lock_guard<std::mutex> lock(g_lock);
+    for (const auto& [playerId, name] : g_nicks) {
+        if (!IsListedPlayer(playerId) || !SameNick(name, nick)) continue;
+        id = playerId;
+        return true;
+    }
+    return false;
+}
+
 void OnEntityAdd(const uint8_t* body, size_t length, size_t bits) {
     Net::BitStreamReader reader(body, length, bits);
     uint32_t count = 0;
@@ -368,22 +473,40 @@ void OnEntityAdd(const uint8_t* body, size_t length, size_t bits) {
             DIAG("ENTITY_ADD fail idx=%u/%u id=%u type=%u bit=%zu", index, static_cast<unsigned>(count), common.id, static_cast<unsigned>(common.type), reader.GetReadOffsetBits());
             break;
         }
+        visual.interior = common.interior;
+        visual.syncTimeContext = common.syncTimeContext;
         if (common.type != kTypePlayer) Remember(common.id, visual);
         ++stored;
     }
     DIAG("ENTITY_ADD stored %d/%u", stored, static_cast<unsigned>(count));
 }
 
+// CPacketHandler::Packet_EntityRemove (CPacketHandler.cpp 4491-4566) reads ids until the stream ends
+// (`while (bitStream.Read(ID))`). Reading one id left every later element of a batch on the phone.
+// A player id raises protocol error 45 on desktop and stops the packet; it is skipped the same way here.
 void OnEntityRemove(const uint8_t* body, size_t length, size_t bits) {
     Net::BitStreamReader reader(body, length, bits);
     uint32_t id = 0;
-    if (!ReadElementId(reader, id)) return;
-    {
-        std::lock_guard<std::mutex> lock(g_lock);
-        g_visuals.erase(id);
-        g_data.erase(id);
+    int removed = 0;
+    while (ReadElementId(reader, id)) {
+        {
+            std::lock_guard<std::mutex> lock(g_lock);
+            if (IsListedPlayer(id)) {
+                DIAG("ENTITY_REMOVE id=%u is a player (desktop protocol error 45); packet stopped", id);
+                return;
+            }
+            g_visuals.erase(id);
+            g_data.erase(id);
+            g_nicks.erase(id);
+        }
+        // Deleting a CClientPed takes it out of CPedSync (CClientPed::~CClientPed, CClientPed.cpp 926). Without this a reused
+        // ElementID inherits the old hosted flag and interpolators.
+        WorldRPG::Sync::PedSyncState::Forget(id);
+        // ForgetRemote takes g_remoteMutex and only queues; the body is dropped on the game thread.
+        Game::ForgetRemote(id);
+        ++removed;
     }
-    Game::ForgetRemote(id);
+    if (removed > 1) DIAG("ENTITY_REMOVE removed %d element(s)", removed);
 }
 
 void OnCustomData(const uint8_t* body, size_t length, size_t bits) {
@@ -411,7 +534,8 @@ void OnPlayerList(const uint8_t* body, size_t length, size_t bits) {
         uint8_t context = 0, nickLength = 0;
         if (!ReadElementId(reader, id) || !reader.Read(context) || !reader.Read(nickLength) || nickLength > 32)
             break;
-        if (!SkipBytes(reader, nickLength)) break;
+        std::string nick(nickLength, '\0');
+        if (nickLength && !reader.ReadBits(reinterpret_cast<uint8_t*>(nick.data()), nickLength * 8)) break;
         uint16_t version = 0;
         uint32_t build = 0;
         if (!reader.Read(version) || !reader.Read(build)) break;
@@ -431,6 +555,7 @@ void OnPlayerList(const uint8_t* body, size_t length, size_t bits) {
         visual.kind = 1;
         visual.model = static_cast<int>(model);
         Remember(id, visual);
+        g_nicks[id] = nick;
         ++players;
         bool hasTeam = false;
         if (!ReadFlag(reader, hasTeam)) break;

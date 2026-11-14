@@ -45,19 +45,19 @@ A complete line-by-line conversion catalog comparing all 1,581 desktop MTA clien
 
 | Category | Documentation File | Total | Implemented | Stub | Missing | Parity % |
 |---|---|---|---|---|---|---|
-| **Vehicles (CLuaVehicleDefs)** | [VEHICLES.md](docs/lua-functions/VEHICLES.md) | 165 | 0 | 23 | 142 | 0.0% |
-| **Peds & Players (CLuaPedDefs, CLuaPlayerDefs)** | [PEDS_AND_PLAYERS.md](docs/lua-functions/PEDS_AND_PLAYERS.md) | 206 | 8 | 82 | 116 | 3.9% |
+| **Vehicles (CLuaVehicleDefs)** | [VEHICLES.md](docs/lua-functions/VEHICLES.md) | 165 | 6 | 22 | 137 | 3.6% |
+| **Peds & Players (CLuaPedDefs, CLuaPlayerDefs)** | [PEDS_AND_PLAYERS.md](docs/lua-functions/PEDS_AND_PLAYERS.md) | 206 | 20 | 82 | 104 | 9.7% |
 | **World, Objects & Environment** | [WORLD_AND_OBJECTS.md](docs/lua-functions/WORLD_AND_OBJECTS.md) | 227 | 2 | 15 | 210 | 0.9% |
-| **Element Tree & Data (CLuaElementDefs)** | [ELEMENTS.md](docs/lua-functions/ELEMENTS.md) | 81 | 10 | 24 | 47 | 12.3% |
-| **GUI & 2D/3D Drawing (DX & CEGUI)** | [GUI_AND_DX.md](docs/lua-functions/GUI_AND_DX.md) | 199 | 22 | 6 | 171 | 11.1% |
+| **Element Tree & Data (CLuaElementDefs)** | [ELEMENTS.md](docs/lua-functions/ELEMENTS.md) | 81 | 28 | 24 | 29 | 34.6% |
+| **GUI & 2D/3D Drawing (DX & CEGUI)** | [GUI_AND_DX.md](docs/lua-functions/GUI_AND_DX.md) | 199 | 42 | 6 | 151 | 21.1% |
 | **Engine & Model Replacement (DFF, TXD, COL)** | [ENGINE_AND_MODELS.md](docs/lua-functions/ENGINE_AND_MODELS.md) | 125 | 1 | 15 | 109 | 0.8% |
 | **Audio & Voice System (CLuaAudioDefs)** | [AUDIO_AND_VOICE.md](docs/lua-functions/AUDIO_AND_VOICE.md) | 57 | 0 | 8 | 49 | 0.0% |
 | **Camera & Viewport (CLuaCameraDefs)** | [CAMERA.md](docs/lua-functions/CAMERA.md) | 47 | 1 | 5 | 41 | 2.1% |
 | **Weapons & Projectiles (CLuaWeaponDefs, CLuaProjectileDefs)** | [WEAPONS_AND_COMBAT.md](docs/lua-functions/WEAPONS_AND_COMBAT.md) | 31 | 0 | 0 | 31 | 0.0% |
-| **Core System, Networking & Utilities** | [CORE_AND_UTILITY.md](docs/lua-functions/CORE_AND_UTILITY.md) | 195 | 16 | 15 | 164 | 8.2% |
+| **Core System, Networking & Utilities** | [CORE_AND_UTILITY.md](docs/lua-functions/CORE_AND_UTILITY.md) | 195 | 35 | 15 | 145 | 17.9% |
 | **Markers, Blips, ColShapes & Spatial** | [MARKERS_AND_SPATIAL.md](docs/lua-functions/MARKERS_AND_SPATIAL.md) | 145 | 0 | 3 | 142 | 0.0% |
 | **Web Browser & Compatibility (CEF / Discord)** | [BROWSER_AND_COMPATIBILITY.md](docs/lua-functions/BROWSER_AND_COMPATIBILITY.md) | 103 | 0 | 0 | 103 | 0.0% |
-| **TOTAL** | **All Categories** | **1581** | **60** | **196** | **1325** | **3.8%** |
+| **TOTAL** | **All Categories** | **1581** | **135** | **195** | **1251** | **8.5%** |
 
 *Full machine-generated parity matrix: [`docs/PARITY_MATRIX.md`](docs/PARITY_MATRIX.md)*
 
@@ -87,6 +87,8 @@ To set up and host your own compatible game server, clone and build the San Andr
 > Peer bitstream: the phone is pinned to `0x0030`. Items that only exist from `0x0031` or `0x003D` are marked. Verified on device means logged on a real phone against the live server.
 
 **Legend:** `[x]` verified on device. `[~]` implemented in code, not verified on device. `[ ]` not started or log-only.
+
+- [ ] Non-traffic peds (remote players and script/synced peds, not native-ped-traffic) are still bugged: they do not move correctly; work already in the tree is recorded in [`docs/PEDS_SYNC_STATUS.md`](docs/PEDS_SYNC_STATUS.md).
 
 ### 0. Session, join and world state (prerequisite)
 - [x] **Join handshake** (`NeonJoinProtocol`): RakNet connect, `MOD_NAME`, `PLAYER_JOINDATA`, `PLAYER_INGAME_NOTICE`, `SERVER_JOINEDGAME` (reference `CNetAPI`, join path).
@@ -162,6 +164,7 @@ To set up and host your own compatible game server, clone and build the San Andr
 ### 5. Step E — Scripting engine, touch UI and optimization
 - [~] **Lua 5.3 client VM**: `addEventHandler`, `triggerServerEvent`, timers and about 60 ped natives defined; `getAmbientPedPopulationProfile` shim relies on them.
 - [ ] **DirectX / RenderWare 2D GUI**: DX primitives, radar blips and HUD overlays for remote entities.
+- [ ] **Registration wardrobe preview** ([docs/ROADMAP_WARDROBE_PREVIEW.md](docs/ROADMAP_WARDROBE_PREVIEW.md)): `createPed` (model 0 stays CJ), `setTime`, `setWeather`, `setCameraMatrix`, `setCameraTarget`, `addPedClothes`, `removePedClothes`, `setElementRotation`, in that order. The DX menu already draws.
 - [ ] **Touch control customization**: virtual joystick sensitivity and touch button mapping.
 - [ ] **Custom asset streaming**: server-side DFF/TXD download and RenderWare memory streaming.
 - [ ] **Engine optimization**: frame pacing, memory compaction and ARM64 anti-crash guardrails.
@@ -306,6 +309,7 @@ adb push game_assets/. /sdcard/Android/data/com.worldrpg.neonlauncher/files/game
 
 Detailed architectural and protocol references are preserved in the `docs/` directory:
 
+- [Wardrobe preview port](docs/ROADMAP_WARDROBE_PREVIEW.md)
 - [Lua Functions Conversion Catalog](docs/lua-functions/README.md)
 - [Client Parity Matrix](docs/PARITY_MATRIX.md)
 - [Protocol Reference](docs/PROTOCOL_REFERENCE.md)

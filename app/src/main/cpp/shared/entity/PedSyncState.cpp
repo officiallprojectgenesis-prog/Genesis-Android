@@ -87,12 +87,12 @@ bool IsHosted(uint32_t id) {
     return it != gPeds.end() && it->second.hosted;
 }
 
-void SetObserverPosition(uint32_t id, const Vec3& target, const Vec3& velocity, uint64_t delayMs) {
+void SetObserverPosition(uint32_t id, const Vec3& target, const Vec3& velocity, uint64_t delayMs, bool applyVelocity) {
     if (!ValidId(id)) return;
     const uint64_t now = NowMs();
     std::lock_guard<std::mutex> lock(gMutex);
     Entry& e = gPeds[id];
-    e.velocity = velocity;
+    if (applyVelocity) e.velocity = velocity;
     if (!e.havePose) {
         // No streamed pose yet: place straight (reference SetPosition branch).
         e.pose = target;

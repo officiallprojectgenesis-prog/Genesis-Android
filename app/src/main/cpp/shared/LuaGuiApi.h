@@ -27,13 +27,42 @@ bool GuiDestroy(uint32_t id);
 void GuiDropResource(const std::string& owner);
 // Drops every GUI element (new VM or session).
 void GuiReset();
-// True while a script has the cursor shown (showCursor). The phone then routes touches to onClientClick.
+// True while any resource still holds the cursor (showCursor). One resource's
+// showCursor(false) leaves it showing if another resource still holds it.
+// The phone then routes touches to onClientClick.
 bool GuiCursorShown();
 // Appends the R/T draw lines of the visible elements (Android MtaDxView format).
 void GuiAppendDraws(std::string& out);
+
+// Topmost visible, enabled GUI element under this screen point, or 0.
+uint32_t GuiPick(double x, double y);
+// True when id is a visible, enabled gui-edit (the soft keyboard types into it).
+bool GuiIsEdit(uint32_t id);
+// The focused gui-edit when it is still visible and enabled, otherwise 0.
+uint32_t GuiFocusedEdit();
+// Activates id, or clears the focus when id is 0. A change of gui-edit focus
+// notifies the hook (onClientGUIFocus / onClientGUIBlur).
+void GuiSetFocused(uint32_t id);
+// Appends one UTF-8 character to the focused edit. False when no edit has focus
+// or the text is already at the 4096-byte cap.
+bool GuiEditAppend(const char* bytes, size_t length);
+// Deletes the last Unicode character of the focused edit.
+bool GuiEditErase();
+// True in INPUTMODE_NO_BINDS (guiSetInputEnabled(true) or guiSetInputMode("no_binds")).
+// The phone then shows the soft keyboard and delivers keystrokes as onClientCharacter
+// and onClientKey, which is how a DX edit (the login boxes) receives text.
+bool GuiKeyCapture();
+// onClientGUIFocus / onClientGUIBlur. focused is true for focus, false for blur.
+using GuiFocusHook = void (*)(uint32_t id, bool focused);
+void GuiSetFocusHook(GuiFocusHook hook);
 
 // Desktop font height in pixels at scale 1, relative to the default 15 px font, for
 // dxDrawText and dxGetFontHeight. Unknown or non-string names are the default font.
 double DxFontScale(const char* font);
 
 } // namespace WorldRPG::Script
+
+// Registers the GUI and plain-pixel bindings added after InstallGuiBindings.
+// InstallGuiBindings calls this. A later translation unit may also call it (weak
+// reference); both paths install the same functions.
+extern "C" void InstallGuiLua(lua_State* L);

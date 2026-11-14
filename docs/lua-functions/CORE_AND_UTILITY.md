@@ -5,9 +5,9 @@ Timers, event handling, network latent transfers, file I/O, XML parsing, JSON se
 ## Parity Status
 
 - **Total Functions:** 195
-- **Implemented:** 23 (11.8%)
+- **Implemented:** 35 (17.9%)
 - **Stubs:** 15
-- **Missing:** 157
+- **Missing:** 145
 
 > **Technical Requirement:** Pure CPU/platform logic. Mostly ported or needs standard library wrappers (e.g. tinyxml2, sha256, zlib).
 
@@ -24,18 +24,18 @@ Timers, event handling, network latent transfers, file I/O, XML parsing, JSON se
 | `base64Decode` | Missing | `CLuaCryptDefs.cpp:28` | `ArgumentParserWarn<false, Base64decode>` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
 | `base64Encode` | Missing | `CLuaCryptDefs.cpp:27` | `ArgumentParserWarn<false, Base64encode>` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
 | `bindKey` | *Stub* | `CLuaManager.cpp:209` | `CLuaFunctionDefs::BindKey` | Currently stubbed: `l_true: lua_pushboolean(L, 1)`. Needs native engine wiring. |
-| `bitAnd` | Missing | `CLuaBitDefs.cpp:18` | `bitAnd` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `bitArShift` | Missing | `CLuaBitDefs.cpp:20` | `bitArShift` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `bitExtract` | Missing | `CLuaBitDefs.cpp:22` | `bitExtract` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `bitLRotate` | Missing | `CLuaBitDefs.cpp:20` | `bitLRotate` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `bitLShift` | Missing | `CLuaBitDefs.cpp:20` | `bitLShift` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `bitNot` | Missing | `CLuaBitDefs.cpp:18` | `bitNot` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `bitOr` | Missing | `CLuaBitDefs.cpp:18` | `bitOr` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `bitRRotate` | Missing | `CLuaBitDefs.cpp:20` | `bitRRotate` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `bitRShift` | Missing | `CLuaBitDefs.cpp:20` | `bitRShift` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `bitReplace` | Missing | `CLuaBitDefs.cpp:22` | `bitReplace` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `bitTest` | Missing | `CLuaBitDefs.cpp:18` | `bitTest` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `bitXor` | Missing | `CLuaBitDefs.cpp:18` | `bitXor` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
+| `bitAnd` | **Implemented** | `CLuaBitDefs.cpp:18` | `bitAnd` | Operational on Android. (BitAnd) |
+| `bitArShift` | **Implemented** | `CLuaBitDefs.cpp:20` | `bitArShift` | Operational on Android. (BitArShift) |
+| `bitExtract` | **Implemented** | `CLuaBitDefs.cpp:22` | `bitExtract` | Operational on Android. (BitExtract) |
+| `bitLRotate` | **Implemented** | `CLuaBitDefs.cpp:20` | `bitLRotate` | Operational on Android. (BitLRotate) |
+| `bitLShift` | **Implemented** | `CLuaBitDefs.cpp:20` | `bitLShift` | Operational on Android. (BitLShift) |
+| `bitNot` | **Implemented** | `CLuaBitDefs.cpp:18` | `bitNot` | Operational on Android. (BitNot) |
+| `bitOr` | **Implemented** | `CLuaBitDefs.cpp:18` | `bitOr` | Operational on Android. (BitOr) |
+| `bitRRotate` | **Implemented** | `CLuaBitDefs.cpp:20` | `bitRRotate` | Operational on Android. (BitRRotate) |
+| `bitRShift` | **Implemented** | `CLuaBitDefs.cpp:20` | `bitRShift` | Operational on Android. (BitRShift) |
+| `bitReplace` | **Implemented** | `CLuaBitDefs.cpp:22` | `bitReplace` | Operational on Android. (BitReplace) |
+| `bitTest` | **Implemented** | `CLuaBitDefs.cpp:18` | `bitTest` | Operational on Android. (BitTest) |
+| `bitXor` | **Implemented** | `CLuaBitDefs.cpp:18` | `bitXor` | Operational on Android. (BitXor) |
 | `call` | Missing | `CLuaResourceDefs.cpp:20` | `Call` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
 | `cancelEvent` | Missing | `CLuaManager.cpp:169` | `CLuaFunctionDefs::CancelEvent` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
 | `cancelLatentEvent` | Missing | `CLuaManager.cpp:174` | `CLuaFunctionDefs::CancelLatentEvent` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |

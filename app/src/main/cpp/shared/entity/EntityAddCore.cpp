@@ -214,8 +214,7 @@ bool ReadEntityCommon(Net::BitStreamReader& reader, EntityCommon& out) {
     // 8 bits early and the MARKER fields misalign. The reference gates it on ExtendedWorldPositions,
     // so this is a deliberate deviation based on the bytes on the wire.
     {
-        uint8_t syncTimeContext = 0;
-        if (!reader.Read(syncTimeContext)) {
+        if (!reader.Read(out.syncTimeContext)) {
             DIAG("ENTITY_ADD fail line=%d stage=synctime id=%u type=%u bit=%zu", __LINE__, id, static_cast<unsigned>(type), reader.GetReadOffsetBits());
             return false;
         }

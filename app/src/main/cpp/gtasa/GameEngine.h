@@ -145,6 +145,30 @@ void CopyBody(float& x, float& y, float& z, float& heading,
     float& vx, float& vy, float& vz, float& health);
 // Local ped armour sampled beside health in SampleLocalPose. 0 until that sample runs.
 float CopyLocalArmor();
+// CLuaWorldDefs::GetGroundPosition (CLuaWorldDefs.cpp 872-893) via
+// CWorldSA::FindGroundZFor3DPosition (CWorldSA.cpp 708-729):
+// CWorld::FindGroundZFor3DCoord(x, y, z, nullptr, nullptr). The native runs on
+// the game thread. False when the symbol is missing or that thread does not
+// run the call; out is then unchanged.
+bool FindGroundZFor3DPosition(float x, float y, float z, float& out);
+
+// Client-only ped for createPed (CStaticFunctionDefinitions::CreatePed 2815-2852).
+// The id is not a server element. The body is created on the game thread.
+// Model 0 stays CJ. 0 means the call was rejected.
+uint32_t NoteScriptPed(int model, float x, float y, float z, float rotationDegrees);
+bool ReleaseScriptPed(uint32_t id);
+bool ScriptPedAlive(uint32_t id);
+// addPedClothes / removePedClothes. type is the clothing slot. remove clears it.
+void NoteScriptClothes(uint32_t id, const char* texture, const char* model, int type, bool remove);
+// setElementRotation for a script ped: Z degrees, default order.
+void NoteScriptRotation(uint32_t id, float rotationDegrees);
+void NoteScriptFrozen(uint32_t id, bool frozen);
+// setCameraMatrix position and look-at. Applied on the game thread until cleared.
+void NoteScriptCamera(float x, float y, float z, float lookX, float lookY, float lookZ);
+void ClearScriptCamera();
+// setTime / setWeather. False when the arguments are outside the desktop range.
+bool NoteScriptTime(int hour, int minute);
+bool NoteScriptWeather(int weather);
 // Another player shot this ped. Health is reported in the next pure sync.
 void NoteDamage(uint32_t attacker, float amount, uint8_t weapon);
 bool ConsumeDamage(uint32_t& attacker, uint8_t& weapon);
@@ -160,12 +184,24 @@ struct OnFootKeys {
     bool duck = false;
     int stickX = 0;
     int stickY = 0;
+    // CCameraSA::GetCameraRotation: TheCamera.Orientation (libGTASA 2.10, TheCamera+0x154).
+    // 0 until that float has been sampled.
     float camera = 0;
+    // CPad::GetPad(0) LeftStickX and LeftStickY were both 0. The sticks above stay 0;
+    // move speed must not rebuild them.
+    bool padStickZero = false;
 };
 void CopyOnFoot(float heading, float vx, float vy, OnFootKeys& keys);
 // A server ped from PACKET_ID_PED_SYNC or ENTITY_ADD. Applied on the game thread.
 void NoteRemotePed(uint32_t id, float x, float y, float z, float heading,
-    float vx = 0, float vy = 0, float vz = 0);
+    float vx = 0, float vy = 0, float vz = 0, bool applyVelocity = true);
+// CNetAPI::ReadPlayerPuresync (CNetAPI.cpp 830-1021) for the calls the phone can run.
+// hasVelocity writes move speed even when it is zero (SVelocitySync with the bit clear).
+// Health and armor are applied to CPed +0x6AC / +0x6B4 on the game thread.
+void NoteRemotePlayerSync(uint32_t id, float x, float y, float z, float heading,
+    float vx, float vy, float vz, bool hasVelocity,
+    int stickX, int stickY, float camera, bool fire, bool duck,
+    bool hasHealth, float health, bool hasArmor, float armor);
 void SetPedHost(uint32_t id, bool host);
 void ForgetRemote(uint32_t id);
 // P3.1: drop every remote body and car on the next game tick (reconnect).
@@ -218,10 +254,16 @@ void LockPedHealth(uint32_t id, float health);
 void LockPedArmor(uint32_t id, float armor);
 void LockPedHealthCurrent(uint32_t id);
 void LockPedArmorCurrent(uint32_t id);
+// Snapshot of the locks Packet_PedSync / ReadPlayerPuresync stored.
+// False when this id has neither lock.
+bool CopyPedVitalsLock(uint32_t id, bool& healthLocked, float& health, bool& armorLocked, float& armor);
 struct HostedPed {
     uint32_t id = 0;
     float x = 0, y = 0, z = 0, heading = 0;
     float vx = 0, vy = 0, vz = 0, health = 100;
+    float armor = 0;
+    // True when health and armor were read from the live body (CPed +0x6AC / +0x6B4).
+    bool bodyVitals = false;
 };
 int CopyHostedPeds(HostedPed* out, int capacity);
 // Hosted unoccupied vehicles (packet 56 source). Rotation is in degrees, wrapped to [0, 360).

@@ -7,11 +7,20 @@ namespace WorldRPG::Game {
 // One remote CPlayerPed from the ped pool. Null when the pool is full or
 // CPlayerPed::CPlayerPed is not exported. Does not call SetupPlayerPed or
 // CPed::Teleport.
-void* CreateRemotePlayerPed(int model, float x, float y, float z, float heading);
+// keepCj: model 0 stays the CJ player clump (createPed). Remote sync passes false,
+// and VisibleModel replaces 0 with skin 7.
+void* CreateRemotePlayerPed(int model, float x, float y, float z, float heading, bool keepCj = false);
+// CWorld::Remove only, and only when the vtable is still a live ped. Game thread.
+void ReleasePlayerPed(void* ped);
 
-// Copies position and yaw into the ped matrix the way CEntitySA::SetMatrix
-// does. Falls back to the CPlaceable position fields when SetMatrix is missing.
+// CClientPed::_CreateModel writes the element matrix (CClientPed.cpp 5772) after
+// SetCurrentRotation has put a Z-only CMatrix::SetRotation on it (5298-5321,
+// CMatrix.h 253-279). Position is the network Z (SetPosition, 1064-1098).
 void PlaceRemotePlayerPed(void* ped, float x, float y, float z, float heading);
+
+// Yaw only. CMatrix::SetRotateZOnly rows, plus fCurrentRotation and fTargetRotation.
+// Does not move the ped. CPlaceable::SetHeading is not in libGTASA 2.10.
+void SetRemotePedHeading(void* ped, float heading);
 
 // Plan step A (controller switch). Hooks CPlayerPed::ProcessControl once. For a
 // remote ped with a stick set, CPad::GetPad(0) gets that stick for one call and

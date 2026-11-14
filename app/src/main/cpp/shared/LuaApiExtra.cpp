@@ -11,8 +11,12 @@ extern "C" {
 #include "lauxlib.h"
 }
 
+#include <cfloat>
+#include <cmath>
+#include <cstdint>
 #include <cstdio>
 #include <cstring>
+#include <limits>
 #include <string>
 
 // Chat line sink (jni/JNI_OnLoad.cpp on Android, stubs/jni_bridge_stub.cpp in the headless build).
@@ -245,18 +249,278 @@ int FalseResult(lua_State* L) {
     return 1;
 }
 
-// getAmbientPedPopulationProfile(): the desktop native reads the engine's density,
-// zone and creation-distance values. The phone has no hook for them, so it reports
-// the desktop failure shape (false, reason) instead of an invented profile.
-int GetAmbientPedPopulationProfile(lua_State* L) {
-    lua_pushboolean(L, 0);
-    lua_pushstring(L, "engine-hook-missing");
-    return 2;
-}
-
 // fileOpen(path): resource files are not readable from Lua yet.
 int FileOpen(lua_State* L) {
     lua_pushnil(L);
+    return 1;
+}
+
+// CLuaBitDefs.cpp (Shared/mods/deathmatch/logic/luadefs/CLuaBitDefs.cpp 30-408).
+// ReadNumber(uint, false) allows a negative value and keeps the low 32 bits.
+// Extra arguments after the required ones are included only when they are numbers
+// (CScriptArgReader::NextIsNumber), not numeric strings.
+
+void LogBit(const char* function, const char* category, const char* message) {
+    char buf[256];
+    std::snprintf(buf, sizeof(buf), "%s @ '%s' [%s]", category, function, message);
+    LUA_LOGI("WARNING: %s", buf);
+}
+
+void LogBitType(lua_State* L, const char* function, int index) {
+    const int type = lua_type(L, index);
+    const char* name = "none";
+    switch (type) {
+        case LUA_TNIL: name = "nil"; break;
+        case LUA_TBOOLEAN: name = "boolean"; break;
+        case LUA_TNUMBER: name = "number"; break;
+        case LUA_TSTRING: name = "string"; break;
+        case LUA_TTABLE: name = "table"; break;
+        case LUA_TFUNCTION: name = "function"; break;
+        case LUA_TUSERDATA: name = "userdata"; break;
+        default: break;
+    }
+    const char* value = (type == LUA_TNUMBER || type == LUA_TSTRING) ? lua_tostring(L, index) : nullptr;
+    char buf[256];
+    if (value && value[0] != '\0') {
+        std::snprintf(buf, sizeof(buf), "Bad argument @ '%s' [Expected number at argument %d, got %s '%.64s']",
+                      function, index, name, value);
+    } else {
+        std::snprintf(buf, sizeof(buf), "Bad argument @ '%s' [Expected number at argument %d, got %s]",
+                      function, index, name);
+    }
+    LUA_LOGI("WARNING: %s", buf);
+}
+
+// checkSign false matches ReadNumber(uint, false). Signed int uses ReadNumber(int).
+bool ReadBitUint(lua_State* L, int index, const char* function, uint32_t& out) {
+    const int type = lua_type(L, index);
+    if (type != LUA_TNUMBER && type != LUA_TSTRING) {
+        LogBitType(L, function, index);
+        return false;
+    }
+    if (!lua_isnumber(L, index)) {
+        LogBit(function, "Bad argument", "Expected number, got non-convertible string");
+        return false;
+    }
+    const lua_Number number = lua_tonumber(L, index);
+    if (std::isnan(number)) {
+        LogBit(function, "Bad argument", "Expected number, got NaN");
+        return false;
+    }
+    // int64 bounds. 2^63 is the first magnitude a double can hold past int64_t.
+    if (!std::isfinite(number) || number >= 9223372036854775808.0 || number < -9223372036854775808.0) {
+        LogBit(function, "Bad argument", "Expected number within the supported range");
+        return false;
+    }
+    out = static_cast<uint32_t>(static_cast<int64_t>(number));
+    return true;
+}
+
+bool ReadBitInt(lua_State* L, int index, const char* function, int& out, bool optional, int fallback) {
+    const int type = lua_type(L, index);
+    if (optional && (type == LUA_TNONE || type == LUA_TNIL)) {
+        out = fallback;
+        return true;
+    }
+    if (type != LUA_TNUMBER && type != LUA_TSTRING) {
+        LogBitType(L, function, index);
+        return false;
+    }
+    if (!lua_isnumber(L, index)) {
+        LogBit(function, "Bad argument", "Expected number, got non-convertible string");
+        return false;
+    }
+    const lua_Number number = lua_tonumber(L, index);
+    if (std::isnan(number)) {
+        LogBit(function, "Bad argument", "Expected number, got NaN");
+        return false;
+    }
+    if (!std::isfinite(number) || number > static_cast<lua_Number>(std::numeric_limits<int>::max()) ||
+        number < static_cast<lua_Number>(std::numeric_limits<int>::min())) {
+        LogBit(function, "Bad argument", "Expected number within the supported range");
+        return false;
+    }
+    out = static_cast<int>(number);
+    return true;
+}
+
+int BitFail(lua_State* L, bool nilOnError) {
+    if (nilOnError) lua_pushnil(L);
+    else lua_pushboolean(L, 0);
+    return 1;
+}
+
+// Fold further number arguments. Stops at the first non-number, as NextIsNumber does.
+bool FoldBits(lua_State* L, const char* function, int start, uint32_t& value, uint32_t (*op)(uint32_t, uint32_t)) {
+    for (int index = start; lua_type(L, index) == LUA_TNUMBER; ++index) {
+        uint32_t next = 0;
+        if (!ReadBitUint(L, index, function, next)) return false;
+        value = op(value, next);
+    }
+    return true;
+}
+
+uint32_t BitAndOp(uint32_t a, uint32_t b) { return a & b; }
+uint32_t BitOrOp(uint32_t a, uint32_t b) { return a | b; }
+uint32_t BitXorOp(uint32_t a, uint32_t b) { return a ^ b; }
+
+int BitAnd(lua_State* L) {
+    uint32_t a = 0, b = 0;
+    if (!ReadBitUint(L, 1, "bitAnd", a) || !ReadBitUint(L, 2, "bitAnd", b)) return BitFail(L, false);
+    uint32_t result = a & b;
+    if (!FoldBits(L, "bitAnd", 3, result, BitAndOp)) return BitFail(L, false);
+    lua_pushnumber(L, result);
+    return 1;
+}
+
+int BitNot(lua_State* L) {
+    uint32_t value = 0;
+    if (!ReadBitUint(L, 1, "bitNot", value)) return BitFail(L, false);
+    lua_pushnumber(L, static_cast<lua_Number>(~value));
+    return 1;
+}
+
+int BitOr(lua_State* L) {
+    uint32_t a = 0, b = 0;
+    if (!ReadBitUint(L, 1, "bitOr", a) || !ReadBitUint(L, 2, "bitOr", b)) return BitFail(L, false);
+    uint32_t result = a | b;
+    if (!FoldBits(L, "bitOr", 3, result, BitOrOp)) return BitFail(L, false);
+    lua_pushnumber(L, result);
+    return 1;
+}
+
+// bitTest pushes nil on a bad argument (CLuaBitDefs.cpp 141).
+int BitTest(lua_State* L) {
+    uint32_t a = 0, b = 0;
+    if (!ReadBitUint(L, 1, "bitTest", a) || !ReadBitUint(L, 2, "bitTest", b)) return BitFail(L, true);
+    uint32_t result = a & b;
+    if (!FoldBits(L, "bitTest", 3, result, BitAndOp)) return BitFail(L, true);
+    lua_pushboolean(L, result != 0 ? 1 : 0);
+    return 1;
+}
+
+int BitXor(lua_State* L) {
+    uint32_t a = 0, b = 0;
+    if (!ReadBitUint(L, 1, "bitXor", a) || !ReadBitUint(L, 2, "bitXor", b)) return BitFail(L, false);
+    uint32_t result = a ^ b;
+    if (!FoldBits(L, "bitXor", 3, result, BitXorOp)) return BitFail(L, false);
+    lua_pushnumber(L, result);
+    return 1;
+}
+
+int BitLRotate(lua_State* L) {
+    uint32_t value = 0;
+    int disp = 0;
+    if (!ReadBitUint(L, 1, "bitLRotate", value) || !ReadBitInt(L, 2, "bitLRotate", disp, false, 0)) return BitFail(L, false);
+    disp &= 31;
+    const uint32_t result = disp == 0 ? value : ((value << disp) | (value >> (32 - disp)));
+    lua_pushnumber(L, result);
+    return 1;
+}
+
+int BitRRotate(lua_State* L) {
+    uint32_t value = 0;
+    int disp = 0;
+    if (!ReadBitUint(L, 1, "bitRRotate", value) || !ReadBitInt(L, 2, "bitRRotate", disp, false, 0)) return BitFail(L, false);
+    disp &= 31;
+    const uint32_t result = disp == 0 ? value : ((value >> disp) | (value << (32 - disp)));
+    lua_pushnumber(L, result);
+    return 1;
+}
+
+int BitLShift(lua_State* L) {
+    uint32_t value = 0;
+    int disp = 0;
+    if (!ReadBitUint(L, 1, "bitLShift", value) || !ReadBitInt(L, 2, "bitLShift", disp, false, 0)) return BitFail(L, false);
+    // CLuaBitDefs.cpp 240-243: disp >= 32 yields 0, otherwise `value << disp`.
+    // A negative count is undefined in that shift. A 32-bit shift uses the low 5 bits.
+    uint32_t result = 0;
+    if (disp >= 32) result = 0;
+    else if (disp < 0) result = value << (static_cast<unsigned>(disp) & 31u);
+    else result = value << static_cast<unsigned>(disp);
+    lua_pushnumber(L, result);
+    return 1;
+}
+
+int BitRShift(lua_State* L) {
+    uint32_t value = 0;
+    int disp = 0;
+    if (!ReadBitUint(L, 1, "bitRShift", value) || !ReadBitInt(L, 2, "bitRShift", disp, false, 0)) return BitFail(L, false);
+    uint32_t result = 0;
+    if (disp >= 32) result = 0;
+    else if (disp < 0) result = value >> (static_cast<unsigned>(disp) & 31u);
+    else result = value >> static_cast<unsigned>(disp);
+    lua_pushnumber(L, result);
+    return 1;
+}
+
+// CLuaBitDefs::bitArShift (CLuaBitDefs.cpp 284-327).
+int BitArShift(lua_State* L) {
+    uint32_t value = 0;
+    int disp = 0;
+    if (!ReadBitUint(L, 1, "bitArShift", value) || !ReadBitInt(L, 2, "bitArShift", disp, false, 0)) return BitFail(L, false);
+    uint32_t result = 0;
+    if (disp < 0 || (value & 0x80000000u) == 0) {
+        if (disp <= -32 || disp >= 32) result = 0;
+        else if (disp < 0) result = value << static_cast<unsigned>(-disp);
+        else result = value >> static_cast<unsigned>(disp);
+    } else if (disp >= 32) {
+        result = 0xFFFFFFFFu;
+    } else {
+        result = (value >> static_cast<unsigned>(disp)) | ~(~0u >> static_cast<unsigned>(disp));
+    }
+    lua_pushnumber(L, result);
+    return 1;
+}
+
+uint32_t BitFieldMask(int width) {
+    if (width >= 32) return 0xFFFFFFFFu;
+    if (width <= 0) return 0;
+    return (1u << static_cast<unsigned>(width)) - 1u;
+}
+
+int BitExtract(lua_State* L) {
+    uint32_t value = 0;
+    int field = 0;
+    int width = 1;
+    if (!ReadBitUint(L, 1, "bitExtract", value) || !ReadBitInt(L, 2, "bitExtract", field, false, 0) ||
+        !ReadBitInt(L, 3, "bitExtract", width, true, 1))
+        return BitFail(L, false);
+    if (static_cast<long long>(field) + static_cast<long long>(width) > 32) {
+        LogBit("bitExtract", "Bad usage", "Trying to access non-exisistent bits");
+        return BitFail(L, false);
+    }
+    if (field < 0) {
+        LogBit("bitExtract", "Bad usage", "field cannot be negative");
+        return BitFail(L, false);
+    }
+    if (width <= 0) {
+        LogBit("bitExtract", "Bad usage", "width must be positive");
+        return BitFail(L, false);
+    }
+    lua_pushnumber(L, (value >> static_cast<unsigned>(field)) & BitFieldMask(width));
+    return 1;
+}
+
+// On a bad argument the desktop function pushes false and then `return false`, which is 0 results.
+int BitReplace(lua_State* L) {
+    uint32_t value = 0;
+    uint32_t replace = 0;
+    int field = 0;
+    int width = 1;
+    if (!ReadBitUint(L, 1, "bitReplace", value) || !ReadBitUint(L, 2, "bitReplace", replace) ||
+        !ReadBitInt(L, 3, "bitReplace", field, false, 0) || !ReadBitInt(L, 4, "bitReplace", width, true, 1))
+        return 0;
+    const long long span = static_cast<long long>(field) + static_cast<long long>(width);
+    if (span > 32 || field < 0 || width <= 0) {
+        if (span > 32) LogBit("bitReplace", "Bad usage", "Trying to access non-exisistent bits");
+        else if (field < 0) LogBit("bitReplace", "Bad usage", "field cannot be negative");
+        else LogBit("bitReplace", "Bad usage", "width must be positive");
+        return 0;
+    }
+    const uint32_t mask = BitFieldMask(width);
+    replace &= mask;
+    lua_pushnumber(L, (value & ~(mask << static_cast<unsigned>(field))) | (replace << static_cast<unsigned>(field)));
     return 1;
 }
 
@@ -300,7 +564,18 @@ void InstallExtraBindings(lua_State* L) {
     SetGlobal(L, "dxGetFontHeight", DxGetFontHeight);
     InstallGuiBindings(L);
     SetGlobal(L, "fileOpen", FileOpen);
-    SetGlobal(L, "getAmbientPedPopulationProfile", GetAmbientPedPopulationProfile);
+    SetGlobal(L, "bitAnd", BitAnd);
+    SetGlobal(L, "bitNot", BitNot);
+    SetGlobal(L, "bitOr", BitOr);
+    SetGlobal(L, "bitTest", BitTest);
+    SetGlobal(L, "bitXor", BitXor);
+    SetGlobal(L, "bitLRotate", BitLRotate);
+    SetGlobal(L, "bitRRotate", BitRRotate);
+    SetGlobal(L, "bitLShift", BitLShift);
+    SetGlobal(L, "bitRShift", BitRShift);
+    SetGlobal(L, "bitArShift", BitArShift);
+    SetGlobal(L, "bitExtract", BitExtract);
+    SetGlobal(L, "bitReplace", BitReplace);
     SetGlobal(L, "createVehicle", FalseResult);
     SetGlobal(L, "createMarker", FalseResult);
     SetGlobal(L, "createColSphere", FalseResult);

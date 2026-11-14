@@ -12,7 +12,7 @@ Percent = implemented / desktop total. Stub and missing columns are defined in t
 
 | Section | Desktop total | Implemented | Stub | Missing | % | Notes |
 |---|---|---|---|---|---|---|
-| A1 Lua functions | 1581 | 60 | 196 | 1325 | 3.8% | Port-only bindings not in desktop: 4. Duplicates across groups skipped: 0. |
+| A1 Lua functions | 1581 | 135 | 195 | 1251 | 8.5% | Port-only bindings not in desktop: 4. Duplicates across groups skipped: 0. |
 | A2 Lua OOP classes | 63 | 0 | 0 | 63 | 0.0% | Matched by global name only. Port class-registration calls found: 0. |
 | B Client events | 144 | 6 | 0 | 138 | 4.2% | Port fires 6 literal event names in total (onClientResourceStart, onClientChatMessage, onClientCursorMove, onClientClick, onClientRender, onClientResourceStop). Server-triggered names from packet 81 are dispatched dynamically and are not counted. |
 | C1 Inbound packets (UPE game ids) | 62 | 22 | 0 | 40 | 35.5% | 2 desktop ids reachable only via provisional registerHandler (ids 0-11, not wire ids) counted as missing. Port explicitly dispatches 23 ids. |
@@ -761,8 +761,8 @@ Desktop: literal `AddEvent("name", ...)` calls under `Client/mods/deathmatch/log
 | onClientGUIMouseDown | not fired | - | Client/mods/deathmatch/logic/CClientGame.cpp:2808 |
 | onClientGUIMouseUp | not fired | - | Client/mods/deathmatch/logic/CClientGame.cpp:2809 |
 | onClientGUIScroll | not fired | - | Client/mods/deathmatch/logic/CClientGame.cpp:2810 |
-| onClientGUIChanged | not fired | - | Client/mods/deathmatch/logic/CClientGame.cpp:2811 |
-| onClientGUIAccepted | not fired | - | Client/mods/deathmatch/logic/CClientGame.cpp:2812 |
+| onClientGUIChanged | fired | app/src/main/cpp/shared/LuaVMStub.cpp | Client/mods/deathmatch/logic/CClientGame.cpp:2811 |
+| onClientGUIAccepted | fired | app/src/main/cpp/shared/LuaVMStub.cpp | Client/mods/deathmatch/logic/CClientGame.cpp:2812 |
 | onClientGUITabSwitched | not fired | - | Client/mods/deathmatch/logic/CClientGame.cpp:2815 |
 | onClientGUIComboBoxAccepted | not fired | - | Client/mods/deathmatch/logic/CClientGame.cpp:2816 |
 | onClientDoubleClick | not fired | - | Client/mods/deathmatch/logic/CClientGame.cpp:2819 |
@@ -772,10 +772,10 @@ Desktop: literal `AddEvent("name", ...)` calls under `Client/mods/deathmatch/log
 | onClientMouseWheel | not fired | - | Client/mods/deathmatch/logic/CClientGame.cpp:2823 |
 | onClientGUIMove | not fired | - | Client/mods/deathmatch/logic/CClientGame.cpp:2824 |
 | onClientGUISize | not fired | - | Client/mods/deathmatch/logic/CClientGame.cpp:2825 |
-| onClientGUIFocus | not fired | - | Client/mods/deathmatch/logic/CClientGame.cpp:2826 |
-| onClientGUIBlur | not fired | - | Client/mods/deathmatch/logic/CClientGame.cpp:2827 |
-| onClientKey | not fired | - | Client/mods/deathmatch/logic/CClientGame.cpp:2828 |
-| onClientCharacter | not fired | - | Client/mods/deathmatch/logic/CClientGame.cpp:2829 |
+| onClientGUIFocus | fired | app/src/main/cpp/shared/LuaVMStub.cpp | Client/mods/deathmatch/logic/CClientGame.cpp:2826 |
+| onClientGUIBlur | fired | app/src/main/cpp/shared/LuaVMStub.cpp | Client/mods/deathmatch/logic/CClientGame.cpp:2827 |
+| onClientKey | fired | app/src/main/cpp/shared/LuaVMStub.cpp | Client/mods/deathmatch/logic/CClientGame.cpp:2828 |
+| onClientCharacter | fired | app/src/main/cpp/shared/LuaVMStub.cpp | Client/mods/deathmatch/logic/CClientGame.cpp:2829 |
 | onClientPaste | not fired | - | Client/mods/deathmatch/logic/CClientGame.cpp:2830 |
 | onClientConsole | not fired | - | Client/mods/deathmatch/logic/CClientGame.cpp:2833 |
 | onClientCoreCommand | not fired | - | Client/mods/deathmatch/logic/CClientGame.cpp:2834 |

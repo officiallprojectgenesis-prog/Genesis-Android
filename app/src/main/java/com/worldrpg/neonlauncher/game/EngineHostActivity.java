@@ -1,15 +1,24 @@
 package com.worldrpg.neonlauncher.game;
 
+import android.media.AudioAttributes;
+import android.media.MediaPlayer;
 import android.content.Intent;
 import android.graphics.Color;
 import android.os.Bundle;
 import android.util.Log;
 import android.util.TypedValue;
 import android.os.Build;
+import android.text.Editable;
+import android.text.InputType;
+import android.text.TextWatcher;
 import android.view.Gravity;
+import android.view.KeyEvent;
 import android.view.View;
 import android.view.WindowInsets;
+import android.view.WindowManager;
 import android.view.inputmethod.EditorInfo;
+import android.view.inputmethod.InputConnection;
+import android.view.inputmethod.InputConnectionWrapper;
 import android.view.inputmethod.InputMethodManager;
 import android.os.Handler;
 import android.os.Looper;
@@ -55,6 +64,14 @@ public final class EngineHostActivity extends GTASA {
     };
     private View chatInputBar;
     private EditText chatInput;
+    // Invisible field the soft keyboard types into for a DX edit or a gui-edit.
+    private EditText scriptInput;
+    private String scriptCommitted = "";
+    private boolean scriptApplying;
+    private boolean scriptKeyboardShown;
+    // Chat took the keyboard. Cleared the next time the scripts stop asking for it.
+    private boolean scriptKeyboardSuppressed;
+    private boolean finishingField;
     private String connectIp = "";
     private int connectPort = 0;
     private String connectNick = "";
@@ -73,6 +90,10 @@ public final class EngineHostActivity extends GTASA {
     private native void nativeDestroy();
     private native void nativeSetScreenSize(int width, int height);
     private native void nativeCursorEvent(int action, float x, float y);
+    private native void nativeScriptInput(String text, int backspaces, String key);
+    private native void nativeSoundEnded(int id);
+    private final java.util.HashMap<Integer, MediaPlayer> sounds = new java.util.HashMap<>();
+    private final java.util.HashMap<Integer, Float> soundVolume = new java.util.HashMap<>();
     private native boolean nativeSendChat(String text);
     private native void nativeDropConnection();
     private native String nativeMapSnapshot();
@@ -198,7 +219,7 @@ public final class EngineHostActivity extends GTASA {
 
         dxOverlay = new MtaDxView(this);
         dxOverlay.setVisibility(View.GONE);
-        dxOverlay.setCursorListener(this::nativeCursorEvent);
+        dxOverlay.setCursorListener(this::onCursorTouch);
         addContentView(dxOverlay, new FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
 
@@ -258,10 +279,181 @@ public final class EngineHostActivity extends GTASA {
                 FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM);
         addContentView(bar, inputParams);
         chatInputBar = bar;
+        installScriptInput();
+    }
+
+    // The game surface is not an Android editor. This field only exists so InputMethodManager
+    // has a focused view. A "K" line from nativePump opens it; the diff of its text is delivered
+    // as onClientCharacter / onClientKey, or into the focused gui-edit.
+    private void installScriptInput() {
+        scriptInput = new EditText(this) {
+            @Override
+            public InputConnection onCreateInputConnection(EditorInfo outAttrs) {
+                InputConnection base = super.onCreateInputConnection(outAttrs);
+                if (base == null) return null;
+                return new InputConnectionWrapper(base, true) {
+                    @Override
+                    public boolean deleteSurroundingText(int beforeLength, int afterLength) {
+                        if (beforeLength > 0 && afterLength == 0 && scriptCommitted.isEmpty()) {
+                            nativeScriptInput("", beforeLength, "");
+                            return true;
+                        }
+                        return super.deleteSurroundingText(beforeLength, afterLength);
+                    }
+
+                    @Override
+                    public boolean sendKeyEvent(KeyEvent event) {
+                        if (event.getAction() == KeyEvent.ACTION_DOWN
+                                && event.getKeyCode() == KeyEvent.KEYCODE_ENTER) {
+                            finishScriptField();
+                            return true;
+                        }
+                        if (event.getAction() == KeyEvent.ACTION_DOWN
+                                && event.getKeyCode() == KeyEvent.KEYCODE_DEL
+                                && scriptCommitted.isEmpty()) {
+                            nativeScriptInput("", 1, "");
+                            return true;
+                        }
+                        return super.sendKeyEvent(event);
+                    }
+                };
+            }
+        };
+        scriptInput.setSingleLine(true);
+        scriptInput.setAlpha(0f);
+        scriptInput.setBackgroundColor(Color.TRANSPARENT);
+        // NEXT: the action key moves to the next DX field (tab) or closes the keyboard.
+        // It does not send enter, which the login screen treats as submit.
+        scriptInput.setImeOptions(EditorInfo.IME_ACTION_NEXT);
+        scriptInput.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);
+        scriptInput.setOnEditorActionListener((v, action, event) -> {
+            int id = action & EditorInfo.IME_MASK_ACTION;
+            if (id == EditorInfo.IME_ACTION_NEXT || id == EditorInfo.IME_ACTION_DONE
+                    || id == EditorInfo.IME_ACTION_GO || id == EditorInfo.IME_ACTION_SEND) {
+                finishScriptField();
+                return true;
+            }
+            return false;
+        });
+        scriptInput.addTextChangedListener(new TextWatcher() {
+            @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
+            @Override public void onTextChanged(CharSequence s, int start, int before, int count) {}
+            @Override public void afterTextChanged(Editable s) { deliverScriptText(s == null ? "" : s.toString()); }
+        });
+        addContentView(scriptInput, new FrameLayout.LayoutParams(1, 1, Gravity.TOP | Gravity.START));
+    }
+
+    private void deliverScriptText(String next) {
+        if (scriptApplying || !scriptKeyboardShown) return;
+        String previous = scriptCommitted;
+        int i = 0;
+        int j = 0;
+        while (i < previous.length() && j < next.length()) {
+            int a = previous.codePointAt(i);
+            int b = next.codePointAt(j);
+            if (a != b) break;
+            i += Character.charCount(a);
+            j += Character.charCount(b);
+        }
+        int removed = previous.codePointCount(i, previous.length());
+        String inserted = next.substring(j);
+        scriptCommitted = next;
+        StringBuilder keep = new StringBuilder();
+        for (int k = 0; k < inserted.length();) {
+            int cp = inserted.codePointAt(k);
+            if (cp != '\n' && cp != '\r') keep.appendCodePoint(cp);
+            k += Character.charCount(cp);
+        }
+        if (removed == 0 && keep.length() == 0) return;
+        nativeScriptInput(keep.toString(), removed, "");
+    }
+
+    // Commits whatever is in the field, moves a DX edit to the next one, and closes the keyboard.
+    // The login screen treats Enter as submit, so this path sends tab instead.
+    private void finishScriptField() {
+        if (finishingField || (scriptKeyboardSuppressed && !scriptKeyboardShown)) return;
+        finishingField = true;
+        try {
+            if (scriptInput != null && scriptInput.getText() != null) {
+                deliverScriptText(scriptInput.getText().toString());
+            }
+            nativeScriptInput("", 0, "tab");
+            scriptKeyboardSuppressed = true;
+            scriptKeyboardShown = false;
+            hideScriptKeyboard();
+        } finally {
+            finishingField = false;
+        }
+    }
+
+    private void showScriptKeyboard() {
+        if (scriptInput == null) return;
+        scriptApplying = true;
+        scriptInput.setText("");
+        scriptCommitted = "";
+        scriptApplying = false;
+        // The tap was handled by the DX overlay, so this runs a frame later. ALWAYS_VISIBLE
+        // plus the insets controller still opens the IME; ADJUST_NOTHING keeps the GL surface put.
+        getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING
+                | WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_VISIBLE);
+        scriptInput.requestFocus();
+        InputMethodManager keyboard = (InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
+        if (keyboard != null) keyboard.showSoftInput(scriptInput, InputMethodManager.SHOW_FORCED);
+        if (Build.VERSION.SDK_INT >= 30) {
+            android.view.WindowInsetsController controller = scriptInput.getWindowInsetsController();
+            if (controller != null) controller.show(WindowInsets.Type.ime());
+        }
+    }
+
+    private void hideScriptKeyboard() {
+        if (scriptInput == null) return;
+        scriptApplying = true;
+        scriptInput.setText("");
+        scriptCommitted = "";
+        scriptApplying = false;
+        getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING);
+        scriptInput.clearFocus();
+        if (Build.VERSION.SDK_INT >= 30 && scriptInput.getWindowInsetsController() != null) {
+            scriptInput.getWindowInsetsController().hide(WindowInsets.Type.ime());
+        }
+        InputMethodManager keyboard = (InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
+        if (keyboard != null) keyboard.hideSoftInputFromWindow(scriptInput.getWindowToken(), 0);
+    }
+
+    // A second tap on the field is still inside the gesture, so it can raise the IME if the
+    // frame-later request was ignored.
+    private void onCursorTouch(int action, float x, float y) {
+        nativeCursorEvent(action, x, y);
+        if (action != 0 || !scriptKeyboardShown || scriptInput == null) return;
+        scriptInput.requestFocus();
+        InputMethodManager keyboard = (InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
+        if (keyboard != null) keyboard.showSoftInput(scriptInput, InputMethodManager.SHOW_FORCED);
+    }
+
+    /** A "K" line in the DX frame means a gui-edit or guiSetInputEnabled(true) wants the keyboard. */
+    private void syncScriptKeyboard(String frame) {
+        boolean want = false;
+        if (frame != null) {
+            for (String line : frame.split("\n", -1)) {
+                if ("K".equals(line)) {
+                    want = true;
+                    break;
+                }
+            }
+        }
+        if (!want) scriptKeyboardSuppressed = false;
+        boolean show = want && !scriptKeyboardSuppressed;
+        if (show == scriptKeyboardShown) return;
+        scriptKeyboardShown = show;
+        if (show) showScriptKeyboard();
+        else hideScriptKeyboard();
     }
 
     private void openChatInput() {
         if (chatInputBar == null || chatInput == null) return;
+        scriptKeyboardSuppressed = true;
+        scriptKeyboardShown = false;
+        hideScriptKeyboard();
         chatInputBar.setVisibility(View.VISIBLE);
         chatInput.requestFocus();
         InputMethodManager keyboard = (InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
@@ -329,6 +521,71 @@ public final class EngineHostActivity extends GTASA {
         });
     }
 
+    private void playUrlSound(String body) {
+        int bar = body.indexOf('|');
+        int bar2 = bar < 0 ? -1 : body.indexOf('|', bar + 1);
+        if (bar <= 0 || bar2 <= bar) return;
+        int id;
+        try { id = Integer.parseInt(body.substring(0, bar)); }
+        catch (NumberFormatException error) { return; }
+        boolean loop = "1".equals(body.substring(bar + 1, bar2));
+        String url = body.substring(bar2 + 1);
+        // One stream at a time. A second playSound was leaving the previous players
+        // running, so the login tracks stacked.
+        for (Integer existing : new java.util.ArrayList<>(sounds.keySet())) {
+            if (existing != id) stopUrlSound(Integer.toString(existing));
+        }
+        stopUrlSound(Integer.toString(id));
+        MediaPlayer player = new MediaPlayer();
+        player.setAudioAttributes(new AudioAttributes.Builder()
+                .setUsage(AudioAttributes.USAGE_MEDIA)
+                .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
+                .build());
+        try {
+            player.setDataSource(url);
+            player.setLooping(loop);
+            player.setOnPreparedListener(ready -> {
+                Float gain = soundVolume.get(id);
+                if (gain != null) ready.setVolume(gain, gain);
+                ready.start();
+            });
+            player.setOnCompletionListener(done -> nativeSoundEnded(id));
+            player.prepareAsync();
+            sounds.put(id, player);
+        } catch (Exception error) {
+            player.release();
+            nativeSoundEnded(id);
+        }
+    }
+
+    private void stopUrlSound(String body) {
+        int id;
+        try { id = Integer.parseInt(body); }
+        catch (NumberFormatException error) { return; }
+        soundVolume.remove(id);
+        MediaPlayer player = sounds.remove(id);
+        if (player == null) return;
+        player.setOnCompletionListener(null);
+        try { player.stop(); } catch (Exception ignored) {}
+        player.release();
+    }
+
+    private void volumeUrlSound(String body) {
+        int bar = body.indexOf('|');
+        if (bar <= 0) return;
+        int id;
+        float volume;
+        try {
+            id = Integer.parseInt(body.substring(0, bar));
+            volume = Float.parseFloat(body.substring(bar + 1));
+        } catch (NumberFormatException error) { return; }
+        float gain = Math.max(0f, Math.min(1f, volume));
+        soundVolume.put(id, gain);
+        MediaPlayer player = sounds.get(id);
+        if (player == null) return;
+        try { player.setVolume(gain, gain); } catch (Exception ignored) {}
+    }
+
     private void showDisconnectDialog(String message) {
         if (isFinishing() || disconnectDialog != null) return;
         disconnectDialog = new DisconnectDialog(this, message, new DisconnectDialog.Actions() {
@@ -365,6 +622,18 @@ public final class EngineHostActivity extends GTASA {
             }
             if (kind == 0) {
                 appendChat(text);
+                return;
+            }
+            if (kind == 11) {
+                playUrlSound(text);
+                return;
+            }
+            if (kind == 12) {
+                stopUrlSound(text);
+                return;
+            }
+            if (kind == 13) {
+                volumeUrlSound(text);
                 return;
             }
             if (kind == 10) {
@@ -409,6 +678,7 @@ public final class EngineHostActivity extends GTASA {
         if (flags.contains("nooverlay")) return;
         final String shown = flags.contains("overlayempty") ? "X" : commands;
         runOnUiThread(() -> {
+            syncScriptKeyboard(shown);
             if (dxOverlay != null) dxOverlay.setFrame(shown);
         });
     }

@@ -8,11 +8,13 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
+#include <memory>
 #include <string>
 #include <utility>
 #include <vector>
 
 #include "../../net/raknet/RakNetWrapper.h"
+#include "PedSpawn.h"
 
 #ifdef __ANDROID__
 #include <android/log.h>
@@ -65,9 +67,15 @@ struct Visual {
     float rotX = 0, rotY = 0;
     float health = -1.f;
     bool hosted = false;
+    // ENTITY_ADD common header. CClientPed::SetInterior / RequestCollision use it.
+    uint8_t interior = 0;
+    // ENTITY_ADD sync time context (CPacketHandler::Packet_EntityAdd sets it on the element).
+    uint8_t syncTimeContext = 0;
     uint32_t attached = 0xFFFFFFFFu;
     int blipHandle = -1;
     bool blipLive = false;
+    // Peds (kind 14) only: the rest of the ENTITY_ADD ped body. Shared so copies of Visual stay cheap.
+    std::shared_ptr<const PedSpawn> ped;
 };
 
 struct Datum {
@@ -89,6 +97,8 @@ struct EntityCommon {
     float attachedRotX = 0, attachedRotY = 0, attachedRotZ = 0; // degrees
     bool collisions = false;
     bool callProp = true;     // default true, as in the reference
+    // One byte after the name. Desktop stores it with SetSyncTimeContext (CPacketHandler.cpp 4420).
+    uint8_t syncTimeContext = 0;
     std::string name;
     std::vector<std::pair<std::string, Datum>> customData;
 };

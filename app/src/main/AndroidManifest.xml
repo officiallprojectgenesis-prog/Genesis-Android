@@ -23,7 +23,8 @@
         android:theme="@style/Theme.WorldRPGNeon"
         android:requestLegacyExternalStorage="true"
         android:largeHeap="true"
-        android:hardwareAccelerated="true">
+        android:hardwareAccelerated="true"
+        android:usesCleartextTraffic="true">
 
         <activity
             android:name=".ui.MainActivity"

@@ -158,6 +158,19 @@ struct NeonJoinClient::Impl {
     uint32_t lastKeyMs = 0;
     uint32_t lastPedMs = 0;
     uint32_t lastUnoccupiedMs = 0;
+    // Last values written by SendPedSync (desktop CClientPed::m_LastSyncedData, SLastSyncedPedData).
+    struct PedLastSynced {
+        float x = 0, y = 0, z = 0;
+        float vx = 0, vy = 0, vz = 0;
+        float rotation = 0;
+        float health = 0;
+        float armor = 0;
+        bool onFire = false;
+        bool inWater = false;
+        bool reloading = false;
+        float camera = 0;
+    };
+    std::unordered_map<uint32_t, PedLastSynced> lastPed;
     // Last synced values per hosted vehicle (desktop CDeathmatchVehicle::m_LastSyncedData).
     struct UnoccupiedLastSynced {
         WorldRPG::VehicleSync::Vec3 position, rotation, velocity, turnVelocity;
@@ -242,6 +255,12 @@ struct NeonJoinClient::Impl {
     bool lastSentLookLeft = false;
     bool lastSentLookRight = false;
     bool pureSyncSentThisPulse = false;
+    // Last on-foot sticks written by packet 32 or 31 (wire bytes, -127..127).
+    // A change from non-zero to the pad's 0 is the release edge.
+    int lastOnFootStickX = 0;
+    int lastOnFootStickY = 0;
+    // Keysync saw the release between pure-sync samples. The next packet 32 writes a zero SVelocitySync.
+    bool pendingZeroVelocity = false;
     void SendDriverKeySync(const WorldRPG::Game::LocalCarState& car) {
         // Desktop DoPulse: keysync is the else branch of the puresync send.
         if (pureSyncSentThisPulse) return;
@@ -396,7 +415,8 @@ struct NeonJoinClient::Impl {
         lastY = y;
         const float move = std::sqrt(moveX * moveX + moveY * moveY);
         float speed = std::sqrt(vx * vx + vy * vy);
-        if (speed < 0.02f && move > 0.04f) {
+        // A released pad must not be rebuilt from leftover CPhysical+0x68 or from the position step.
+        if (!foot.padStickZero && speed < 0.02f && move > 0.04f) {
             const float scale = move > 0.25f ? 0.20f : 0.09f;
             const float inv = 1.f / move;
             vx = moveX * inv * scale;
@@ -404,17 +424,38 @@ struct NeonJoinClient::Impl {
             vz = 0.f;
             speed = scale;
         }
-        const bool moving = speed > 0.02f;
+        if (!foot.padStickZero) pendingZeroVelocity = false;
+        const bool moving = !foot.padStickZero && speed > 0.02f;
+        // Falling edge, or the keysync that already announced it: bSyncingVelocity with a zero
+        // SVelocitySync so ReadPlayerPuresync calls SetMoveSpeed(0) (CNetAPI.cpp 891-896).
+        const bool releaseVelocity = foot.padStickZero &&
+            (pendingZeroVelocity || lastOnFootStickX != 0 || lastOnFootStickY != 0);
         const int stickX = foot.stickX;
         const int stickY = foot.stickY;
         uint8_t keys = 0;
         if (foot.fire) keys |= 0x10;
         if (foot.duck) keys |= 0x40;
-        if (moving && speed <= 0.16f) keys |= 0x80;
-        uint32_t syncFlags = moving ? 0x0402u : 0x0002u;
+        // m_bPedWalk is not read from the pad. The speed bit stays only while the stick is held.
+        if (!foot.padStickZero && moving && speed <= 0.16f) keys |= 0x80;
+        uint32_t syncFlags = (moving || releaseVelocity) ? 0x0402u : 0x0002u;
         if (foot.duck) syncFlags |= 0x0008u;
         BitStreamWriter w;
         w.Write(static_cast<uint8_t>(32));          // PLAYER_PURESYNC
+        // CNetAPI::WritePlayerPuresync writes GetSyncTimeContext (CNetAPI.cpp 1119).
+        // ENTITY_ADD does not store a player (ServerWorld::OnEntityAdd skips type 1) and the
+        // PLAYER_LIST context byte is not kept, so the phone has no local time context. 0 is
+        // what CanUpdateSync accepts for a fresh element.
+        static bool loggedContext = false;
+        if (!loggedContext) {
+            loggedContext = true;
+            JOIN_LOGI("DIAG PLAYER_PURESYNC time context stays 0: CClientPlayer::GetSyncTimeContext "
+                      "is not stored for the local player (CNetAPI.cpp 1118-1119). "
+                      "Skipped at bitstream 0x0030: SNativeTaskLocomotionSync (NativeTaskLocomotionPresentation 0x3C). "
+                      "Not read, so those bits stay clear: HasJetPack, GetContactEntity, GetWeapon / aim, "
+                      "IsOnGround (bIsOnGround stays set), GetArmor (SPlayerArmorSync stays 0). "
+                      "WriteCameraOrientation (CNetAPI.cpp 1023-1114) has no camera matrix; "
+                      "the 8-bit yaw below reuses GetCameraRotation and pitch stays level.");
+        }
         w.Write(static_cast<uint8_t>(0));           // time context
         w.Write(keys);
         low(w, 0, 1);                               // no analog square
@@ -426,7 +467,11 @@ struct NeonJoinClient::Impl {
         fixed24(w, y);
         w.Write(z);
         low(w, rotationBits, 16);
-        if (moving) {
+        if (releaseVelocity) {
+            // SVelocitySync::Write with modulus 0 (SyncStructures.h 582-587): one clear bit.
+            uint8_t zeroBit = 0;
+            w.WriteBits(&zeroBit, 1);
+        } else if (moving) {
             const float modulus = std::max(speed, 0.001f);
             float nx = vx / modulus, ny = vy / modulus, nz = vz / modulus;
             auto writeNorm = [&](BitStreamWriter& out) {
@@ -459,10 +504,20 @@ struct NeonJoinClient::Impl {
             w.Write(modulus);
             writeNorm(w);
         }
-        const int healthByte = std::clamp(static_cast<int>(std::lround(health)), 0, 200);
-        w.Write(static_cast<uint8_t>(healthByte));
-        w.Write(static_cast<uint8_t>(0));           // armor
-        low(w, cameraBits, 12);                     // camera faces the ped heading
+        // SPlayerHealthSync: SFloatAsBitsSync<8>(0, 255, preserveGreaterThanMin) (SyncStructures.h 189-193).
+        // A raw clamp to 200 drops health above 200 and a value in (0, 0.5) to 0.
+        auto playerHealthByte = [](float value) -> uint8_t {
+            if (!std::isfinite(value) || value <= 0.f) return 0;
+            float alpha = value / 255.f;
+            if (alpha > 1.f) alpha = 1.f;
+            int byte = static_cast<int>(std::lround(static_cast<double>(alpha) * 255.0));
+            if (byte <= 0) return 1;
+            if (byte > 255) return 255;
+            return static_cast<uint8_t>(byte);
+        };
+        w.Write(playerHealthByte(health));
+        w.Write(static_cast<uint8_t>(0));           // armor (GetArmor not written; see DIAG above)
+        low(w, cameraBits, 12);                     // SCameraRotationSync = GetCameraRotation
         const auto camZ = static_cast<uint8_t>(std::lround(255.0 * ((foot.camera + pi) / (2.0 * pi))) & 0xFF);
         w.Write(camZ);
         w.Write(static_cast<uint8_t>(128));         // camera rot X, level
@@ -486,6 +541,9 @@ struct NeonJoinClient::Impl {
         }
         if (net->SendPacket(static_cast<uint8_t>(PacketID::USER_PACKET_ENUM), w,
                             PacketPriority::MEDIUM, PacketReliability::UNRELIABLE_SEQUENCED)) {
+            lastOnFootStickX = stickX;
+            lastOnFootStickY = stickY;
+            if (releaseVelocity) pendingZeroVelocity = false;
             static float loggedX = 0, loggedY = 0;
             static int reports = 0;
             const float dx = x - loggedX;
@@ -499,12 +557,13 @@ struct NeonJoinClient::Impl {
         }
     }
 
-    // CNetAPI::WriteKeysync for an on-foot player who is not aiming.
-    // Sent between pure-sync samples when the heading changes, which is
-    // what the desktop uses to turn the remote ped.
+    // CNetAPI::WriteKeysync (CNetAPI.cpp 729-828) for an on-foot player who is not aiming.
+    // CNetAPI::DoPulse (381-397) sends this only when that pulse did not send puresync.
+    // A pad release (IsSmallKeySyncNeeded 507: the stick left the analog band) is sent at once.
     void SendKeySync() {
         if (!net || !net->IsConnected()) return;
         // Driving a server-confirmed car: the vehicle form (SendDriverKeySync), as SendPureSync switches to packet 33.
+        // The on-foot release below does not run in the driver branch.
         {
             WorldRPG::Game::LocalCarState car;
             if (WorldRPG::Game::CopyLocalCar(car) && car.vehicleId == g_confirmedVehicle) {
@@ -512,8 +571,7 @@ struct NeonJoinClient::Impl {
                 return;
             }
         }
-        const uint32_t now = NowMs();
-        if (now - lastSyncMs < 40 || now - lastKeyMs < 50) return;
+        if (pureSyncSentThisPulse) return;
         float x = 0, y = 0, z = 0, heading = 0, vx = 0, vy = 0, vz = 0, health = 100.f;
         WorldRPG::Game::CopyBody(x, y, z, heading, vx, vy, vz, health);
         (void)x; (void)y; (void)z; (void)health;
@@ -526,7 +584,12 @@ struct NeonJoinClient::Impl {
         const float speed = std::sqrt(vx * vx + vy * vy);
         WorldRPG::Game::OnFootKeys foot;
         WorldRPG::Game::CopyOnFoot(heading, vx, vy, foot);
-        if (std::fabs(turn) < 0.05f && speed < 0.02f && !foot.fire && !foot.duck) return;
+        const bool release = foot.padStickZero && (lastOnFootStickX != 0 || lastOnFootStickY != 0);
+        const uint32_t now = NowMs();
+        if (!release) {
+            if (now - lastSyncMs < 40 || now - lastKeyMs < 50) return;
+            if (std::fabs(turn) < 0.05f && speed < 0.02f && !foot.fire && !foot.duck) return;
+        }
         lastKeyMs = now;
         lastKeyHeading = heading;
         auto low = [](BitStreamWriter& w, uint32_t value, int bits) {
@@ -539,7 +602,7 @@ struct NeonJoinClient::Impl {
         uint8_t keys = 0;
         if (foot.fire) keys |= 0x10;
         if (foot.duck) keys |= 0x40;
-        if (speed > 0.02f && speed <= 0.16f) keys |= 0x80;
+        if (!foot.padStickZero && speed > 0.02f && speed <= 0.16f) keys |= 0x80;
         BitStreamWriter w;
         w.Write(static_cast<uint8_t>(31));
         w.Write(keys);
@@ -555,69 +618,183 @@ struct NeonJoinClient::Impl {
             w.Write(static_cast<uint8_t>(0));
             low(w, 0, 4);
         }
-        net->SendPacket(static_cast<uint8_t>(PacketID::USER_PACKET_ENUM), w,
-                        PacketPriority::MEDIUM, PacketReliability::UNRELIABLE_SEQUENCED);
+        if (net->SendPacket(static_cast<uint8_t>(PacketID::USER_PACKET_ENUM), w,
+                            PacketPriority::MEDIUM, PacketReliability::UNRELIABLE_SEQUENCED)) {
+            lastOnFootStickX = foot.stickX;
+            lastOnFootStickY = foot.stickY;
+            if (release) pendingZeroVelocity = true;
+        }
     }
 
+    // CPedSync::DoPulse (CPedSync.cpp 125-165) calls Update every iPedSync milliseconds
+    // (CTickRateSettings.h 19, default 400). Update (733-767) writes one PED_SYNC for the
+    // hosted list. WritePedInformation (924-1133) sets a flag only when that field changed
+    // and returns without bytes when both flag bytes are 0.
+    // Bitstream stays 0x0030. NativeTaskLocomotionPresentation is 0x3C and
+    // NativeTaskWeaponPresentation is 0x3D (bitstream.h), so flags2 0x02 and 0x04 are not set.
+    // UpdateNativeTaskAnimationPresentation returns immediately at this version for the same reason.
     void SendPedSync() {
         if (!net || !net->IsConnected()) return;
         const uint32_t now = NowMs();
         if (now - lastPedMs < 400) return;
-        WorldRPG::Game::HostedPed peds[16];
-        const int count = WorldRPG::Game::CopyHostedPeds(peds, 16);
-        if (count <= 0) return;
         lastPedMs = now;
-        auto low = [](BitStreamWriter& w, uint32_t value, int bits) {
-            uint8_t bytes[4] = {};
-            for (int i = 0; i < 4; ++i) bytes[i] = static_cast<uint8_t>((value >> (8 * i)) & 0xFF);
-            w.WriteBits(bytes, static_cast<size_t>(bits));
+        static bool loggedGaps = false;
+        if (!loggedGaps) {
+            loggedGaps = true;
+            JOIN_LOGI("DIAG PED_SYNC: flags2 0x02/0x04 stay clear at bitstream 0x0030 "
+                      "(NativeTaskLocomotionPresentation 0x3C, NativeTaskWeaponPresentation 0x3D). "
+                      "flags2 0x01 needs GetCameraRotation (TheCamera yaw is not hooked). "
+                      "ucFlags 0x20 needs CPedSA::IsOnFire (pFireOnPed), 0x40 needs CPedSA::IsInWater "
+                      "(TASK_COMPLEX_IN_WATER), 0x60 needs IsReloadingWeapon, 0x80 needs HasSyncedAnim. "
+                      "Those reads are missing, so the flags stay clear. "
+                      "Sync time context is the ENTITY_ADD byte; CPedRPCs/CElementRPCs SetSyncTimeContext "
+                      "is not applied. The interval stays 400 ms; CWorldRPCs does not update iPedSync. "
+                      "fCurrentRotation is not located; rotation is the matrix heading ReadBodyPos samples.");
+        }
+        // Same cap as the ped body quota. Update walks the whole sync list; the phone has at most 48 bodies.
+        WorldRPG::Game::HostedPed peds[48];
+        const int count = WorldRPG::Game::CopyHostedPeds(peds, 48);
+        constexpr float kFloatEpsilon = 0.0001f;  // CVector::FLOAT_EPSILON (CVector.h 26, operator== 282-284)
+        constexpr float kPi = 3.14159265f;
+        constexpr float kSyncPositionLimit = 100000.f;  // SYNC_POSITION_LIMIT (SyncStructures.h 28)
+        auto vectorChanged = [kFloatEpsilon](float ax, float ay, float az, float bx, float by, float bz) {
+            return std::fabs(ax - bx) >= kFloatEpsilon || std::fabs(ay - by) >= kFloatEpsilon ||
+                   std::fabs(az - bz) >= kFloatEpsilon;
         };
-        auto fixed24 = [&](BitStreamWriter& w, float coord) {
+        auto fixed24 = [](BitStreamWriter& w, float coord) {
+            // SFloatSync<14, 10> at bitstream 0x0030 (SPositionComponentSync): value * 1024, 24 bits.
             int32_t fixed = static_cast<int32_t>(std::lround(static_cast<double>(coord) * 1024.0));
             if (fixed > 8388607) fixed = 8388607;
             if (fixed < -8388608) fixed = -8388608;
-            low(w, static_cast<uint32_t>(fixed) & 0xFFFFFFu, 24);
+            WriteFieldLsb(w, static_cast<uint32_t>(fixed) & 0xFFFFFFu, 24);
         };
-        const float pi = 3.14159265f;
+        // SPedRotationSync (SyncStructures.h 651-662): one wrap into [-pi, pi], then 16-bit unlerp.
+        auto writeRotation16 = [kPi](BitStreamWriter& w, float rotation) {
+            if (rotation < -kPi) rotation += kPi * 2.f;
+            else if (rotation > kPi) rotation -= kPi * 2.f;
+            float alpha = (rotation + kPi) / (kPi * 2.f);
+            if (alpha < 0.f) alpha = 0.f;
+            if (alpha > 1.f) alpha = 1.f;
+            const auto bits = static_cast<uint32_t>(std::lround(65535.0 * static_cast<double>(alpha)));
+            WriteFieldLsb(w, bits > 65535u ? 65535u : bits, 16);
+        };
+        // SCameraRotationSync (SyncStructures.h 683-687): SFloatAsBitsSync<12>(-pi, pi, false, true).
+        auto writeCamera12 = [kPi](BitStreamWriter& w, float rotation) {
+            const float size = kPi * 2.f;
+            rotation = rotation - size * std::floor((rotation + kPi) / size);
+            float alpha = (rotation + kPi) / size;
+            if (alpha < 0.f) alpha = 0.f;
+            if (alpha > 1.f) alpha = 1.f;
+            const auto bits = static_cast<uint32_t>(std::lround(4095.0 * static_cast<double>(alpha)));
+            WriteFieldLsb(w, bits > 4095u ? 4095u : bits, 12);
+        };
         BitStreamWriter w;
         w.Write(static_cast<uint8_t>(63));
+        bool wrote = false;
+        std::unordered_map<uint32_t, PedLastSynced> next;
         for (int i = 0; i < count; ++i) {
             const auto& ped = peds[i];
-            float heading = ped.heading;
-            while (heading < -pi) heading += 2.f * pi;
-            while (heading > pi) heading -= 2.f * pi;
-            const float speed = std::sqrt(ped.vx * ped.vx + ped.vy * ped.vy + ped.vz * ped.vz);
-            low(w, ped.id & 0x1FFFFu, 17);
-            w.Write(static_cast<uint8_t>(0));
-            w.Write(static_cast<uint8_t>(speed > 0.001f ? 0x07 : 0x03));
-            w.Write(static_cast<uint8_t>(0));
-            fixed24(w, ped.x);
-            fixed24(w, ped.y);
-            w.Write(ped.z);
-            const auto rotationBits = static_cast<uint32_t>(std::lround(65535.0 * ((heading + pi) / (2.0 * pi))));
-            low(w, rotationBits, 16);
-            if (speed > 0.001f) {
-                uint8_t one = 1;
-                w.WriteBits(&one, 1);
-                w.Write(speed);
-                float nx = ped.vx / speed, ny = ped.vy / speed, nz = ped.vz / speed;
-                auto bit = [&](bool on) {
-                    uint8_t value = on ? 1u : 0u;
-                    w.WriteBits(&value, 1);
-                };
-                bit(nx < 0.f);
-                if (ny == 0.f) bit(true);
-                else {
-                    bit(false);
-                    w.Write(static_cast<uint16_t>(std::lround((ny + 1.f) * 32767.5f)));
+            const auto found = lastPed.find(ped.id);
+            const bool firstSeen = found == lastPed.end();
+            PedLastSynced last = firstSeen ? PedLastSynced{} : found->second;
+            // HasSyncedAnim is not hooked, so the synced-animation transform lock (931-936) stays off
+            // and ucFlags 0x80 stays clear.
+            const bool lockSyncedAnimationTransform = false;
+            // The reads are not hooked, so these stay at the unset state. A later hook replaces the constants.
+            const bool onFire = false;       // CPedSA::IsOnFire (pFireOnPed)
+            const bool inWater = false;      // CPedSA::IsInWater (TASK_COMPLEX_IN_WATER)
+            const bool reloading = false;    // CClientPed::IsReloadingWeapon
+            const float camera = 0.f;        // CClientPed::GetCameraRotation
+            uint8_t ucFlags = 0;
+            if (!lockSyncedAnimationTransform && vectorChanged(ped.x, ped.y, ped.z, last.x, last.y, last.z))
+                ucFlags |= 0x01;
+            if (!lockSyncedAnimationTransform && ped.heading != last.rotation)
+                ucFlags |= 0x02;
+            if (!lockSyncedAnimationTransform && vectorChanged(ped.vx, ped.vy, ped.vz, last.vx, last.vy, last.vz))
+                ucFlags |= 0x04;
+            // Last health and armour start at 0. A body whose value is also 0 would not count as a
+            // change, so the first sample is published anyway (desktop's first compare is against
+            // an uninitialized SLastSyncedPedData).
+            if (ped.bodyVitals && (firstSeen || ped.health != last.health))
+                ucFlags |= 0x08;
+            if (ped.bodyVitals && (firstSeen || ped.armor != last.armor))
+                ucFlags |= 0x10;
+            if (onFire != last.onFire)
+                ucFlags |= 0x20;
+            if (inWater != last.inWater)
+                ucFlags |= 0x40;
+            if (reloading != last.reloading)
+                ucFlags |= 0x60;
+            uint8_t flags2 = 0;
+            // IsNearlyEqual(GetCameraRotation(), last, numeric_limits<float>::epsilon()). No yaw hook, so no bit.
+            if (!lockSyncedAnimationTransform && camera != last.camera)
+                flags2 |= 0x01;
+            if (ucFlags != 0 || flags2 != 0) {
+                wrote = true;
+                WriteFieldLsb(w, ped.id & 0x1FFFFu, 17);
+                w.Write(WorldRPG::ServerWorld::SyncTimeContext(ped.id));
+                w.Write(ucFlags);
+                w.Write(flags2);
+                if (ucFlags & 0x01) {
+                    fixed24(w, ped.x);
+                    fixed24(w, ped.y);
+                    float z = ped.z;
+                    if (z > kSyncPositionLimit - 1.f) z = kSyncPositionLimit - 1.f;
+                    if (z < -kSyncPositionLimit + 1.f) z = -kSyncPositionLimit + 1.f;
+                    w.Write(z);
+                    last.x = ped.x;
+                    last.y = ped.y;
+                    last.z = ped.z;
                 }
-                if (nz == 0.f) bit(true);
-                else {
-                    bit(false);
-                    w.Write(static_cast<uint16_t>(std::lround((nz + 1.f) * 32767.5f)));
+                if (ucFlags & 0x02) {
+                    writeRotation16(w, ped.heading);
+                    last.rotation = ped.heading;
+                }
+                if (ucFlags & 0x04) {
+                    const float speed = std::sqrt(ped.vx * ped.vx + ped.vy * ped.vy + ped.vz * ped.vz);
+                    if (speed == 0.f) {
+                        WriteBit(w, false);
+                    } else {
+                        WriteBit(w, true);
+                        w.Write(speed);
+                        w.WriteNormVector(ped.vx / speed, ped.vy / speed, ped.vz / speed);
+                    }
+                    last.vx = ped.vx;
+                    last.vy = ped.vy;
+                    last.vz = ped.vz;
+                }
+                if (ucFlags & 0x08) {
+                    w.Write(ped.health);
+                    last.health = ped.health;
+                }
+                if (ucFlags & 0x10) {
+                    w.Write(ped.armor);
+                    last.armor = ped.armor;
+                }
+                if (flags2 & 0x01) {
+                    writeCamera12(w, camera);
+                    last.camera = camera;
+                }
+                if (ucFlags & 0x20) {
+                    WriteBit(w, onFire);
+                    last.onFire = onFire;
+                }
+                if (ucFlags & 0x40) {
+                    WriteBit(w, inWater);
+                    last.inWater = inWater;
+                }
+                if (ucFlags & 0x60) {
+                    WriteBit(w, reloading);
+                    last.reloading = reloading;
                 }
             }
+            next.emplace(ped.id, last);
         }
+        lastPed.swap(next);
+        // Update sends the packet whenever the sync list is non-empty, including when every ped
+        // returned early. CPedSyncPacket::Read then returns false (m_Syncs empty) and
+        // CPacketTranslator.cpp 251-254 drops it. The phone sends only when a ped wrote bytes.
+        if (!wrote) return;
         net->SendPacket(static_cast<uint8_t>(PacketID::USER_PACKET_ENUM), w,
                         PacketPriority::MEDIUM, PacketReliability::UNRELIABLE_SEQUENCED);
     }
@@ -970,7 +1147,10 @@ struct NeonJoinClient::Impl {
         info.fakeLagCommand = fakelag;
         info.httpDownloadType = httpType;
         // This join id is the local ped for the whole session. PacketHandler accepts a PLAYER_SPAWN only for it.
-        if (info.localPlayerId != 0xFFFFFFFFu) WorldRPG::ServerWorld::SetLocalPlayer(info.localPlayerId);
+        if (info.localPlayerId != 0xFFFFFFFFu) {
+            WorldRPG::ServerWorld::SetLocalPlayer(info.localPlayerId);
+            WorldRPG::ServerWorld::NotePlayerNick(info.localPlayerId, nickname);
+        }
 
         JOIN_LOGI("NeonJoin: SERVER_JOINEDGAME id=%u root=%u name=[%s] http=%u port=%u",
                   info.localPlayerId, info.rootElementId, info.serverName.c_str(),
@@ -1169,6 +1349,41 @@ void NeonJoinClient::OnTransportFailure(const std::string& reason) {
     pImpl_->Fail(reason.empty() ? "Transport connection failed" : reason);
 }
 
+namespace {
+
+// Ids CNetAPI::ProcessPacket returns true for with no m_Status check
+// (CNetAPI.cpp:39-226), plus the ped and unoccupied ids CPacketHandler
+// consumes the same way (CPedSync.cpp:99-122, CUnoccupiedVehicleSync.cpp:31-54).
+// CConnectManager aborts every other id while it is still the handler
+// (CConnectManager.cpp:687-698), so these are not ignored before MOD_NAME.
+bool IgnoredInboundSyncWhileJoining(uint8_t gameId, const char*& name) {
+    switch (gameId) {
+        case 31: name = "PLAYER_KEYSYNC"; return true;
+        case 32: name = "PLAYER_PURESYNC"; return true;
+        case 33: name = "PLAYER_VEHICLE_PURESYNC"; return true;
+        case 34: name = "LIGHTSYNC"; return true;
+        case 35: name = "VEHICLE_RESYNC"; return true;
+        case 36: name = "RETURN_SYNC"; return true;
+        case 54: name = "UNOCCUPIED_VEHICLE_STARTSYNC"; return true;
+        case 55: name = "UNOCCUPIED_VEHICLE_STOPSYNC"; return true;
+        case 56: name = "UNOCCUPIED_VEHICLE_SYNC"; return true;
+        case 61: name = "PED_STARTSYNC"; return true;
+        case 62: name = "PED_STOPSYNC"; return true;
+        case 63: name = "PED_SYNC"; return true;
+        case 98: name = "PLAYER_BULLETSYNC"; return true;
+        case 100: name = "WEAPON_BULLETSYNC"; return true;
+        default: return false;
+    }
+}
+
+// Deathmatch's handler is installed only after MOD_NAME. JoinDataSent is
+// STATUS_CONNECTING; InGameNoticeSent is STATUS_JOINING until packet 22.
+bool DesktopConsumesSyncInJoinState(JoinState state) {
+    return state == JoinState::JoinDataSent || state == JoinState::InGameNoticeSent;
+}
+
+}  // namespace
+
 bool NeonJoinClient::ProcessGamePacket(uint8_t gameId, const uint8_t* body, size_t length, size_t bitLength) {
     Impl& d = *pImpl_;
     // Late packets from an ended attempt must not replace its failure or
@@ -1220,9 +1435,22 @@ bool NeonJoinClient::ProcessGamePacket(uint8_t gameId, const uint8_t* body, size
             return false;
     }
 
+    // CNetAPI::ProcessPacket and the ped/unoccupied handlers consume these
+    // during STATUS_CONNECTING and STATUS_JOINING and do not fail the session.
+    // The body is not applied: PacketHandler runs only after JoinState::Complete.
+    const char* syncName = nullptr;
+    if (DesktopConsumesSyncInJoinState(d.state) && IgnoredInboundSyncWhileJoining(gameId, syncName)) {
+        JOIN_LOGI("NeonJoin: ignoring %s (%u) in state %s", syncName, static_cast<unsigned>(gameId),
+                  JoinStateName(d.state));
+        return true;
+    }
+
     // Strict on purpose: any other application packet while joining is a
     // protocol divergence that must surface instead of being silently dropped
-    // (Plano 22 P1B acceptance rule).
+    // (Plano 22 P1B acceptance rule). CConnectManager still aborts these sync
+    // ids before MOD_NAME, and CPacketHandler raises a protocol error for
+    // PLAYER_LIST, PLAYER_QUIT, nick changes, pickups and text items before
+    // STATUS_JOINED, so those keep failing here.
     d.Fail("unexpected packet id " + std::to_string(gameId) + " in state " + JoinStateName(d.state));
     return true;
 }

@@ -39,10 +39,12 @@ constexpr int kVisibleStandInModel = 7;
 constexpr int kPedStateIdle = 1;
 constexpr unsigned char kCreatedByScript = 2;
 
+// libGTASA CMatrix / CMatrixSAInterface: right, forward, up, pos.
+// Not an RwMatrix (that one stores up in the second row and at in the third).
 struct Matrix {
     float rightX, rightY, rightZ, rightPad;
+    float frontX, frontY, frontZ, frontPad;
     float upX, upY, upZ, upPad;
-    float atX, atY, atZ, atPad;
     float posX, posY, posZ, posPad;
 };
 
@@ -53,6 +55,7 @@ struct PortFns {
     void (*setModel)(void*, unsigned) = nullptr;
     void (*setCreatedBy)(void*, unsigned char) = nullptr;
     void (*worldAdd)(void*) = nullptr;
+    void (*worldRemove)(void*) = nullptr;
     void (*setMatrix)(void*, const Matrix*) = nullptr;
     void (*setState)(void*, int) = nullptr;
 };
@@ -76,6 +79,7 @@ PortFns& Fns() {
     api.setCreatedBy = reinterpret_cast<void (*)(void*, unsigned char)>(
         dlsym(handle, "_ZN4CPed16SetCharCreatedByEh"));
     api.worldAdd = reinterpret_cast<void (*)(void*)>(dlsym(handle, "_ZN6CWorld3AddEP7CEntity"));
+    api.worldRemove = reinterpret_cast<void (*)(void*)>(dlsym(handle, "_ZN6CWorld6RemoveEP7CEntity"));
     api.setMatrix = reinterpret_cast<void (*)(void*, const Matrix*)>(
         dlsym(handle, "_ZN10CPlaceable9SetMatrixERK7CMatrix"));
     api.setState = reinterpret_cast<void (*)(void*, int)>(
@@ -169,19 +173,56 @@ int VisibleModel(int model) {
 
 }  // namespace
 
+void SetRemotePedHeading(void* ped, float heading) {
+    if (!ped || !std::isfinite(heading)) return;
+    auto* raw = static_cast<unsigned char*>(ped);
+    auto* matrix = *reinterpret_cast<unsigned char**>(raw + 0x18);
+    const auto matrixAddr = reinterpret_cast<uintptr_t>(matrix);
+    if (matrix && (matrixAddr & 3u) == 0 && matrixAddr > 0x10000u) {
+        // CMatrix::SetRotateZOnly (libGTASA 2.10, 0x537958) writes these rows and
+        // does not touch position at +0x30. Desktop CMatrix::SetRotation with only
+        // Z set (Shared/sdk/CMatrix.h 253-279) is the same orientation:
+        // right=(cos, sin, 0), forward=(-sin, cos, 0), up=(0, 0, 1).
+        const float s = std::sin(heading);
+        const float c = std::cos(heading);
+        auto* right = reinterpret_cast<float*>(matrix);
+        auto* front = reinterpret_cast<float*>(matrix + 0x10);
+        auto* up = reinterpret_cast<float*>(matrix + 0x20);
+        right[0] = c;
+        right[1] = s;
+        right[2] = 0.f;
+        front[0] = -s;
+        front[1] = c;
+        front[2] = 0.f;
+        up[0] = 0.f;
+        up[1] = 0.f;
+        up[2] = 1.f;
+    }
+    *reinterpret_cast<float*>(raw + 0x14) = heading;
+    // CPedSA::SetCurrentRotation / SetTargetRotation (CPedSA.h 435-436).
+    // CPed::UpdatePosition (0x597b3c) passes +0x6C4 to SetRotateZOnly.
+    // CPed::TurnBody (0x59dd58) stores the desired heading at +0x6C8 and steps +0x6C4 toward it.
+    // CClientPed::SetCurrentRotation(rotation, true) writes both (CClientPed.cpp 5302-5307).
+    *reinterpret_cast<float*>(raw + 0x6C4) = heading;
+    *reinterpret_cast<float*>(raw + 0x6C8) = heading;
+}
+
 void PlaceRemotePlayerPed(void* ped, float x, float y, float z, float heading) {
     if (!ped) return;
     auto& api = Fns();
-    if (api.setMatrix) {
-        // Same yaw the pose reader uses: heading = atan2(-at.x, at.y), up = +Z.
+    if (api.setMatrix && std::isfinite(heading)) {
+        // up.z at +0x28 is 1, so CPlaceable::SetMatrix (0x4ebf5c) keeps a simple
+        // transform when the ped has no matrix yet: position, and heading
+        // atan2(-forward.x, forward.y) from the second row. A pitched matrix
+        // (forward along Z) fails that test and is stored whole.
         Matrix matrix{};
         const float s = std::sin(heading);
         const float c = std::cos(heading);
         matrix.rightX = c;
         matrix.rightY = s;
+        matrix.frontX = -s;
+        matrix.frontY = c;
         matrix.upZ = 1.f;
-        matrix.atX = -s;
-        matrix.atY = c;
         matrix.posX = x;
         matrix.posY = y;
         matrix.posZ = z;
@@ -194,12 +235,12 @@ void PlaceRemotePlayerPed(void* ped, float x, float y, float z, float heading) {
     *reinterpret_cast<float*>(raw + 0x08) = x;
     *reinterpret_cast<float*>(raw + 0x0C) = y;
     *reinterpret_cast<float*>(raw + 0x10) = z;
-    *reinterpret_cast<float*>(raw + 0x14) = heading;
+    SetRemotePedHeading(ped, heading);
     auto* speed = reinterpret_cast<float*>(raw + 0x68);
     speed[0] = speed[1] = speed[2] = 0.f;
 }
 
-void* CreateRemotePlayerPed(int model, float x, float y, float z, float heading) {
+void* CreateRemotePlayerPed(int model, float x, float y, float z, float heading, bool keepCj) {
     auto& api = Fns();
     if (!api.pedNew || !api.playerCtor || !api.worldAdd) return nullptr;
     if (!EnsurePlayerPedGroupPatch()) {
@@ -221,7 +262,8 @@ void* CreateRemotePlayerPed(int model, float x, float y, float z, float heading)
     }
     // Slot 1, AI behaviour (the false). Slot 0 is the local player.
     api.playerCtor(ped, kRemotePlayerSlot, false);
-    const int skin = VisibleModel(model);
+    // createPed(0) is CJ. Remote sync must not use that shared clump (VisibleModel).
+    const int skin = (keepCj && model == 0) ? 0 : VisibleModel(model);
     if (api.setModel) api.setModel(ped, static_cast<unsigned>(skin));
     if (api.setCreatedBy) api.setCreatedBy(ped, kCreatedByScript);
     PlaceRemotePlayerPed(ped, x, y, z, heading);
@@ -233,6 +275,16 @@ void* CreateRemotePlayerPed(int model, float x, float y, float z, float heading)
         ENGINE_LOGI("CPlayerPed(1, false) model %d at %.0f %.0f %.0f", skin, x, y, z);
     }
     return ped;
+}
+
+void ReleasePlayerPed(void* ped) {
+    if (!ped) return;
+    auto& api = Fns();
+    if (!api.worldRemove) {
+        ENGINE_LOGI("DIAG createPed drop: CWorld::Remove missing");
+        return;
+    }
+    api.worldRemove(ped);
 }
 
 namespace {

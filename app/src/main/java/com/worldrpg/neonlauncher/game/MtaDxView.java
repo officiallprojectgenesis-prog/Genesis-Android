@@ -19,7 +19,9 @@ import java.util.HashMap;
 /** Draws the rectangles, text, and images produced by client resource scripts. */
 public final class MtaDxView extends View {
     private String frame = "";
-    private final Paint fill = new Paint(Paint.ANTI_ALIAS_FLAG);
+    // Desktop dxDrawRectangle is a sharp pixel quad. Anti-alias insets the edge
+    // by a fraction of a pixel, so borders look pulled inside the box.
+    private final Paint fill = new Paint();
     private final Paint image = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG);
     private final TextPaint text = new TextPaint(Paint.ANTI_ALIAS_FLAG);
     private final HashMap<String, Bitmap> images = new HashMap<>();
@@ -131,7 +133,8 @@ public final class MtaDxView extends View {
         if (p.length < 5) return;
         float x = f(p[0]), y = f(p[1]), w = f(p[2]), h = f(p[3]);
         fill.setColor((int) l(p[4]));
-        canvas.drawRect(x, y, x + w, y + h, fill);
+        // Shared edges stay on the same pixel: round the corners, not x and w apart.
+        canvas.drawRect(Math.round(x), Math.round(y), Math.round(x + w), Math.round(y + h), fill);
     }
 
     private void drawText(Canvas canvas, String body) {

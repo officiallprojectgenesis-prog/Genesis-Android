@@ -2,6 +2,7 @@
 
 #include "LuaApiExtra.h"
 #include "LuaVMStub.h"
+#include "../gtasa/GameEngine.h"
 
 extern "C" {
 #include "lua.h"
@@ -9,8 +10,11 @@ extern "C" {
 }
 
 #include <algorithm>
+#include <cmath>
+#include <cstdint>
 #include <cstdio>
 #include <cstring>
+#include <limits>
 #include <map>
 #include <utility>
 #include <vector>
@@ -28,6 +32,9 @@ constexpr double kDefaultFontHeight = 15.0;
 // Colors as ARGB, the format the R and T draw lines use.
 constexpr uint32_t kWindowBackground = 0xE0101820u;
 constexpr uint32_t kButtonBackground = 0xE0304050u;
+constexpr uint32_t kFieldBackground = 0xE0181828u;
+constexpr uint32_t kCheckBackground = 0xE0E0E0E0u;
+constexpr uint32_t kCheckMark = 0xE040C060u;
 constexpr uint32_t kTextWhite = 0xFFFFFFFFu;
 constexpr uint32_t kTextDisabled = 0x80FFFFFFu;
 
@@ -48,13 +55,37 @@ struct GuiElement {
     bool visible = true;
     bool enabled = true;
     double alpha = 1.0;
+    uint32_t z = 0;                 // sibling draw order; higher is in front
+    bool selected = false;          // checkbox (desktop GetSelected, not the CEGUI invert)
+    bool masked = false;            // gui-edit, guiEditSetMasked (CGUIEdit::SetMasked)
+    bool dropOpen = false;          // combobox drop list
+    bool alwaysOnTop = false;       // CEGUI AlwaysOnTop, default False; guiSetProperty is not ported
+    int selectedItem = -1;          // combobox, -1 is none (CGUIComboBox_Impl::GetSelectedItemIndex)
+    std::string caption;            // combobox storedCaption, restored when the selection clears
+    std::vector<std::string> items; // combobox rows, index 0 is the first item
 };
 
-// Ordered by id, so creation order is the draw order: later elements are drawn on top.
+// Ordered by id. Draw order among siblings is z, not id (guiBringToFront).
 std::map<uint32_t, GuiElement> g_elements;
 uint32_t g_nextId = kFirstGuiId;
-bool g_cursorShown = false;
-bool g_inputEnabled = true;
+uint32_t g_nextZ = 0;
+uint32_t g_focused = 0;
+
+// Desktop CGUI_Impl starts in INPUTMODE_NO_BINDS_ON_EDIT (CGUI_Impl.cpp:76, 343-387).
+// guiGetInputEnabled is then false until an edit has focus, or guiSetInputEnabled(true)
+// selects INPUTMODE_NO_BINDS. Bind blocking is not wired: this mode is only what
+// guiGetInputEnabled reads. Nothing on the phone drops key binds from it.
+enum class InputMode { AllowBinds, NoBinds, NoBindsOnEdit };
+InputMode g_inputMode = InputMode::NoBindsOnEdit;
+// onClientGUIFocus / onClientGUIBlur. Set by the VM when it can fire Lua events.
+GuiFocusHook g_focusHook = nullptr;
+
+// Desktop CResource::ShowCursor (CResource.cpp:1707-1741) keeps one flag per resource
+// and a shared count. The phone has a single Lua state, so the key is ActiveVmOwner():
+// the resource name already stored on elements as owner. An empty name is the caller
+// outside a resource. One showCursor(false) clears only that key.
+std::map<std::string, bool> g_cursorHold;
+int g_cursorHolds = 0;
 
 GuiElement* Find(uint32_t id) {
     auto found = g_elements.find(id);
@@ -84,7 +115,8 @@ Box ScreenBox(uint32_t id) {
     return box;
 }
 
-// Desktop CGUIElement::IsVisible includes the parents: a child shows only when every ancestor does.
+// Desktop CGUIElement::IsVisible is CEGUI isVisible() with localOnly false: a child
+// reports visible only when it and every ancestor are visible.
 bool EffectivelyVisible(const GuiElement& element) {
     const GuiElement* current = &element;
     for (int depth = 0; current && depth < 64; ++depth) {
@@ -92,6 +124,42 @@ bool EffectivelyVisible(const GuiElement& element) {
         current = current->parent ? Find(current->parent) : nullptr;
     }
     return true;
+}
+
+// Desktop CGUIElement::IsEnabled is !isDisabled() with localOnly false: a disabled
+// ancestor makes the child report disabled. Visibility is a separate walk.
+bool EffectivelyEnabled(const GuiElement& element) {
+    const GuiElement* current = &element;
+    for (int depth = 0; current && depth < 64; ++depth) {
+        if (!current->enabled) return false;
+        current = current->parent ? Find(current->parent) : nullptr;
+    }
+    return true;
+}
+
+void SetCursorHold(const std::string& owner, bool show) {
+    bool& held = g_cursorHold[owner];
+    if (held == show) return;
+    held = show;
+    g_cursorHolds += show ? 1 : -1;
+}
+
+void ReleaseCursorHold(const std::string& owner) {
+    const auto found = g_cursorHold.find(owner);
+    if (found == g_cursorHold.end() || !found->second) return;
+    found->second = false;
+    --g_cursorHolds;
+}
+
+bool AnyCursorHold() { return g_cursorHolds > 0; }
+
+// INPUTMODE_NO_BINDS_ON_EDIT: true only for a visible gui-edit that has focus.
+// Read-only edits and memos are not tracked. Bind blocking is not wired.
+bool InputEnabledNow() {
+    if (g_inputMode == InputMode::AllowBinds) return false;
+    if (g_inputMode == InputMode::NoBinds) return true;
+    const GuiElement* focused = Find(g_focused);
+    return focused && focused->type == "gui-edit" && EffectivelyVisible(*focused);
 }
 
 double EffectiveAlpha(const GuiElement& element) {
@@ -109,6 +177,23 @@ uint32_t WithAlpha(uint32_t argb, double alpha) {
     const double scaled = static_cast<double>(argb >> 24) * std::clamp(alpha, 0.0, 1.0);
     const uint32_t a = static_cast<uint32_t>(std::clamp(scaled, 0.0, 255.0));
     return (a << 24) | (argb & 0x00FFFFFFu);
+}
+
+// One '*' per Unicode character. The draw frame keeps only ASCII, so the bullet
+// used on the desktop password field cannot travel in an R/T line.
+std::string Masked(const std::string& text) {
+    std::string out;
+    for (size_t i = 0; i < text.size();) {
+        const auto lead = static_cast<unsigned char>(text[i]);
+        size_t n = 1;
+        if ((lead & 0xE0) == 0xC0) n = 2;
+        else if ((lead & 0xF0) == 0xE0) n = 3;
+        else if ((lead & 0xF8) == 0xF0) n = 4;
+        if (i + n > text.size()) n = 1;
+        out.push_back('*');
+        i += n;
+    }
+    return out;
 }
 
 // Text in one line: the draw format cannot carry a line break.
@@ -150,76 +235,17 @@ double Requested(double pixels, double parentSize, bool relative) {
     return parentSize > 0.0 ? pixels / parentSize : 0.0;
 }
 
-// guiCreateWindow(x, y, w, h, title, relative), guiCreateLabel / guiCreateButton(x, y, w, h,
-// text, relative, parent). Elements start visible and enabled, as on desktop.
-int CreateElement(lua_State* L, const char* type, bool hasParent) {
-    GuiElement element;
-    element.type = type;
+// Puts the element in the map. z is the sibling order (later creates are in front).
+uint32_t Emplace(GuiElement element) {
     element.owner = ActiveVmOwner();
-    element.x = luaL_optnumber(L, 1, 0.0);
-    element.y = luaL_optnumber(L, 2, 0.0);
-    element.w = luaL_optnumber(L, 3, 200.0);
-    element.h = luaL_optnumber(L, 4, 120.0);
-    size_t textLength = 0;
-    const char* text = luaL_optlstring(L, 5, "", &textLength);
-    element.text = OneLine(text, textLength);
-    element.relPos = lua_toboolean(L, 6) != 0;
-    element.relSize = element.relPos;
-    if (hasParent) {
-        const uint32_t parent = ElementIdOf(L, 7);
-        if (Find(parent)) element.parent = parent;
-    }
+    element.z = ++g_nextZ;
     const uint32_t id = g_nextId++;
     g_elements.emplace(id, std::move(element));
-    PushElement(L, id);
-    return 1;
+    return id;
 }
 
-int GuiCreateWindow(lua_State* L) { return CreateElement(L, "gui-window", false); }
-int GuiCreateLabel(lua_State* L) { return CreateElement(L, "gui-label", true); }
-int GuiCreateButton(lua_State* L) { return CreateElement(L, "gui-button", true); }
-
-// guiSetVisible / guiGetVisible: the element's own flag (desktop IsVisible).
-int GuiSetVisible(lua_State* L) {
-    GuiElement* element = ElementArg(L, 1);
-    if (element) element->visible = lua_toboolean(L, 2) != 0;
-    lua_pushboolean(L, element ? 1 : 0);
-    return 1;
-}
-
-int GuiGetVisible(lua_State* L) {
-    const GuiElement* element = ElementArg(L, 1);
-    lua_pushboolean(L, element && element->visible ? 1 : 0);
-    return 1;
-}
-
-int GuiSetText(lua_State* L) {
-    GuiElement* element = ElementArg(L, 1);
-    size_t length = 0;
-    const char* text = luaL_optlstring(L, 2, "", &length);
-    if (element) element->text = OneLine(text, length);
-    lua_pushboolean(L, element ? 1 : 0);
-    return 1;
-}
-
-int GuiGetText(lua_State* L) {
-    const GuiElement* element = ElementArg(L, 1);
-    lua_pushstring(L, element ? element->text.c_str() : "");
-    return 1;
-}
-
-// guiSetPosition(element, x, y, relative) and guiGetPosition(element, relative).
-int GuiSetPosition(lua_State* L) {
-    GuiElement* element = ElementArg(L, 1);
-    if (element) {
-        element->x = luaL_optnumber(L, 2, 0.0);
-        element->y = luaL_optnumber(L, 3, 0.0);
-        element->relPos = lua_toboolean(L, 4) != 0;
-    }
-    lua_pushboolean(L, element ? 1 : 0);
-    return 1;
-}
-
+// guiGetPosition(element, relative). The matching setter is below, with the other
+// argument-checked bindings.
 int GuiGetPosition(lua_State* L) {
     const GuiElement* element = ElementArg(L, 1);
     if (!element) {
@@ -235,18 +261,7 @@ int GuiGetPosition(lua_State* L) {
     return 2;
 }
 
-// guiSetSize(element, w, h, relative) and guiGetSize(element, relative).
-int GuiSetSize(lua_State* L) {
-    GuiElement* element = ElementArg(L, 1);
-    if (element) {
-        element->w = luaL_optnumber(L, 2, 0.0);
-        element->h = luaL_optnumber(L, 3, 0.0);
-        element->relSize = lua_toboolean(L, 4) != 0;
-    }
-    lua_pushboolean(L, element ? 1 : 0);
-    return 1;
-}
-
+// guiGetSize(element, relative).
 int GuiGetSize(lua_State* L) {
     const GuiElement* element = ElementArg(L, 1);
     if (!element) {
@@ -262,64 +277,27 @@ int GuiGetSize(lua_State* L) {
     return 2;
 }
 
-int GuiSetAlpha(lua_State* L) {
-    GuiElement* element = ElementArg(L, 1);
-    if (element) element->alpha = std::clamp(luaL_optnumber(L, 2, 1.0), 0.0, 1.0);
-    lua_pushboolean(L, element ? 1 : 0);
-    return 1;
-}
-
-int GuiGetAlpha(lua_State* L) {
-    const GuiElement* element = ElementArg(L, 1);
-    lua_pushnumber(L, element ? element->alpha : 0.0);
-    return 1;
-}
-
-int GuiSetEnabled(lua_State* L) {
-    GuiElement* element = ElementArg(L, 1);
-    if (element) element->enabled = lua_toboolean(L, 2) != 0;
-    lua_pushboolean(L, element ? 1 : 0);
-    return 1;
-}
-
-int GuiGetEnabled(lua_State* L) {
-    const GuiElement* element = ElementArg(L, 1);
-    lua_pushboolean(L, element && element->enabled ? 1 : 0);
-    return 1;
-}
-
-// The phone has no mouse cursor, so the cursor and input flags are only remembered.
-int ShowCursor(lua_State* L) {
-    g_cursorShown = lua_toboolean(L, 1) != 0;
-    lua_pushboolean(L, 1);
-    return 1;
-}
-
-int IsCursorShowing(lua_State* L) {
-    lua_pushboolean(L, g_cursorShown ? 1 : 0);
-    return 1;
-}
-
-int GuiSetInputEnabled(lua_State* L) {
-    g_inputEnabled = lua_toboolean(L, 1) != 0;
-    lua_pushboolean(L, 1);
-    return 1;
-}
-
-int GuiGetInputEnabled(lua_State* L) {
-    lua_pushboolean(L, g_inputEnabled ? 1 : 0);
-    return 1;
-}
-
-// destroyElement(element): GUI elements are destroyed with their children. Any other
-// element keeps the no-op result the phone gave before (no client-side element creation).
-int DestroyElement(lua_State* L) {
-    GuiDestroy(ElementIdOf(L, 1));
-    lua_pushboolean(L, 1);
-    return 1;
-}
-
 } // namespace
+
+// Defined below, after Args. InstallGuiBindings runs before that point.
+static int GuiCreateWindow(lua_State* L);
+static int GuiCreateLabel(lua_State* L);
+static int GuiCreateButton(lua_State* L);
+static int GuiSetVisible(lua_State* L);
+static int GuiGetVisible(lua_State* L);
+static int GuiSetText(lua_State* L);
+static int GuiGetText(lua_State* L);
+static int GuiSetPosition(lua_State* L);
+static int GuiSetSize(lua_State* L);
+static int GuiSetAlpha(lua_State* L);
+static int GuiGetAlpha(lua_State* L);
+static int GuiSetEnabled(lua_State* L);
+static int GuiGetEnabled(lua_State* L);
+static int ShowCursor(lua_State* L);
+static int IsCursorShowing(lua_State* L);
+static int GuiSetInputEnabled(lua_State* L);
+static int GuiGetInputEnabled(lua_State* L);
+static int DestroyElement(lua_State* L);
 
 void InstallGuiBindings(lua_State* L) {
     const struct { const char* name; lua_CFunction fn; } binds[] = {
@@ -348,6 +326,7 @@ void InstallGuiBindings(lua_State* L) {
         lua_pushcfunction(L, bind.fn);
         lua_setglobal(L, bind.name);
     }
+    InstallGuiLua(L);
 }
 
 bool GuiIsElement(uint32_t id) {
@@ -368,12 +347,19 @@ bool GuiDestroy(uint32_t id) {
             if (child.parent == doomed[i]) doomed.push_back(childId);
         }
     }
+    for (uint32_t gone : doomed) {
+        if (g_focused == gone) GuiSetFocused(0);
+    }
     for (uint32_t gone : doomed) g_elements.erase(gone);
     return true;
 }
 
 void GuiDropResource(const std::string& owner) {
     if (owner.empty()) return;
+    // CResource's destructor calls ShowCursor(false) (CResource.cpp:220) before it
+    // deletes the resource's GUI elements, so this resource's hold is released and
+    // any other resource that still holds the cursor keeps it showing.
+    ReleaseCursorHold(owner);
     std::vector<uint32_t> mine;
     for (const auto& [id, element] : g_elements) {
         if (element.owner == owner) mine.push_back(id);
@@ -382,32 +368,166 @@ void GuiDropResource(const std::string& owner) {
 }
 
 void GuiReset() {
-    g_cursorShown = false;
+    g_cursorHold.clear();
+    g_cursorHolds = 0;
     g_elements.clear();
-    g_cursorShown = false;
-    g_inputEnabled = true;
+    // Direct clear: session teardown must not fire focus events.
+    g_focused = 0;
+    g_inputMode = InputMode::NoBindsOnEdit;
 }
 
-bool GuiCursorShown() { return g_cursorShown; }
+bool GuiCursorShown() { return AnyCursorHold(); }
 
-void GuiAppendDraws(std::string& out) {
-    for (const auto& [id, element] : g_elements) {
-        if (!EffectivelyVisible(element)) continue;
-        const Box box = ScreenBox(id);
-        const double alpha = EffectiveAlpha(element);
-        const uint32_t textColor = element.enabled ? kTextWhite : kTextDisabled;
-        if (element.type == "gui-window") {
-            // Background, then the title in the top bar (desktop title bar height is about 24 px).
-            AppendRect(out, box, kWindowBackground, alpha);
-            AppendText(out, box.x + 8, box.y + 4, box.x + box.w - 8, box.y + 28, kTextWhite, alpha, element.text);
-        } else if (element.type == "gui-button") {
-            AppendRect(out, box, kButtonBackground, alpha);
-            AppendText(out, box.x, box.y, box.x + box.w, box.y + box.h, textColor, alpha, element.text);
-        } else {
-            AppendText(out, box.x, box.y, box.x + box.w, box.y + box.h, textColor, alpha, element.text);
+static void DrawElement(std::string& out, uint32_t id, const GuiElement& element) {
+    const Box box = ScreenBox(id);
+    const double alpha = EffectiveAlpha(element);
+    const uint32_t textColor = element.enabled ? kTextWhite : kTextDisabled;
+    const std::string line = OneLine(element.text.c_str(), element.text.size());
+    if (element.type == "gui-window") {
+        // Background, then the title in the top bar (desktop title bar height is about 24 px).
+        AppendRect(out, box, kWindowBackground, alpha);
+        AppendText(out, box.x + 8, box.y + 4, box.x + box.w - 8, box.y + 28, kTextWhite, alpha, line);
+    } else if (element.type == "gui-button" || element.type == "gui-combobox") {
+        AppendRect(out, box, kButtonBackground, alpha);
+        AppendText(out, box.x, box.y, box.x + box.w, box.y + box.h, textColor, alpha, line);
+        // Open combobox: the drop list under the box (CGUIComboBox_Impl::ShowDropList).
+        if (element.type == "gui-combobox" && element.dropOpen) {
+            for (size_t i = 0; i < element.items.size(); ++i) {
+                Box row = box;
+                row.y = box.y + box.h + static_cast<double>(i) * 18.0;
+                row.h = 18.0;
+                AppendRect(out, row, kButtonBackground, alpha);
+                const std::string item = OneLine(element.items[i].c_str(), element.items[i].size());
+                AppendText(out, row.x + 4, row.y, row.x + row.w, row.y + row.h, textColor, alpha, item);
+            }
         }
+    } else if (element.type == "gui-edit") {
+        AppendRect(out, box, kFieldBackground, alpha);
+        // Masked edits draw stars (guiEditSetMasked). A focused edit draws a caret at the end.
+        std::string shown = element.masked ? Masked(line) : line;
+        if (g_focused == id) shown.push_back('|');
+        AppendText(out, box.x, box.y, box.x + box.w, box.y + box.h, textColor, alpha, shown);
+    } else if (element.type == "gui-checkbox") {
+        Box mark{box.x, box.y, std::min(16.0, std::max(0.0, box.w)), std::min(16.0, std::max(0.0, box.h))};
+        AppendRect(out, mark, kCheckBackground, alpha);
+        if (element.selected && mark.w > 6.0 && mark.h > 6.0) {
+            AppendRect(out, Box{mark.x + 3, mark.y + 3, mark.w - 6, mark.h - 6}, kCheckMark, alpha);
+        }
+        AppendText(out, box.x + 20, box.y, box.x + box.w, box.y + box.h, textColor, alpha, line);
+    } else {
+        AppendText(out, box.x, box.y, box.x + box.w, box.y + box.h, textColor, alpha, line);
     }
 }
+
+// Child ids in creation order (the map is ordered by id).
+static std::vector<uint32_t> ChildrenOf(uint32_t parent) {
+    std::vector<uint32_t> kids;
+    for (const auto& [id, element] : g_elements) {
+        if (element.parent == parent) kids.push_back(id);
+    }
+    return kids;
+}
+
+// Desktop RUN_CHILDREN, then the element itself (CStaticFunctionDefinitions.cpp:66-73).
+template <typename Fn>
+static void PostOrder(uint32_t id, Fn& fn) {
+    for (uint32_t child : ChildrenOf(id)) PostOrder(child, fn);
+    if (GuiElement* element = Find(id)) fn(*element);
+}
+
+static void DrawBranch(std::string& out, uint32_t parent) {
+    std::vector<uint32_t> kids = ChildrenOf(parent);
+    std::sort(kids.begin(), kids.end(), [](uint32_t a, uint32_t b) {
+        const GuiElement* left = Find(a);
+        const GuiElement* right = Find(b);
+        if (left->z != right->z) return left->z < right->z;
+        return a < b;
+    });
+    for (uint32_t id : kids) {
+        const GuiElement* element = Find(id);
+        if (!element || !EffectivelyVisible(*element)) continue;
+        DrawElement(out, id, *element);
+        DrawBranch(out, id);
+    }
+}
+
+void GuiAppendDraws(std::string& out) { DrawBranch(out, 0); }
+
+namespace {
+
+bool BoxContains(const Box& box, double x, double y) {
+    return box.w > 0.0 && box.h > 0.0 && x >= box.x && y >= box.y && x < box.x + box.w && y < box.y + box.h;
+}
+
+// Same order DrawBranch paints in, so the last drawn element under the point wins.
+uint32_t PickBranch(uint32_t parent, double x, double y) {
+    uint32_t hit = 0;
+    std::vector<uint32_t> kids = ChildrenOf(parent);
+    std::sort(kids.begin(), kids.end(), [](uint32_t a, uint32_t b) {
+        const GuiElement* left = Find(a);
+        const GuiElement* right = Find(b);
+        if (left->z != right->z) return left->z < right->z;
+        return a < b;
+    });
+    for (uint32_t id : kids) {
+        const GuiElement* element = Find(id);
+        if (!element || !EffectivelyVisible(*element) || !EffectivelyEnabled(*element)) continue;
+        if (BoxContains(ScreenBox(id), x, y)) hit = id;
+        if (const uint32_t child = PickBranch(id, x, y)) hit = child;
+    }
+    return hit;
+}
+
+bool EditType(uint32_t id) {
+    const GuiElement* element = Find(id);
+    return element && element->type == "gui-edit";
+}
+
+} // namespace
+
+uint32_t GuiPick(double x, double y) { return PickBranch(0, x, y); }
+
+bool GuiIsEdit(uint32_t id) {
+    const GuiElement* element = Find(id);
+    return element && element->type == "gui-edit" && EffectivelyVisible(*element) && EffectivelyEnabled(*element);
+}
+
+uint32_t GuiFocusedEdit() {
+    return GuiIsEdit(g_focused) ? g_focused : 0;
+}
+
+void GuiSetFocusHook(GuiFocusHook hook) { g_focusHook = hook; }
+
+void GuiSetFocused(uint32_t id) {
+    if (id && !Find(id)) id = 0;
+    if (g_focused == id) return;
+    const uint32_t previous = g_focused;
+    g_focused = id;
+    if (!g_focusHook) return;
+    if (EditType(previous)) g_focusHook(previous, false);
+    if (EditType(id)) g_focusHook(id, true);
+}
+
+bool GuiEditAppend(const char* bytes, size_t length) {
+    GuiElement* element = Find(GuiFocusedEdit());
+    if (!element || !bytes || length == 0) return false;
+    if (element->text.size() + length > 4096) return false;
+    element->text.append(bytes, length);
+    return true;
+}
+
+bool GuiEditErase() {
+    GuiElement* element = Find(GuiFocusedEdit());
+    if (!element || element->text.empty()) return false;
+    size_t end = element->text.size();
+    do {
+        --end;
+    } while (end > 0 && (static_cast<unsigned char>(element->text[end]) & 0xC0) == 0x80);
+    element->text.resize(end);
+    return true;
+}
+
+bool GuiKeyCapture() { return g_inputMode == InputMode::NoBinds; }
 
 double DxFontScale(const char* font) {
     struct FontHeight {
@@ -427,4 +547,966 @@ double DxFontScale(const char* font) {
     return 1.0;
 }
 
+// Desktop CScriptArgReader checks used by the functions below: numbers (and numeric
+// strings), real booleans, strings, and a GUI element table. A bad argument returns
+// false or nil, the same failure value as CLuaGUIDefs / CLuaDrawingDefs, and does not
+// raise a Lua error.
+struct Args {
+    lua_State* L = nullptr;
+    int index = 1;
+    bool bad = false;
+    const char* why = "bad argument";
+
+    void fail(const char* reason) {
+        if (!bad) {
+            bad = true;
+            why = reason;
+        }
+    }
+
+    bool num(double& out) {
+        if (bad) return false;
+        if (!lua_isnumber(L, index)) {
+            fail("number");
+            return false;
+        }
+        out = lua_tonumber(L, index++);
+        if (std::isnan(out)) {
+            fail("NaN");
+            return false;
+        }
+        return true;
+    }
+
+    bool vec2(double& x, double& y) {
+        if (bad) return false;
+        if (!lua_isnumber(L, index)) {
+            fail("vector2");
+            return false;
+        }
+        return num(x) && num(y);
+    }
+
+    bool integer(int& out) {
+        double value = 0;
+        if (!num(value)) return false;
+        const double highest = static_cast<double>(std::numeric_limits<int>::max()) + 1.0;
+        if (value >= highest || value < static_cast<double>(std::numeric_limits<int>::min())) {
+            fail("number");
+            return false;
+        }
+        out = static_cast<int>(value);
+        return true;
+    }
+
+    // Unsigned color byte. Negative values are rejected (ReadNumber checkSign).
+    // A missing optional byte uses fallback (alpha defaults to 255).
+    bool byte(uint8_t& out, bool optional, uint8_t fallback) {
+        if (bad) return false;
+        const int kind = lua_type(L, index);
+        if (optional && (kind == LUA_TNONE || kind == LUA_TNIL)) {
+            out = fallback;
+            ++index;
+            return true;
+        }
+        double value = 0;
+        if (!num(value)) return false;
+        if (value < -static_cast<double>(std::numeric_limits<float>::epsilon())) {
+            fail("positive");
+            return false;
+        }
+        if (value >= 1.0e15) {
+            fail("number");
+            return false;
+        }
+        out = static_cast<uint8_t>(static_cast<int64_t>(value));
+        return true;
+    }
+
+    bool flag(bool& out, bool optional, bool fallback) {
+        if (bad) return false;
+        const int kind = lua_type(L, index);
+        if (kind == LUA_TBOOLEAN) {
+            out = lua_toboolean(L, index++) != 0;
+            return true;
+        }
+        if (optional && (kind == LUA_TNONE || kind == LUA_TNIL)) {
+            out = fallback;
+            ++index;
+            return true;
+        }
+        fail("bool");
+        return false;
+    }
+
+    bool text(std::string& out) {
+        if (bad) return false;
+        const int kind = lua_type(L, index);
+        if (kind != LUA_TSTRING && kind != LUA_TNUMBER) {
+            fail("string");
+            return false;
+        }
+        size_t length = 0;
+        const char* value = lua_tolstring(L, index++, &length);
+        out.assign(value ? value : "", length);
+        return true;
+    }
+
+    // ReadCharStringRef: a real string, not a number.
+    bool bytes(const char*& data, size_t& length) {
+        if (bad) return false;
+        if (lua_type(L, index) != LUA_TSTRING) {
+            fail("string");
+            return false;
+        }
+        data = lua_tolstring(L, index++, &length);
+        if (!data) {
+            data = "";
+            length = 0;
+        }
+        return true;
+    }
+
+    // typeName null accepts any GUI element. Desktop ReadUserData of a widget class
+    // rejects every other element type.
+    bool gui(uint32_t& id, const char* typeName) {
+        if (bad) return false;
+        if (lua_type(L, index) != LUA_TTABLE) {
+            fail("element");
+            return false;
+        }
+        id = ElementIdOf(L, index);
+        const GuiElement* element = Find(id);
+        if (!element || (typeName && element->type != typeName)) {
+            fail(typeName ? typeName : "element");
+            ++index;
+            return false;
+        }
+        ++index;
+        return true;
+    }
+
+    // Optional parent. nil, none, and false mean no parent (ReadUserData NULL).
+    bool parent(uint32_t& id) {
+        if (bad) return false;
+        const int kind = lua_type(L, index);
+        if (kind == LUA_TNONE || kind == LUA_TNIL) {
+            id = 0;
+            ++index;
+            return true;
+        }
+        if (kind == LUA_TBOOLEAN && lua_toboolean(L, index) == 0) {
+            id = 0;
+            ++index;
+            return true;
+        }
+        if (kind != LUA_TTABLE) {
+            fail("element");
+            return false;
+        }
+        const uint32_t found = ElementIdOf(L, index);
+        if (!Find(found)) {
+            fail("element");
+            ++index;
+            return false;
+        }
+        id = found;
+        ++index;
+        return true;
+    }
+};
+
+static int Reject(lua_State* L, const char* name, const Args& args, bool nilOnError) {
+    LUA_LOGE("%s: bad argument (%s)", name, args.why);
+    if (nilOnError) lua_pushnil(L);
+    else lua_pushboolean(L, 0);
+    return 1;
+}
+
+// CPixelsManager.cpp:727-748. Plain tail is two little-endian uint16s (width, height).
+// The byte size must be width * height * 4 + 4. Multiply wraps as a uint32, same as desktop.
+static bool PlainSize(const char* data, size_t size, uint32_t& width, uint32_t& height) {
+    if (!data || size < 8 || size > 0xFFFFFFFFu) return false;
+    uint16_t tail[2] = {};
+    std::memcpy(tail, data + size - 4, 4);
+    width = tail[0];
+    height = tail[1];
+    const uint32_t expect = width * height * 4u + 4u;
+    return static_cast<uint32_t>(size) == expect;
+}
+
+// CFileFormatPng.cpp:21-34. Header and IEND tail only; no libpng.
+static bool IsPng(const void* data, size_t size) {
+    static const unsigned char header[] = {0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A};
+    static const unsigned char tail[] = {0xAE, 0x42, 0x60, 0x82};
+    if (!data || size < sizeof(header)) return false;
+    const auto* bytes = static_cast<const unsigned char*>(data);
+    return std::memcmp(bytes, header, sizeof(header)) == 0 &&
+           std::memcmp(bytes + size - sizeof(tail), tail, sizeof(tail)) == 0;
+}
+
+// CFileFormatJpeg.cpp:30-56. Header, tail, and the second marker. No libjpeg.
+static bool IsJpeg(const void* data, size_t size) {
+    if (!data || size == 0) return false;
+    static const unsigned char header[] = {0xFF, 0xD8, 0xFF};
+    static const unsigned char tail[] = {0xFF, 0xD9};
+    if (size < 6) return false;
+    const auto* bytes = static_cast<const unsigned char*>(data);
+    if (std::memcmp(bytes, header, 3) != 0 || std::memcmp(bytes + size - 2, tail, 2) != 0) return false;
+    const unsigned seg1 = static_cast<unsigned>(bytes[4]) * 256u + bytes[5];
+    if (static_cast<size_t>(seg1) + 5 >= size) return false;
+    return bytes[4 + seg1] == 0xFF;
+}
+
+static bool IsDds(const void* data, size_t size) {
+    static const unsigned char header[] = {0x44, 0x44, 0x53, 0x20};
+    if (!data || size < sizeof(header)) return false;
+    return std::memcmp(data, header, sizeof(header)) == 0;
+}
+
+// CPixelsManager.cpp:656-682. PNG, then JPEG, then DDS, then plain.
+static const char* PixelsFormatName(const char* data, size_t size) {
+    if (IsPng(data, size)) return "png";
+    if (IsJpeg(data, size)) return "jpeg";
+    if (IsDds(data, size)) return "dds";
+    uint32_t width = 0, height = 0;
+    if (size >= 8 && PlainSize(data, size, width, height)) return "plain";
+    return nullptr;
+}
+
+// (int) position, then the uint parameter of GetPixelColor / SetPixelColor.
+static bool PixelIndex(double value, uint32_t& out) {
+    const double highest = static_cast<double>(std::numeric_limits<int>::max()) + 1.0;
+    if (value >= highest || value < static_cast<double>(std::numeric_limits<int>::min())) return false;
+    out = static_cast<uint32_t>(static_cast<int>(value));
+    return true;
+}
+
+struct Bgra {
+    uint8_t b, g, r, a;
+};
+
+static bool PixelOffset(const char* data, size_t size, uint32_t x, uint32_t y, size_t& offset) {
+    uint32_t width = 0, height = 0;
+    if (!PlainSize(data, size, width, height)) return false;
+    if (static_cast<uint64_t>(x) >= width || static_cast<uint64_t>(y) >= height) return false;
+    const uint64_t index = static_cast<uint64_t>(x) + static_cast<uint64_t>(y) * width;
+    if ((index + 1ull) * 4ull + 4ull > size) return false;
+    offset = static_cast<size_t>(index);
+    return true;
+}
+
+// CLuaDrawingDefs.cpp:1983-2010, CPixelsManager.cpp:836-851.
+// Only plain pixels. Returns r, g, b, a. Failure is false.
+static int DxGetPixelColor(lua_State* L) {
+    Args args{L};
+    const char* data = nullptr;
+    size_t length = 0;
+    double px = 0, py = 0;
+    if (!args.bytes(data, length) || !args.vec2(px, py)) return Reject(L, "dxGetPixelColor", args, false);
+    uint32_t x = 0, y = 0;
+    size_t offset = 0;
+    if (!PixelIndex(px, x) || !PixelIndex(py, y) || !PixelOffset(data, length, x, y, offset)) {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+    const auto* pixel = reinterpret_cast<const Bgra*>(data) + offset;
+    lua_pushnumber(L, pixel->r);
+    lua_pushnumber(L, pixel->g);
+    lua_pushnumber(L, pixel->b);
+    lua_pushnumber(L, pixel->a);
+    return 4;
+}
+
+// CLuaDrawingDefs.cpp:1929-1951, CPixelsManager.cpp:656-682.
+static int DxGetPixelsFormat(lua_State* L) {
+    Args args{L};
+    const char* data = nullptr;
+    size_t length = 0;
+    if (!args.bytes(data, length)) return Reject(L, "dxGetPixelsFormat", args, false);
+    const char* name = PixelsFormatName(data, length);
+    if (!name) {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+    lua_pushstring(L, name);
+    return 1;
+}
+
+// CLuaDrawingDefs.cpp:2013-2041, CPixelsManager.cpp:860-874.
+// Writes B,G,R,A into the Lua string, which is what ReadCharStringRef points at.
+static int DxSetPixelColor(lua_State* L) {
+    Args args{L};
+    const char* data = nullptr;
+    size_t length = 0;
+    double px = 0, py = 0;
+    uint8_t red = 0, green = 0, blue = 0, alpha = 255;
+    if (!args.bytes(data, length) || !args.vec2(px, py) || !args.byte(red, false, 0) || !args.byte(green, false, 0) ||
+        !args.byte(blue, false, 0) || !args.byte(alpha, true, 255)) {
+        return Reject(L, "dxSetPixelColor", args, false);
+    }
+    uint32_t x = 0, y = 0;
+    size_t offset = 0;
+    if (!PixelIndex(px, x) || !PixelIndex(py, y) || !PixelOffset(data, length, x, y, offset)) {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+    auto* pixel = reinterpret_cast<Bgra*>(const_cast<char*>(data)) + offset;
+    pixel->b = blue;
+    pixel->g = green;
+    pixel->r = red;
+    pixel->a = alpha;
+    lua_pushboolean(L, 1);
+    return 1;
+}
+
+// CLuaGUIDefs.cpp:1913-1930, CStaticFunctionDefinitions.cpp:6153-6162.
+// Deactivate. Returns true for any GUI element. Clears the focus when this element is the
+// active one, which fires onClientGUIBlur for a gui-edit.
+static int GuiBlur(lua_State* L) {
+    Args args{L};
+    uint32_t id = 0;
+    if (!args.gui(id, nullptr)) return Reject(L, "guiBlur", args, false);
+    if (g_focused == id) GuiSetFocused(0);
+    lua_pushboolean(L, 1);
+    return 1;
+}
+
+// CLuaGUIDefs.cpp:1933-1948, CStaticFunctionDefinitions.cpp:6165-6175.
+// Activate. A gui-edit that gains focus is what the phone's soft keyboard types into.
+static int GuiFocus(lua_State* L) {
+    Args args{L};
+    uint32_t id = 0;
+    if (!args.gui(id, nullptr)) return Reject(L, "guiFocus", args, false);
+    GuiSetFocused(id);
+    lua_pushboolean(L, 1);
+    return 1;
+}
+
+// CLuaGUIDefs.cpp:614-633. "allow_binds", "no_binds", "no_binds_when_editing".
+// "no_binds" is INPUTMODE_NO_BINDS: the phone opens the soft keyboard for DX edits.
+static int GuiSetInputMode(lua_State* L) {
+    Args args{L};
+    std::string mode;
+    if (!args.text(mode)) return Reject(L, "guiSetInputMode", args, false);
+    if (mode == "allow_binds") g_inputMode = InputMode::AllowBinds;
+    else if (mode == "no_binds") g_inputMode = InputMode::NoBinds;
+    else if (mode == "no_binds_when_editing") g_inputMode = InputMode::NoBindsOnEdit;
+    else {
+        args.fail("input-mode");
+        return Reject(L, "guiSetInputMode", args, false);
+    }
+    lua_pushboolean(L, 1);
+    return 1;
+}
+
+// CLuaGUIDefs.cpp:635-639.
+static int GuiGetInputMode(lua_State* L) {
+    const char* mode = "no_binds_when_editing";
+    if (g_inputMode == InputMode::AllowBinds) mode = "allow_binds";
+    else if (g_inputMode == InputMode::NoBinds) mode = "no_binds";
+    lua_pushstring(L, mode);
+    return 1;
+}
+
+// CLuaGUIDefs.cpp:3163-3184, CStaticFunctionDefinitions.cpp:6340-6356.
+// A non-edit fails the argument check (ReadUserData of CGUIEdit).
+static int GuiEditSetMasked(lua_State* L) {
+    Args args{L};
+    uint32_t id = 0;
+    bool masked = false;
+    if (!args.gui(id, "gui-edit") || !args.flag(masked, false, false))
+        return Reject(L, "guiEditSetMasked", args, false);
+    if (GuiElement* element = Find(id)) element->masked = masked;
+    lua_pushboolean(L, 1);
+    return 1;
+}
+
+// CLuaGUIDefs.cpp:3187-3206. A bad element is nil, not false.
+static int GuiEditIsMasked(lua_State* L) {
+    Args args{L};
+    uint32_t id = 0;
+    if (!args.gui(id, "gui-edit")) return Reject(L, "guiEditIsMasked", args, true);
+    const GuiElement* element = Find(id);
+    lua_pushboolean(L, element && element->masked ? 1 : 0);
+    return 1;
+}
+
+// CLuaGUIDefs.cpp:1386-1407, CStaticFunctionDefinitions.cpp:6111-6132.
+// Moves the element in front of its siblings. AlwaysOnTop stays false (guiSetProperty is
+// not ported). Console input is not restored: there is no console, and isConsoleActive stays false.
+static int GuiBringToFront(lua_State* L) {
+    Args args{L};
+    uint32_t id = 0;
+    if (!args.gui(id, nullptr)) return Reject(L, "guiBringToFront", args, false);
+    GuiElement* element = Find(id);
+    if (!element || element->alwaysOnTop) {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+    element->z = ++g_nextZ;
+    lua_pushboolean(L, 1);
+    return 1;
+}
+
+// CLuaGUIDefs.cpp:1502-1521. The stored flag is the script value. CGUICheckBox_Impl inverts
+// it only for the CEGUI widget, and GetSelected inverts it back.
+static int GuiCheckBoxGetSelected(lua_State* L) {
+    Args args{L};
+    uint32_t id = 0;
+    if (!args.gui(id, "gui-checkbox")) return Reject(L, "guiCheckBoxGetSelected", args, false);
+    const GuiElement* element = Find(id);
+    lua_pushboolean(L, element && element->selected ? 1 : 0);
+    return 1;
+}
+
+// CLuaGUIDefs.cpp:1456-1477, CStaticFunctionDefinitions.cpp:6177-6192.
+// Also sets descendant checkboxes (RUN_CHILDREN, propagation on by default).
+static int GuiCheckBoxSetSelected(lua_State* L) {
+    Args args{L};
+    uint32_t id = 0;
+    bool state = false;
+    if (!args.gui(id, "gui-checkbox") || !args.flag(state, false, false))
+        return Reject(L, "guiCheckBoxSetSelected", args, false);
+    auto visit = [&](GuiElement& element) {
+        if (element.type == "gui-checkbox") element.selected = state;
+    };
+    PostOrder(id, visit);
+    lua_pushboolean(L, 1);
+    return 1;
+}
+
+// CLuaGUIDefs.cpp:3785-3806, CStaticFunctionDefinitions.cpp:5768-5787,
+// CGUIComboBox_Impl.cpp:63-69 and 123-148. The new row is appended. The result is its
+// 0-based index (the "+ 1" comment in the static function is not what GetItemIndex returns).
+static int GuiComboBoxAddItem(lua_State* L) {
+    Args args{L};
+    uint32_t id = 0;
+    std::string value;
+    if (!args.gui(id, "gui-combobox") || !args.text(value)) return Reject(L, "guiComboBoxAddItem", args, false);
+    int added = 0;
+    auto visit = [&](GuiElement& element) {
+        if (element.type != "gui-combobox") return;
+        element.items.push_back(value);
+        added = static_cast<int>(element.items.size()) - 1;
+    };
+    PostOrder(id, visit);
+    lua_pushnumber(L, added);
+    return 1;
+}
+
+// CLuaGUIDefs.cpp:3833-3851, CStaticFunctionDefinitions.cpp:5810-5828,
+// CGUIComboBox_Impl.cpp:230-242. Clears the rows and restores the caption.
+static int GuiComboBoxClear(lua_State* L) {
+    Args args{L};
+    uint32_t id = 0;
+    if (!args.gui(id, "gui-combobox")) return Reject(L, "guiComboBoxClear", args, false);
+    bool ok = false;
+    auto visit = [&](GuiElement& element) {
+        if (element.type != "gui-combobox") return;
+        element.items.clear();
+        element.selectedItem = -1;
+        element.text = element.caption;
+        ok = true;
+    };
+    PostOrder(id, visit);
+    lua_pushboolean(L, ok ? 1 : 0);
+    return 1;
+}
+
+// CLuaGUIDefs.cpp:3946-3964, CStaticFunctionDefinitions.cpp:5911-5926.
+// No RUN_CHILDREN. The count is this combobox only.
+static int GuiComboBoxGetItemCount(lua_State* L) {
+    Args args{L};
+    uint32_t id = 0;
+    if (!args.gui(id, "gui-combobox")) return Reject(L, "guiComboBoxGetItemCount", args, false);
+    const GuiElement* element = Find(id);
+    lua_pushnumber(L, element ? static_cast<lua_Number>(element->items.size()) : 0);
+    return 1;
+}
+
+// CLuaGUIDefs.cpp:3898-3918, CStaticFunctionDefinitions.cpp:5871-5888,
+// CGUIComboBox_Impl.cpp:151-172. Index -1 is the text in the box. A bad index is "".
+static int GuiComboBoxGetItemText(lua_State* L) {
+    Args args{L};
+    uint32_t id = 0;
+    int index = 0;
+    if (!args.gui(id, "gui-combobox") || !args.integer(index)) return Reject(L, "guiComboBoxGetItemText", args, false);
+    const GuiElement* element = Find(id);
+    std::string value;
+    if (element) {
+        if (index == -1) value = element->text;
+        else if (index >= 0 && static_cast<size_t>(index) < element->items.size())
+            value = element->items[static_cast<size_t>(index)];
+    }
+    lua_pushlstring(L, value.data(), value.size());
+    return 1;
+}
+
+// CLuaGUIDefs.cpp:3854-3872, CStaticFunctionDefinitions.cpp:5831-5848,
+// CGUIComboBox_Impl.cpp:105-120. -1 when nothing is selected. A bad argument is nil.
+static int GuiComboBoxGetSelected(lua_State* L) {
+    Args args{L};
+    uint32_t id = 0;
+    if (!args.gui(id, "gui-combobox")) return Reject(L, "guiComboBoxGetSelected", args, true);
+    const GuiElement* element = Find(id);
+    lua_pushnumber(L, element ? element->selectedItem : -1);
+    return 1;
+}
+
+// CLuaGUIDefs.cpp:3989-4006, CStaticFunctionDefinitions.cpp:5956-5970.
+// A bad argument is nil, not false.
+static int GuiComboBoxIsOpen(lua_State* L) {
+    Args args{L};
+    uint32_t id = 0;
+    if (!args.gui(id, "gui-combobox")) return Reject(L, "guiComboBoxIsOpen", args, true);
+    const GuiElement* element = Find(id);
+    lua_pushboolean(L, element && element->dropOpen ? 1 : 0);
+    return 1;
+}
+
+// CLuaGUIDefs.cpp:3809-3830, CStaticFunctionDefinitions.cpp:5790-5807,
+// CGUIComboBox_Impl.cpp:81-97. Out of range is false. Removing the selected row
+// restores the caption. Later rows keep their identity, so the selected index shifts.
+static int GuiComboBoxRemoveItem(lua_State* L) {
+    Args args{L};
+    uint32_t id = 0;
+    int index = 0;
+    if (!args.gui(id, "gui-combobox") || !args.integer(index)) return Reject(L, "guiComboBoxRemoveItem", args, false);
+    bool removed = false;
+    auto visit = [&](GuiElement& element) {
+        if (element.type != "gui-combobox") return;
+        removed = false;
+        if (index < 0 || static_cast<size_t>(index) >= element.items.size()) return;
+        const bool wasSelected = element.selectedItem == index;
+        element.items.erase(element.items.begin() + static_cast<size_t>(index));
+        if (wasSelected) {
+            element.selectedItem = -1;
+            element.text = element.caption;
+        } else if (element.selectedItem > index) {
+            --element.selectedItem;
+        }
+        removed = true;
+    };
+    PostOrder(id, visit);
+    lua_pushboolean(L, removed ? 1 : 0);
+    return 1;
+}
+
+// CLuaGUIDefs.cpp:3921-3943, CStaticFunctionDefinitions.cpp:5891-5908,
+// CGUIComboBox_Impl.cpp:175-191. A selected row also updates the text in the box.
+static int GuiComboBoxSetItemText(lua_State* L) {
+    Args args{L};
+    uint32_t id = 0;
+    int index = 0;
+    std::string value;
+    if (!args.gui(id, "gui-combobox") || !args.integer(index) || !args.text(value))
+        return Reject(L, "guiComboBoxSetItemText", args, false);
+    bool ok = false;
+    auto visit = [&](GuiElement& element) {
+        if (element.type != "gui-combobox") return;
+        if (index < 0 || static_cast<size_t>(index) >= element.items.size()) {
+            ok = false;
+            return;
+        }
+        element.items[static_cast<size_t>(index)] = value;
+        if (element.selectedItem == index) element.text = value;
+        ok = true;
+    };
+    PostOrder(id, visit);
+    lua_pushboolean(L, ok ? 1 : 0);
+    return 1;
+}
+
+// CLuaGUIDefs.cpp:3967-3986, CStaticFunctionDefinitions.cpp:5929-5953.
+static int GuiComboBoxSetOpen(lua_State* L) {
+    Args args{L};
+    uint32_t id = 0;
+    bool open = false;
+    if (!args.gui(id, "gui-combobox") || !args.flag(open, false, false))
+        return Reject(L, "guiComboBoxSetOpen", args, false);
+    bool ok = false;
+    auto visit = [&](GuiElement& element) {
+        if (element.type != "gui-combobox") return;
+        element.dropOpen = open;
+        ok = true;
+    };
+    PostOrder(id, visit);
+    lua_pushboolean(L, ok ? 1 : 0);
+    return 1;
+}
+
+// CLuaGUIDefs.cpp:3875-3895, CStaticFunctionDefinitions.cpp:5851-5868,
+// CGUIComboBox_Impl.cpp:201-227. -1 clears the selection and restores the caption.
+static int GuiComboBoxSetSelected(lua_State* L) {
+    Args args{L};
+    uint32_t id = 0;
+    int index = 0;
+    if (!args.gui(id, "gui-combobox") || !args.integer(index)) return Reject(L, "guiComboBoxSetSelected", args, false);
+    bool ok = false;
+    auto visit = [&](GuiElement& element) {
+        if (element.type != "gui-combobox") return;
+        if (index == -1) {
+            element.selectedItem = -1;
+            element.text = element.caption;
+            ok = true;
+            return;
+        }
+        if (index < 0 || static_cast<size_t>(index) >= element.items.size()) {
+            ok = false;
+            return;
+        }
+        element.selectedItem = index;
+        element.text = element.items[static_cast<size_t>(index)];
+        ok = true;
+    };
+    PostOrder(id, visit);
+    lua_pushboolean(L, ok ? 1 : 0);
+    return 1;
+}
+
+// CLuaGUIDefs.cpp:890-924, CStaticFunctionDefinitions.cpp:5561-5576.
+// onClientGUIStateChanged is not fired: there is no widget input hook.
+static int GuiCreateCheckBox(lua_State* L) {
+    Args args{L};
+    GuiElement element;
+    bool selected = false;
+    bool relative = false;
+    uint32_t parent = 0;
+    if (!args.vec2(element.x, element.y) || !args.vec2(element.w, element.h) || !args.text(element.text) ||
+        !args.flag(selected, false, false) || !args.flag(relative, true, false) || !args.parent(parent)) {
+        return Reject(L, "guiCreateCheckBox", args, false);
+    }
+    element.type = "gui-checkbox";
+    element.selected = selected;
+    element.relPos = relative;
+    element.relSize = relative;
+    element.parent = parent;
+    PushElement(L, Emplace(std::move(element)));
+    return 1;
+}
+
+// CLuaGUIDefs.cpp:3751-3782, CStaticFunctionDefinitions.cpp:5746-5765.
+// The caption is kept separately from the text shown in the box. Read-only, as on desktop.
+// onClientGUIComboBoxAccepted is not fired: there is no widget input hook.
+static int GuiCreateComboBox(lua_State* L) {
+    Args args{L};
+    GuiElement element;
+    bool relative = false;
+    uint32_t parent = 0;
+    if (!args.vec2(element.x, element.y) || !args.vec2(element.w, element.h) || !args.text(element.text) ||
+        !args.flag(relative, true, false) || !args.parent(parent)) {
+        return Reject(L, "guiCreateComboBox", args, false);
+    }
+    element.type = "gui-combobox";
+    element.caption = element.text;
+    element.relPos = relative;
+    element.relSize = relative;
+    element.parent = parent;
+    element.selectedItem = -1;
+    PushElement(L, Emplace(std::move(element)));
+    return 1;
+}
+
+// CLuaGUIDefs.cpp:962-994, CStaticFunctionDefinitions.cpp:5597-5614.
+// A tap focuses the edit (GuiPick) and the soft keyboard writes the text, which fires
+// onClientGUIChanged. Enter fires onClientGUIAccepted. The caret stays at the end.
+static int GuiCreateEdit(lua_State* L) {
+    Args args{L};
+    GuiElement element;
+    bool relative = false;
+    uint32_t parent = 0;
+    if (!args.vec2(element.x, element.y) || !args.vec2(element.w, element.h) || !args.text(element.text) ||
+        !args.flag(relative, true, false) || !args.parent(parent)) {
+        return Reject(L, "guiCreateEdit", args, false);
+    }
+    element.type = "gui-edit";
+    element.relPos = relative;
+    element.relSize = relative;
+    element.parent = parent;
+    PushElement(L, Emplace(std::move(element)));
+    return 1;
+}
+
+// CLuaGUIDefs.cpp GUICreateWindow 702-732, GUICreateLabel 735-767, GUICreateButton 822-854.
+// A bad type or a short argument list returns false and creates nothing. relative is a
+// real boolean (omitted or nil is false). A parent that is not a GUI element fails.
+// The text is stored with its line breaks. The draw line flattens them (OneLine).
+static int CreateSized(lua_State* L, const char* name, const char* type, bool hasParent) {
+    Args args{L};
+    GuiElement element;
+    bool relative = false;
+    uint32_t parent = 0;
+    if (!args.vec2(element.x, element.y) || !args.vec2(element.w, element.h) || !args.text(element.text) ||
+        !args.flag(relative, true, false) || (hasParent && !args.parent(parent))) {
+        return Reject(L, name, args, false);
+    }
+    element.type = type;
+    element.relPos = relative;
+    element.relSize = relative;
+    element.parent = parent;
+    PushElement(L, Emplace(std::move(element)));
+    return 1;
+}
+
+static int GuiCreateWindow(lua_State* L) { return CreateSized(L, "guiCreateWindow", "gui-window", false); }
+static int GuiCreateLabel(lua_State* L) { return CreateSized(L, "guiCreateLabel", "gui-label", true); }
+static int GuiCreateButton(lua_State* L) { return CreateSized(L, "guiCreateButton", "gui-button", true); }
+
+// CLuaGUIDefs.cpp:1867-1887. A bad element or a non-boolean leaves the widget unchanged.
+// guiSetVisible(element, 0) does not store visible: 0 is not a boolean.
+static int GuiSetVisible(lua_State* L) {
+    Args args{L};
+    uint32_t id = 0;
+    bool state = false;
+    if (!args.gui(id, nullptr) || !args.flag(state, false, false)) return Reject(L, "guiSetVisible", args, false);
+    if (GuiElement* element = Find(id)) element->visible = state;
+    lua_pushboolean(L, 1);
+    return 1;
+}
+
+// CLuaGUIDefs.cpp:1978-1996. IsVisible walks ancestors (CEGUI localOnly defaults false).
+static int GuiGetVisible(lua_State* L) {
+    Args args{L};
+    uint32_t id = 0;
+    if (!args.gui(id, nullptr)) return Reject(L, "guiGetVisible", args, false);
+    const GuiElement* element = Find(id);
+    lua_pushboolean(L, element && EffectivelyVisible(*element) ? 1 : 0);
+    return 1;
+}
+
+// CLuaGUIDefs.cpp:1335-1356. Stored text keeps line breaks.
+static int GuiSetText(lua_State* L) {
+    Args args{L};
+    uint32_t id = 0;
+    std::string text;
+    if (!args.gui(id, nullptr) || !args.text(text)) return Reject(L, "guiSetText", args, false);
+    if (GuiElement* element = Find(id)) element->text = std::move(text);
+    lua_pushboolean(L, 1);
+    return 1;
+}
+
+// CLuaGUIDefs.cpp:1708-1727. A bad element returns false, not an empty string.
+static int GuiGetText(lua_State* L) {
+    Args args{L};
+    uint32_t id = 0;
+    if (!args.gui(id, nullptr)) return Reject(L, "guiGetText", args, false);
+    const GuiElement* element = Find(id);
+    if (!element) {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+    lua_pushlstring(L, element->text.data(), element->text.size());
+    return 1;
+}
+
+// CLuaGUIDefs.cpp:2108-2133. relative omitted or nil is false. A number is not a boolean.
+static int GuiSetPosition(lua_State* L) {
+    Args args{L};
+    uint32_t id = 0;
+    double x = 0;
+    double y = 0;
+    bool relative = false;
+    if (!args.gui(id, nullptr) || !args.num(x) || !args.num(y) || !args.flag(relative, true, false))
+        return Reject(L, "guiSetPosition", args, false);
+    if (GuiElement* element = Find(id)) {
+        element->x = x;
+        element->y = y;
+        element->relPos = relative;
+    }
+    lua_pushboolean(L, 1);
+    return 1;
+}
+
+// CLuaGUIDefs.cpp:2080-2105.
+static int GuiSetSize(lua_State* L) {
+    Args args{L};
+    uint32_t id = 0;
+    double width = 0;
+    double height = 0;
+    bool relative = false;
+    if (!args.gui(id, nullptr) || !args.num(width) || !args.num(height) || !args.flag(relative, true, false))
+        return Reject(L, "guiSetSize", args, false);
+    if (GuiElement* element = Find(id)) {
+        element->w = width;
+        element->h = height;
+        element->relSize = relative;
+    }
+    lua_pushboolean(L, 1);
+    return 1;
+}
+
+// CLuaGUIDefs.cpp:1821-1841. The number is clamped to 0..1. A bad argument changes nothing.
+static int GuiSetAlpha(lua_State* L) {
+    Args args{L};
+    uint32_t id = 0;
+    double alpha = 0;
+    if (!args.gui(id, nullptr) || !args.num(alpha)) return Reject(L, "guiSetAlpha", args, false);
+    if (GuiElement* element = Find(id)) element->alpha = std::clamp(alpha, 0.0, 1.0);
+    lua_pushboolean(L, 1);
+    return 1;
+}
+
+// CLuaGUIDefs.cpp:1844-1864. effectiveAlpha defaults false. A bad element is false, not 0.
+static int GuiGetAlpha(lua_State* L) {
+    Args args{L};
+    uint32_t id = 0;
+    bool effective = false;
+    if (!args.gui(id, nullptr) || !args.flag(effective, true, false)) return Reject(L, "guiGetAlpha", args, false);
+    const GuiElement* element = Find(id);
+    if (!element) {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+    lua_pushnumber(L, effective ? EffectiveAlpha(*element) : element->alpha);
+    return 1;
+}
+
+// CLuaGUIDefs.cpp:1890-1910.
+static int GuiSetEnabled(lua_State* L) {
+    Args args{L};
+    uint32_t id = 0;
+    bool enabled = false;
+    if (!args.gui(id, nullptr) || !args.flag(enabled, false, false)) return Reject(L, "guiSetEnabled", args, false);
+    if (GuiElement* element = Find(id)) element->enabled = enabled;
+    lua_pushboolean(L, 1);
+    return 1;
+}
+
+// CLuaGUIDefs.cpp:1999-2017. IsEnabled walks ancestors (CEGUI localOnly defaults false).
+static int GuiGetEnabled(lua_State* L) {
+    Args args{L};
+    uint32_t id = 0;
+    if (!args.gui(id, nullptr)) return Reject(L, "guiGetEnabled", args, false);
+    const GuiElement* element = Find(id);
+    lua_pushboolean(L, element && EffectivelyEnabled(*element) ? 1 : 0);
+    return 1;
+}
+
+// CLuaFunctionDefs.Input.cpp:116-145 and CResource::ShowCursor (CResource.cpp:1707-1741).
+// Holds are keyed by ActiveVmOwner(), the resource name. toggleControls is checked
+// so a bad type fails, and is not applied: player-control toggling is not wired.
+static int ShowCursor(lua_State* L) {
+    Args args{L};
+    bool show = false;
+    bool toggleControls = true;
+    if (!args.flag(show, false, false) || !args.flag(toggleControls, true, true))
+        return Reject(L, "showCursor", args, false);
+    (void)toggleControls;
+    SetCursorHold(ActiveVmOwner(), show);
+    lua_pushboolean(L, 1);
+    return 1;
+}
+
+// CLuaFunctionDefs.Input.cpp:67-76. True while any resource's hold is still set.
+static int IsCursorShowing(lua_State* L) {
+    lua_pushboolean(L, AnyCursorHold() ? 1 : 0);
+    return 1;
+}
+
+// CLuaGUIDefs.cpp:593-611. true selects INPUTMODE_NO_BINDS, false selects INPUTMODE_ALLOW_BINDS.
+// Bind blocking is not wired. On the phone, true also opens the soft keyboard so a DX
+// edit that captures keys (the login boxes) receives onClientCharacter / onClientKey.
+static int GuiSetInputEnabled(lua_State* L) {
+    Args args{L};
+    bool enabled = false;
+    if (!args.flag(enabled, false, false)) return Reject(L, "guiSetInputEnabled", args, false);
+    g_inputMode = enabled ? InputMode::NoBinds : InputMode::AllowBinds;
+    lua_pushboolean(L, 1);
+    return 1;
+}
+
+// CLuaGUIDefs.cpp:587-590. Starts false (INPUTMODE_NO_BINDS_ON_EDIT, no focused edit).
+static int GuiGetInputEnabled(lua_State* L) {
+    lua_pushboolean(L, InputEnabledNow() ? 1 : 0);
+    return 1;
+}
+
+// CLuaElementDefs.cpp:1717-1738. False unless this GUI element is actually deleted.
+// Non-GUI elements are not deleted here.
+static int DestroyElement(lua_State* L) {
+    Args args{L};
+    uint32_t id = 0;
+    if (!args.gui(id, nullptr)) return Reject(L, "destroyElement", args, false);
+    lua_pushboolean(L, GuiDestroy(id) ? 1 : 0);
+    return 1;
+}
+
+// InstallElementLua (when that file is linked) replaces destroyElement after
+// InstallGuiBindings. This runs from InstallGuiLua, which is called again after
+// that, and keeps the GUI result: a GUI id returns whether GuiDestroy deleted it.
+// Any other id is handed to the binding that was already installed (catalog
+// elements). A value that is not an element table deletes nothing and returns false.
+static int DestroyElementDispatch(lua_State* L) {
+    if (lua_type(L, 1) != LUA_TTABLE) {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+    const uint32_t id = ElementIdOf(L, 1);
+    if (WorldRPG::Game::ReleaseScriptPed(id)) {
+        lua_pushboolean(L, 1);
+        return 1;
+    }
+    if (id == 0 || id >= kFirstGuiId) {
+        lua_pushboolean(L, (id >= kFirstGuiId && GuiDestroy(id)) ? 1 : 0);
+        return 1;
+    }
+    const int argc = lua_gettop(L);
+    lua_pushvalue(L, lua_upvalueindex(1));
+    lua_insert(L, 1);
+    lua_call(L, argc, 1);
+    return 1;
+}
+
+static void InstallDestroyElement(lua_State* L) {
+    lua_getglobal(L, "destroyElement");
+    if (!lua_isfunction(L, -1)) {
+        lua_pop(L, 1);
+        lua_pushcfunction(L, DestroyElement);
+        lua_setglobal(L, "destroyElement");
+        return;
+    }
+    lua_pushcclosure(L, DestroyElementDispatch, 1);
+    lua_setglobal(L, "destroyElement");
+}
+
+static void RegisterGuiExtensions(lua_State* L) {
+    const struct { const char* name; lua_CFunction fn; } binds[] = {
+        {"dxGetPixelColor", DxGetPixelColor},
+        {"dxGetPixelsFormat", DxGetPixelsFormat},
+        {"dxSetPixelColor", DxSetPixelColor},
+        {"guiBlur", GuiBlur},
+        {"guiEditIsMasked", GuiEditIsMasked},
+        {"guiEditSetMasked", GuiEditSetMasked},
+        {"guiFocus", GuiFocus},
+        {"guiGetInputMode", GuiGetInputMode},
+        {"guiSetInputMode", GuiSetInputMode},
+        {"guiBringToFront", GuiBringToFront},
+        {"guiCheckBoxGetSelected", GuiCheckBoxGetSelected},
+        {"guiCheckBoxSetSelected", GuiCheckBoxSetSelected},
+        {"guiComboBoxAddItem", GuiComboBoxAddItem},
+        {"guiComboBoxClear", GuiComboBoxClear},
+        {"guiComboBoxGetItemCount", GuiComboBoxGetItemCount},
+        {"guiComboBoxGetItemText", GuiComboBoxGetItemText},
+        {"guiComboBoxGetSelected", GuiComboBoxGetSelected},
+        {"guiComboBoxIsOpen", GuiComboBoxIsOpen},
+        {"guiComboBoxRemoveItem", GuiComboBoxRemoveItem},
+        {"guiComboBoxSetItemText", GuiComboBoxSetItemText},
+        {"guiComboBoxSetOpen", GuiComboBoxSetOpen},
+        {"guiComboBoxSetSelected", GuiComboBoxSetSelected},
+        {"guiCreateCheckBox", GuiCreateCheckBox},
+        {"guiCreateComboBox", GuiCreateComboBox},
+        {"guiCreateEdit", GuiCreateEdit},
+    };
+    for (const auto& bind : binds) {
+        lua_pushcfunction(L, bind.fn);
+        lua_setglobal(L, bind.name);
+    }
+    InstallDestroyElement(L);
+}
+
 } // namespace WorldRPG::Script
+
+extern "C" void InstallGuiLua(lua_State* L) {
+    WorldRPG::Script::RegisterGuiExtensions(L);
+}

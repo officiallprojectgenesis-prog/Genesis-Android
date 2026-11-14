@@ -219,8 +219,8 @@ bool ReadCompressedU16(WorldRPG::Net::BitStreamReader& reader, uint16_t& out) {
     return true;
 }
 
-// Server -> client PLAYER_PURESYNC. Stops at the position: one player per
-// packet, and the camera tail is not needed to place the ped.
+// Server -> client PLAYER_PURESYNC. CNetAPI::ReadPlayerPuresync (CNetAPI.cpp 830-1021).
+// One player per packet. The weapon and aim tail is not applied.
 bool HandlePlayerPureSync(const uint8_t* body, size_t length, size_t bits) {
     WorldRPG::Net::BitStreamReader reader(body, length, bits);
     uint32_t id = 0;
@@ -254,20 +254,61 @@ bool HandlePlayerPureSync(const uint8_t* body, size_t length, size_t bits) {
     float vx = 0, vy = 0, vz = 0;
     if (hasVelocity && !ReadMtaVelocity(reader, vx, vy, vz)) return false;
     (void)latency;
-    if (id != WorldRPG::ServerWorld::LocalPlayer())
-        WorldRPG::Game::NoteRemotePed(id, x, y, z, heading, vx, vy, vz);
-    // Victim health (SPlayerHealthSync, 8 bits, 0..255), read after velocity as in
-    // CNetAPI::ReadPlayerPuresync. A failed read keeps the position update.
-    uint8_t health = 0;
-    if (reader.Read(health)) {
-        WorldRPG::Combat::RegisterVictimHealth(id, health, WorldRPG::ServerWorld::LocalPlayer());
+    // CNetAPI::ReadPlayerPuresync (CNetAPI.cpp 898-1004): health, armor, camera, then
+    // SetMoveSpeed (already read), SetTargetPosition / SetTargetRotation, SetControllerState.
+    // SPlayerHealthSync / SPlayerArmorSync are SFloatAsBitsSync<8> (SyncStructures.h 189-198).
+    uint8_t healthRaw = 0;
+    float health = 100.f, armor = 0.f;
+    bool hasHealth = false, hasArmor = false;
+    float camera = 0.f;
+    if (reader.Read(healthRaw)) {
+        hasHealth = true;
+        health = static_cast<float>(healthRaw);  // range 0..255, so the byte is the value
+        WorldRPG::Combat::RegisterVictimHealth(id, healthRaw, WorldRPG::ServerWorld::LocalPlayer());
+        uint8_t armorRaw = 0;
+        if (reader.Read(armorRaw)) {
+            hasArmor = true;
+            armor = 127.5f * (static_cast<float>(armorRaw) / 255.f);
+            uint8_t camRaw[2] = {};
+            if (reader.ReadBits(camRaw, 12)) {
+                const unsigned camValue = camRaw[0] | ((camRaw[1] & 0x0Fu) << 8);
+                camera = -3.14159265f + (static_cast<float>(camValue & 0xFFFu) / 4095.f) * (2.f * 3.14159265f);
+            }
+        }
     } else {
         PKT_LOGI("DIAG PURESYNC health read failed id=%u bit=%zu", id, reader.GetReadOffsetBits());
+    }
+    // SFullKeysyncSync stores the stick as short(char * 128/127) (SyncStructures.h 972-973).
+    const int sx = static_cast<int>(static_cast<int8_t>(stickX)) * 128 / 127;
+    const int sy = static_cast<int>(static_cast<int8_t>(stickY)) * 128 / 127;
+    // ReadPlayerPuresync clears ShockButtonL and ducks from the flag (CNetAPI.cpp 986-1004).
+    const bool ducked = (flagBytes[0] & 0x08) != 0;
+    const bool fire = (keys & 0x10u) != 0;
+    if (id != WorldRPG::ServerWorld::LocalPlayer()) {
+        WorldRPG::Game::NoteRemotePlayerSync(id, x, y, z, heading, vx, vy, vz, hasVelocity,
+            sx, sy, camera, fire, ducked, hasHealth, health, hasArmor, armor);
+        if (hasHealth) WorldRPG::Game::LockPedHealth(id, health);
+        if (hasArmor) WorldRPG::Game::LockPedArmor(id, armor);
+        WorldRPG::Game::SetPedCameraRotation(id, camera);
+    }
+    static bool loggedGaps = false;
+    if (!loggedGaps) {
+        loggedGaps = true;
+        PKT_LOGI("DIAG ReadPlayerPuresync (CNetAPI.cpp 830-1021): applied controller, SetMoveSpeed, "
+                 "health/armor at CPed +0x6AC/+0x6B4, target position and SetTargetRotation. "
+                 "Not run: CanUpdateSync (no per-player time context), SetLatency, SetHasJetPack, "
+                 "SetWearingGoggles, contact origin, SetChoking, SetOnFire, SetStealthAiming, "
+                 "AddChangeWeapon / SetAimInterpolated, RunClimbingTask, RunSwimTask. "
+                 "Duck is the flag PresentOnFoot passes to SetTaskDuckSecondary. "
+                 "SetCameraRotation is stored; SwitchContext does not write TheCamera+0x154. "
+                 "LockHealth is written each game tick from StreamedInPulse (CClientPed.cpp 4738-4748). "
+                 "The dead-to-alive recreate in InternalSetHealth is logged, not run. "
+                 "Native task block is absent at bitstream 0x0030.");
     }
     static int reports = 0;
     if (reports < 4) {
         ++reports;
-        PKT_LOGI("PlayerSync: id=%u at %.0f %.0f %.0f", id, x, y, z);
+        PKT_LOGI("PlayerSync: id=%u at %.0f %.0f %.0f stick %d %d", id, x, y, z, sx, sy);
     }
     return true;
 }
@@ -382,14 +423,14 @@ bool HandlePedSync(const uint8_t* body, size_t length, size_t bits) {
         const bool animationKilled = (ucFlags & 0x80) != 0;
 
         if (hasPosition || (ucFlags & 0x02)) {
-            WorldRPG::Game::NoteRemotePed(id, x, y, z, heading, vx, vy, vz);
+            WorldRPG::Game::NoteRemotePed(id, x, y, z, heading, vx, vy, vz, (ucFlags & 0x04) != 0);
             // Stage S4: observed peds interpolate to the target (reference SetTargetPosition /
             // SetTargetRotation with the spatial receive interval). Hosted peds keep local authority.
             if (ucFlags & 0x07) {
                 const uint64_t rate = PedSyncState::SpatialSyncRateMs(id, true);
                 if (!PedSyncState::IsHosted(id)) {
                     if (hasPosition)
-                        PedSyncState::SetObserverPosition(id, {x, y, z}, {vx, vy, vz}, rate);
+                        PedSyncState::SetObserverPosition(id, {x, y, z}, {vx, vy, vz}, rate, (ucFlags & 0x04) != 0);
                     if (ucFlags & 0x02)
                         PedSyncState::SetObserverRotation(id, heading, rate);
                 }
@@ -402,10 +443,12 @@ bool HandlePedSync(const uint8_t* body, size_t length, size_t bits) {
             WorldRPG::Game::SetPedOnFire(id, bOnFire);
             WorldRPG::Game::SetPedInWater(id, bIsInWater);
             if (animationKilled) WorldRPG::Game::KillPedAnimation(id);
-            if (ucFlags & 0x08) WorldRPG::Game::LockPedHealth(id, fHealth);
-            if (ucFlags & 0x10) WorldRPG::Game::LockPedArmor(id, fArmor);
             ++applied;
         }
+        // CPedSync::Packet_PedSync locks health and armor whenever those flags are set
+        // (CPedSync.cpp 439-442), including a packet that has no position.
+        if (ucFlags & 0x08) WorldRPG::Game::LockPedHealth(id, fHealth);
+        if (ucFlags & 0x10) WorldRPG::Game::LockPedArmor(id, fArmor);
     }
     if (applied > 0) {
         static int reports = 0;
@@ -465,7 +508,18 @@ bool HandleKeySync(const uint8_t* body, size_t length, size_t bits) {
             if ((buttons & 0x10u) != 0) WorldRPG::Combat::StartRemoteMelee(id, heading);
         }
     }
+    // CNetAPI::ReadKeysync (CNetAPI.cpp 713-723): ShockButtonL is cleared for an on-foot ped,
+    // then SetControllerState, SetCameraRotation, SetTargetRotation, Duck.
+    // NoteRemoteAim replaces the stick, including a zero stick over the previous one.
     WorldRPG::Game::NoteRemoteAim(id, heading, camera, sx, sy, punch, ducked);
+    WorldRPG::Game::SetPedCameraRotation(id, camera);
+    static bool loggedKeyGaps = false;
+    if (!loggedKeyGaps) {
+        loggedKeyGaps = true;
+        PKT_LOGI("DIAG ReadKeysync (CNetAPI.cpp 573-727): controller, camera and duck flag are stored. "
+                 "Not run: weapon slot / aim (SetAimInterpolated), SetChoking, "
+                 "vehicle keysync tail, SwitchContext write of TheCamera+0x154.");
+    }
     if (!attack || punch || !SlotHasAmmo(slot)) return true;
     uint16_t clip = 0;
     if (!ReadCompressedU16(reader, clip)) return true;
@@ -959,6 +1013,17 @@ bool PacketHandler::handlePacket(uint8_t packetId, const uint8_t* data, size_t l
         const uint8_t* body = data + 1;
         const size_t bodyLength = length - 1;
         const size_t bodyBits = bitLength >= 8 ? bitLength - 8 : bodyLength * 8;
+        // ROADMAP_PEDS_SYNC 0.1: which ped-relevant packets reach the 0x0030 peer, and with which RPC function ids.
+        // Counting ePacketID (Packets.h) gives PED_WASTED 64, LUA 76, LUA_ELEMENT_RPC 77, PED_TASK 101; the phone
+        // routes Lua RPCs on 68. Log only, no dispatch change.
+        if (gameId == 64 || gameId == 68 || gameId == 76 || gameId == 77 || gameId == 101) {
+            static int seen[256] = {};
+            if (seen[gameId] < 8) {
+                ++seen[gameId];
+                PKT_LOGI("DIAG ped-roadmap packet id=%u len=%zu bits=%zu first=%u", gameId, bodyLength, bodyBits,
+                         bodyLength > 0 ? static_cast<unsigned>(body[0]) : 0u);
+            }
+        }
         // Real ePacketID values from Shared/sdk/net/Packets.h. The map below
         // still uses the provisional 0..7 numbering and does not match these.
         if (gameId == 43) return HandleChatEcho(body, bodyLength, bodyBits);

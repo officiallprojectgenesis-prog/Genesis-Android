@@ -2,6 +2,10 @@
 
 #include <cstdint>
 #include <string>
+#include <utility>
+#include <vector>
+
+#include "entity/PedSpawn.h"
 
 namespace WorldRPG::Net {
 struct ResourceStartInfo;
@@ -22,6 +26,22 @@ int ModelOf(uint32_t id);
 
 bool GetData(uint32_t id, const char* key, double& number, std::string& text, bool& isNumber);
 
+// One custom-data value as GetData reports it (number, or text when number is false).
+struct ElementDataValue {
+    bool number = false;
+    double value = 0;
+    std::string text;
+};
+
+// Own custom data for one element. Empty when the element has none.
+void CopyElementData(uint32_t id, std::vector<std::pair<std::string, ElementDataValue>>& out);
+
+// Nick from the join or from PLAYER_LIST. False when this id has no nick yet.
+bool CopyPlayerNick(uint32_t id, std::string& out);
+void NotePlayerNick(uint32_t id, const std::string& nick);
+// Case-insensitive nick match among players (CClientPlayerManager::Get, default insensitive).
+bool FindPlayerByNick(const std::string& nick, uint32_t& id);
+
 void OnEntityAdd(const uint8_t* body, size_t length, size_t bits);
 void OnEntityRemove(const uint8_t* body, size_t length, size_t bits);
 void OnCustomData(const uint8_t* body, size_t length, size_t bits);
@@ -38,12 +58,22 @@ struct ActorSpawn {
     float rotX = 0, rotY = 0;
     float health = -1.f;
     bool hosted = false;
+    // ENTITY_ADD interior (CPacketHandler common header). Outdoor traffic is 0.
+    uint8_t interior = 0;
 };
-int CopyActors(ActorSpawn* out, int capacity);
+// Copies peds (kind 14) and vehicles (kind 2).
+// Both limits negative: the two kinds share `capacity` (a run of vehicles can fill it).
+// Otherwise each kind stops at its own limit and peds are copied first, so a full vehicle
+// quota cannot take a ped slot. `capacity` is the size of `out`.
+int CopyActors(ActorSpawn* out, int capacity, int pedLimit = -1, int vehicleLimit = -1);
 void SetActorHost(uint32_t id, bool host);
 bool ActorHosted(uint32_t id);
 bool ElementPose(uint32_t id, float& x, float& y, float& z);
 const char* ElementKindName(uint32_t id);
+// Sync time context from ENTITY_ADD (0 when this id has none). Desktop CClientEntity::GetSyncTimeContext.
+uint8_t SyncTimeContext(uint32_t id);
+// The ENTITY_ADD ped body beyond pose and model (PedSpawn.h). False when the id is not a ped from ENTITY_ADD.
+bool CopyPedSpawn(uint32_t id, Entity::PedSpawn& out);
 
 // Radar blips and the F11 snapshot. Call on the game thread.
 void Tick(float playerX, float playerY, float playerZ);

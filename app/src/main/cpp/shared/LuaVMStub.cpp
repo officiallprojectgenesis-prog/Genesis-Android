@@ -30,6 +30,8 @@ extern "C" {
 #include <vector>
 #include <mutex>
 
+namespace WorldRPG::JniBridge { void PostGameLine(int kind, const char* text); }
+
 namespace WorldRPG::Script {
 
 struct DxRuntime {
@@ -54,6 +56,21 @@ DxRuntime g_dx;
 struct CursorEvent { int action = 0; float x = 0, y = 0; };
 static std::mutex g_cursorMutex;
 static std::vector<CursorEvent> g_cursorQueue;
+// Soft-keyboard edits from the UI thread. text is inserted after backspaces.
+struct ScriptInput { std::string text; int backspaces = 0; std::string key; };
+static std::mutex g_inputMutex;
+static std::vector<ScriptInput> g_inputQueue;
+// playSound handles. The login music is an http URL (login_audio_client.lua).
+constexpr uint32_t kFirstSoundId = 0x61000001u;
+struct SoundSlot { uint32_t id = 0; bool alive = false; float volume = 1.f; };
+static std::mutex g_soundMu;
+static SoundSlot g_sounds[8];
+static uint32_t g_nextSound = kFirstSoundId;
+static std::mutex g_soundEndMu;
+static std::vector<uint32_t> g_soundEnded;
+static bool SoundAlive(uint32_t id);
+// The IME action button asked to leave the field. Holds the keyboard closed until the next tap.
+static bool g_imeDismissed = false;
 static float g_cursorX = 0.f, g_cursorY = 0.f;
 static LuaVMStub* g_active = nullptr;
 
@@ -116,6 +133,131 @@ static void fireHandlers(const char* name, int nargs) {
         }
     }
     lua_pop(g_dx.L, nargs);
+}
+
+// Desktop onClientKey is one down and one up (CClientGame key handler). state is the press boolean.
+static void FireKey(const char* key) {
+    lua_pushstring(g_dx.L, key);
+    lua_pushboolean(g_dx.L, 1);
+    fireHandlers("onClientKey", 2);
+    lua_pushstring(g_dx.L, key);
+    lua_pushboolean(g_dx.L, 0);
+    fireHandlers("onClientKey", 2);
+}
+
+// source is the element. Changed and Accepted also take it as their argument
+// (CClientGame.cpp 2811-2812). Focus and blur take none (2826-2827).
+static void FireElementEvent(const char* name, uint32_t id, bool withArg) {
+    if (!g_dx.L || id == 0) return;
+    lua_getglobal(g_dx.L, "source");
+    PushElement(g_dx.L, id);
+    lua_setglobal(g_dx.L, "source");
+    if (withArg) PushElement(g_dx.L, id);
+    fireHandlers(name, withArg ? 1 : 0);
+    lua_setglobal(g_dx.L, "source");
+}
+
+static void OnGuiFocusHook(uint32_t id, bool focused) {
+    static int depth = 0;
+    if (depth > 4 || !g_dx.L) return;
+    ++depth;
+    FireElementEvent(focused ? "onClientGUIFocus" : "onClientGUIBlur", id, false);
+    --depth;
+}
+
+static size_t CodePointLength(const std::string& text, size_t index) {
+    if (index >= text.size()) return 0;
+    const auto lead = static_cast<unsigned char>(text[index]);
+    size_t n = 1;
+    if ((lead & 0xE0) == 0xC0) n = 2;
+    else if ((lead & 0xF0) == 0xE0) n = 3;
+    else if ((lead & 0xF8) == 0xF0) n = 4;
+    if (index + n > text.size()) return 1;
+    return n;
+}
+
+// CClientGame::CharacterKeyHandler (2355-2381) for a DX edit, and the CEGUI edit
+// handlers for a focused gui-edit (onClientGUIChanged / onClientGUIAccepted).
+// A focused gui-edit consumes the keys, so onClientCharacter does not also run.
+static void ApplyScriptInput() {
+    std::vector<ScriptInput> events;
+    {
+        std::lock_guard<std::mutex> lock(g_inputMutex);
+        events.swap(g_inputQueue);
+    }
+    if (!g_dx.L) return;
+    for (const ScriptInput& ev : events) {
+        const uint32_t edit = GuiFocusedEdit();
+        bool enter = ev.key == "enter";
+        // The soft-keyboard action button is "tab": next DX field, not submit.
+        // Enter stays available for an explicit enter key. The button also closes the IME.
+        const bool tab = ev.key == "tab";
+        if (tab) g_imeDismissed = true;
+        if (edit) {
+            bool changed = false;
+            for (int i = 0; i < ev.backspaces; ++i) {
+                if (GuiEditErase()) changed = true;
+            }
+            for (size_t i = 0; i < ev.text.size();) {
+                const size_t n = CodePointLength(ev.text, i);
+                if (n == 0) break;
+                const unsigned char lead = static_cast<unsigned char>(ev.text[i]);
+                if (ev.text[i] == '\n' || ev.text[i] == '\r') enter = true;
+                else if (lead >= 32 && GuiEditAppend(ev.text.data() + i, n)) changed = true;
+                i += n;
+            }
+            if (changed) FireElementEvent("onClientGUIChanged", edit, true);
+            if (enter) {
+                const uint32_t still = GuiFocusedEdit();
+                FireElementEvent("onClientGUIAccepted", still ? still : edit, true);
+            }
+            continue;
+        }
+        if (tab) FireKey("tab");
+        if (!GuiKeyCapture()) continue;
+        for (int i = 0; i < ev.backspaces; ++i) FireKey("backspace");
+        for (size_t i = 0; i < ev.text.size();) {
+            const size_t n = CodePointLength(ev.text, i);
+            if (n == 0) break;
+            const unsigned char lead = static_cast<unsigned char>(ev.text[i]);
+            if (ev.text[i] != '\n' && ev.text[i] != '\r' && lead >= 32) {
+                lua_pushlstring(g_dx.L, ev.text.data() + i, n);
+                fireHandlers("onClientCharacter", 1);
+            }
+            i += n;
+        }
+        if (enter) FireKey("enter");
+    }
+}
+
+static bool SoundAlive(uint32_t id) {
+    std::lock_guard<std::mutex> lock(g_soundMu);
+    for (const auto& slot : g_sounds)
+        if (slot.alive && slot.id == id) return true;
+    return false;
+}
+
+static void PumpEndedSounds() {
+    std::vector<uint32_t> ended;
+    {
+        std::lock_guard<std::mutex> lock(g_soundEndMu);
+        ended.swap(g_soundEnded);
+    }
+    if (!g_dx.L) return;
+    for (uint32_t id : ended) {
+        if (!SoundAlive(id)) continue;
+        {
+            std::lock_guard<std::mutex> lock(g_soundMu);
+            for (auto& slot : g_sounds)
+                if (slot.id == id) slot.alive = false;
+        }
+        lua_getglobal(g_dx.L, "source");
+        PushElement(g_dx.L, id);
+        lua_setglobal(g_dx.L, "source");
+        lua_pushstring(g_dx.L, "finished");
+        fireHandlers("onClientSoundStopped", 1);
+        lua_setglobal(g_dx.L, "source");
+    }
 }
 
 static int l_addEventHandler(lua_State* L) {
@@ -381,6 +523,86 @@ static int l_getPedArmor(lua_State* L) {
     return 1;
 }
 
+static const char* GroundLuaTypeName(int type) {
+    switch (type) {
+        case LUA_TNIL: return "nil";
+        case LUA_TBOOLEAN: return "boolean";
+        case LUA_TNUMBER: return "number";
+        case LUA_TSTRING: return "string";
+        case LUA_TTABLE: return "table";
+        case LUA_TFUNCTION: return "function";
+        case LUA_TUSERDATA: return "userdata";
+        case LUA_TLIGHTUSERDATA: return "light userdata";
+        case LUA_TTHREAD: return "thread";
+        default: return "none";
+    }
+}
+
+// CScriptArgReader::SetTypeError / GetFullErrorMessage (CScriptArgReader.h 1468-1529, 1589).
+static void GroundTypeError(char* buf, size_t n, const char* expected, int index, lua_State* L) {
+    const char* got = GroundLuaTypeName(lua_type(L, index));
+    const char* value = lua_tostring(L, index);
+    if (value && value[0] != '\0') {
+        std::snprintf(buf, n, "Bad argument @ 'getGroundPosition' [Expected %s at argument %d, got %s '%s']",
+                      expected, index, got, value);
+    } else {
+        std::snprintf(buf, n, "Bad argument @ 'getGroundPosition' [Expected %s at argument %d, got %s]",
+                      expected, index, got);
+    }
+}
+
+// CScriptArgReader::ReadVector3D (CScriptArgReader.h 308-350) then ReadNumber (56-97).
+// Desktop accepts a number/string triple or vector userdata. A table is an error.
+static bool ReadGroundVector(lua_State* L, float& x, float& y, float& z, char* err, size_t errN) {
+    const int first = lua_type(L, 1);
+    if (first != LUA_TNUMBER && first != LUA_TSTRING) {
+        GroundTypeError(err, errN, "vector3", 1, L);
+        return false;
+    }
+    float* coords[3] = {&x, &y, &z};
+    for (int i = 0; i < 3; ++i) {
+        const int index = i + 1;
+        const int type = lua_type(L, index);
+        if (type != LUA_TNUMBER && type != LUA_TSTRING) {
+            GroundTypeError(err, errN, "number", index, L);
+            return false;
+        }
+        if (!lua_isnumber(L, index)) {
+            std::snprintf(err, errN, "Bad argument @ 'getGroundPosition' [Expected number, got non-convertible string]");
+            return false;
+        }
+        const lua_Number number = lua_tonumber(L, index);
+        if (std::isnan(number)) {
+            std::snprintf(err, errN, "Bad argument @ 'getGroundPosition' [Expected number, got NaN]");
+            return false;
+        }
+        *coords[i] = static_cast<float>(number);
+    }
+    return true;
+}
+
+// CLuaWorldDefs::GetGroundPosition (CLuaWorldDefs.cpp 872-893). The world query is
+// CWorldSA::FindGroundZFor3DPosition (CWorldSA.cpp 708-729), run on the game thread.
+static int l_getGroundPosition(lua_State* L) {
+    float x = 0, y = 0, z = 0;
+    char err[256];
+    if (!ReadGroundVector(L, x, y, z, err, sizeof(err))) {
+        LUA_LOGI("WARNING: %s", err);
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+    float ground = 0;
+    if (!Game::FindGroundZFor3DPosition(x, y, z, ground)) {
+        // Symbol missing or the game thread did not run the call (DIAG is in
+        // FindGroundZFor3DPosition). False matches this function's error result.
+        // native-ped-traffic client.lua 42-43 then keeps the player's Z.
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+    lua_pushnumber(L, static_cast<lua_Number>(ground));
+    return 1;
+}
+
 // Desktop MTA getElementRotation(): rx, ry, rz. Not tracked on the phone yet.
 static int l_getElementRotation(lua_State* L) {
     lua_pushnumber(L, 0.0);
@@ -535,7 +757,7 @@ static int l_isElement(lua_State* L) {
     const uint32_t id = ElementIdOf(L, 1);
     float x = 0, y = 0, z = 0;
     const bool known = id != 0 && (id == ServerWorld::LocalPlayer() || id == ServerWorld::LastResourceRoot() ||
-                                    GuiIsElement(id) ||
+                                    GuiIsElement(id) || Game::ScriptPedAlive(id) || SoundAlive(id) ||
                                     ServerWorld::ElementPose(id, x, y, z) || Game::CopyRemotePose(id, x, y, z));
     lua_pushboolean(L, known ? 1 : 0);
     return 1;
@@ -551,6 +773,14 @@ static int l_getElementType(lua_State* L) {
     const uint32_t id = ElementIdOf(L, 1);
     if (const char* guiType = GuiElementType(id)) {
         lua_pushstring(L, guiType);
+        return 1;
+    }
+    if (Game::ScriptPedAlive(id)) {
+        lua_pushstring(L, "ped");
+        return 1;
+    }
+    if (SoundAlive(id)) {
+        lua_pushstring(L, "sound");
         return 1;
     }
     lua_pushstring(L, id == 0 ? "userdata" : ServerWorld::ElementKindName(id));
@@ -599,8 +829,20 @@ static int l_getElementsByType(lua_State* L) {
         PushElement(L, ServerWorld::LocalPlayer());
         lua_rawseti(L, -2, index++);
     }
+    // Desktop GetElementsByType (CLuaElementDefs.cpp 798-848) asks FindAllChildrenByType for
+    // one type name. The phone still returns at most 96 and ignores the start-element and
+    // streamed-in arguments. The copy is that one kind, so vehicles cannot fill a "ped" query.
+    int pedLimit = -1;
+    int vehicleLimit = -1;
+    if (std::strcmp(kind, "ped") == 0) {
+        pedLimit = 96;
+        vehicleLimit = 0;
+    } else if (std::strcmp(kind, "vehicle") == 0) {
+        pedLimit = 0;
+        vehicleLimit = 96;
+    }
     ServerWorld::ActorSpawn actors[96];
-    const int count = ServerWorld::CopyActors(actors, 96);
+    const int count = ServerWorld::CopyActors(actors, 96, pedLimit, vehicleLimit);
     for (int i = 0; i < count; ++i) {
         const bool ped = actors[i].kind == 14 && std::strcmp(kind, "ped") == 0;
         const bool vehicle = actors[i].kind == 2 && std::strcmp(kind, "vehicle") == 0;
@@ -695,6 +937,214 @@ static int l_getNetworkUsageData(lua_State* L) {
     return 1;
 }
 
+extern "C" void InstallCategoryLua(lua_State* L);
+
+// Registration wardrobe. Desktop order is createPed, setTime, setWeather,
+// setCameraMatrix every frame, addPedClothes / removePedClothes, setElementRotation.
+// setCameraTarget(localPlayer) ends the fixed camera.
+static int l_createPed(lua_State* L) {
+    if (!lua_isnumber(L, 1) || !lua_isnumber(L, 2) || !lua_isnumber(L, 3) || !lua_isnumber(L, 4)) {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+    const int model = static_cast<int>(lua_tointeger(L, 1));
+    const float rot = lua_isnumber(L, 5) ? static_cast<float>(lua_tonumber(L, 5)) : 0.f;
+    const uint32_t id = Game::NoteScriptPed(model, static_cast<float>(lua_tonumber(L, 2)),
+        static_cast<float>(lua_tonumber(L, 3)), static_cast<float>(lua_tonumber(L, 4)), rot);
+    if (!id) {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+    PushElement(L, id);
+    return 1;
+}
+
+static int l_addPedClothes(lua_State* L) {
+    const uint32_t id = ElementIdOf(L, 1);
+    const char* texture = lua_tostring(L, 2);
+    const char* model = lua_tostring(L, 3);
+    const int type = static_cast<int>(lua_tointeger(L, 4));
+    if (!Game::ScriptPedAlive(id) || !texture || !model || type < 0 || type >= 18) {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+    Game::NoteScriptClothes(id, texture, model, type, false);
+    lua_pushboolean(L, 1);
+    return 1;
+}
+
+static int l_removePedClothes(lua_State* L) {
+    const uint32_t id = ElementIdOf(L, 1);
+    const int type = static_cast<int>(lua_tointeger(L, 2));
+    if (!Game::ScriptPedAlive(id) || type < 0 || type >= 18) {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+    Game::NoteScriptClothes(id, nullptr, nullptr, type, true);
+    lua_pushboolean(L, 1);
+    return 1;
+}
+
+static int l_setElementRotation(lua_State* L) {
+    const uint32_t id = ElementIdOf(L, 1);
+    if (Game::ScriptPedAlive(id) && lua_isnumber(L, 4))
+        Game::NoteScriptRotation(id, static_cast<float>(lua_tonumber(L, 4)));
+    lua_pushboolean(L, 1);
+    return 1;
+}
+
+static int l_setElementFrozen(lua_State* L) {
+    const uint32_t id = ElementIdOf(L, 1);
+    if (Game::ScriptPedAlive(id)) Game::NoteScriptFrozen(id, lua_toboolean(L, 2) != 0);
+    lua_pushboolean(L, 1);
+    return 1;
+}
+
+static int l_setCameraMatrix(lua_State* L) {
+    if (!lua_isnumber(L, 1) || !lua_isnumber(L, 2) || !lua_isnumber(L, 3)) {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+    const float lx = lua_isnumber(L, 4) ? static_cast<float>(lua_tonumber(L, 4)) : 0.f;
+    const float ly = lua_isnumber(L, 5) ? static_cast<float>(lua_tonumber(L, 5)) : 0.f;
+    const float lz = lua_isnumber(L, 6) ? static_cast<float>(lua_tonumber(L, 6)) : 0.f;
+    Game::NoteScriptCamera(static_cast<float>(lua_tonumber(L, 1)), static_cast<float>(lua_tonumber(L, 2)),
+        static_cast<float>(lua_tonumber(L, 3)), lx, ly, lz);
+    lua_pushboolean(L, 1);
+    return 1;
+}
+
+static int l_setCameraTarget(lua_State* L) {
+    (void)L;
+    Game::ClearScriptCamera();
+    lua_pushboolean(L, 1);
+    return 1;
+}
+
+static int l_setTime(lua_State* L) {
+    if (!lua_isnumber(L, 1) || !lua_isnumber(L, 2)) {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+    lua_pushboolean(L, Game::NoteScriptTime(static_cast<int>(lua_tointeger(L, 1)),
+        static_cast<int>(lua_tointeger(L, 2))) ? 1 : 0);
+    return 1;
+}
+
+static int l_playSound(lua_State* L) {
+    const char* path = lua_tostring(L, 1);
+    if (!path || path[0] == '\0') {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+    const bool loop = lua_toboolean(L, 2) != 0;
+    uint32_t id = 0;
+    {
+        std::lock_guard<std::mutex> lock(g_soundMu);
+        for (auto& slot : g_sounds) {
+            if (slot.alive) continue;
+            slot.alive = true;
+            slot.volume = 1.f;
+            slot.id = g_nextSound++;
+            if (g_nextSound < kFirstSoundId) g_nextSound = kFirstSoundId;
+            id = slot.id;
+            break;
+        }
+    }
+    if (!id) {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+    char line[512];
+    std::snprintf(line, sizeof(line), "%u|%d|%s", id, loop ? 1 : 0, path);
+    ::WorldRPG::JniBridge::PostGameLine(11, line);
+    PushElement(L, id);
+    return 1;
+}
+
+static int l_stopSound(lua_State* L) {
+    const uint32_t id = ElementIdOf(L, 1);
+    if (!SoundAlive(id)) {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+    {
+        std::lock_guard<std::mutex> lock(g_soundMu);
+        for (auto& slot : g_sounds)
+            if (slot.id == id) slot.alive = false;
+    }
+    char line[32];
+    std::snprintf(line, sizeof(line), "%u", id);
+    ::WorldRPG::JniBridge::PostGameLine(12, line);
+    lua_pushboolean(L, 1);
+    return 1;
+}
+
+static int l_setSoundVolume(lua_State* L) {
+    const uint32_t id = ElementIdOf(L, 1);
+    if (!SoundAlive(id) || !lua_isnumber(L, 2)) {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+    float volume = static_cast<float>(lua_tonumber(L, 2));
+    if (volume < 0.f) volume = 0.f;
+    if (volume > 1.f) volume = 1.f;
+    {
+        std::lock_guard<std::mutex> lock(g_soundMu);
+        for (auto& slot : g_sounds)
+            if (slot.id == id) slot.volume = volume;
+    }
+    char line[64];
+    std::snprintf(line, sizeof(line), "%u|%.3f", id, volume);
+    ::WorldRPG::JniBridge::PostGameLine(13, line);
+    lua_pushboolean(L, 1);
+    return 1;
+}
+
+static int l_getSoundVolume(lua_State* L) {
+    const uint32_t id = ElementIdOf(L, 1);
+    std::lock_guard<std::mutex> lock(g_soundMu);
+    for (const auto& slot : g_sounds) {
+        if (slot.alive && slot.id == id) {
+            lua_pushnumber(L, slot.volume);
+            return 1;
+        }
+    }
+    lua_pushboolean(L, 0);
+    return 1;
+}
+
+static int l_setWeather(lua_State* L) {
+    if (!lua_isnumber(L, 1)) {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+    lua_pushboolean(L, Game::NoteScriptWeather(static_cast<int>(lua_tointeger(L, 1))) ? 1 : 0);
+    return 1;
+}
+
+static void installWardrobeBindings(lua_State* L) {
+    const struct { const char* name; lua_CFunction fn; } binds[] = {
+        {"createPed", l_createPed},
+        {"addPedClothes", l_addPedClothes},
+        {"removePedClothes", l_removePedClothes},
+        {"setElementRotation", l_setElementRotation},
+        {"setElementFrozen", l_setElementFrozen},
+        {"setCameraMatrix", l_setCameraMatrix},
+        {"setCameraTarget", l_setCameraTarget},
+        {"setTime", l_setTime},
+        {"setWeather", l_setWeather},
+        {"playSound", l_playSound},
+        {"stopSound", l_stopSound},
+        {"setSoundVolume", l_setSoundVolume},
+        {"getSoundVolume", l_getSoundVolume},
+    };
+    for (const auto& bind : binds) {
+        lua_pushcfunction(L, bind.fn);
+        lua_setglobal(L, bind.name);
+    }
+}
+
 static void installDxBindings(lua_State* L) {
     g_dx.L = L;
     const struct { const char* name; lua_CFunction fn; } binds[] = {
@@ -741,7 +1191,7 @@ static void installDxBindings(lua_State* L) {
         {"getPedWeaponShootingRate", l_num0},
         {"getPedStat", l_num0},
         {"getVehicleType", l_num0},
-        {"getGroundPosition", l_num0},
+        {"getGroundPosition", l_getGroundPosition},
         {"getPedTask", l_false},
         {"getPedTarget", l_false},
         {"getPedControlState", l_false},
@@ -749,7 +1199,6 @@ static void installDxBindings(lua_State* L) {
         {"isElementFrozen", l_false},
         {"isElementOnScreen", l_false},
         {"isPedOnGround", l_true},
-        {"isAmbientPedSphereVisible", l_false},
         {"isPedNativeCoupleActive", l_false},
         {"isPedNativeCouplePresentationActive", l_false},
         {"isPedNativeGroupActive", l_false},
@@ -778,9 +1227,15 @@ static void installDxBindings(lua_State* L) {
         {"setPedWeaponAccuracy", l_true},
         {"setPedWeaponShootingRate", l_true},
         {"setCameraMatrix", l_true},
-        {"setAmbientPedPopulationZoneState", l_true},
         {"resetAmbientPedPopulationModels", l_true},
-        {"resetAmbientPedPopulationZonesToBootstrap", l_true},
+        // Not bound on purpose: resetAmbientPedPopulationZonesToBootstrap, setAmbientPedPopulationZoneState,
+        // getAmbientPedPopulationProfile and isAmbientPedSphereVisible. The server's native-ped-traffic client
+        // script detects a phone by their absence (client.lua 406-407, mobile_puppet_client.lua 17) and then uses
+        // its own fallback: polyfilled profile and spawn candidates, capabilities.mobilePolyfill = true, and a
+        // visibility probe answered as "native-visibility-unavailable". With constant-result stubs bound here the
+        // script took the desktop path: the profile came back false, the server rejected it
+        // (population-profile-rejected), and no traffic ped was ever created for a phone player. Bind them again
+        // only with real engine hooks (desktop CGameSA ambient population functions).
         {"updateAmbientPedPopulationModels", l_true},
         {"processLineOfSight", l_false},
         {"getPlayerMoney", l_getPlayerMoney},
@@ -816,6 +1271,8 @@ static void installDxBindings(lua_State* L) {
     lua_setfield(L, -2, "id");
     lua_setglobal(L, "localPlayer");
     InstallExtraBindings(L);
+    installWardrobeBindings(L);
+    InstallCategoryLua(L);
     // These two stay on this file even if extra bindings register the same names.
     lua_pushcfunction(L, l_getNetworkStats);
     lua_setglobal(L, "getNetworkStats");
@@ -892,6 +1349,18 @@ struct LuaVMStub::Impl {
     void registerStdLibs() {
         if (!L) return;
         luaL_openlibs(L);
+        // Lua 5.3 builds without LUA_COMPAT_MATHLIB have no math.atan2. Traffic's
+        // onClientPreRender calls it every frame and errors before the login camera runs.
+        lua_getglobal(L, "math");
+        lua_getfield(L, -1, "atan2");
+        if (!lua_isfunction(L, -1)) {
+            lua_pop(L, 1);
+            lua_getfield(L, -1, "atan");
+            lua_setfield(L, -2, "atan2");
+        } else {
+            lua_pop(L, 1);
+        }
+        lua_pop(L, 1);
 
         // Override print() with custom version that uses output callback
         lua_pushcfunction(L, lua_custom_print);
@@ -948,6 +1417,7 @@ bool LuaVMStub::initialize() {
 
     g_active = this;
     g_dx.L = pImpl_->L;
+    GuiSetFocusHook(OnGuiFocusHook);
     pImpl_->initialized = true;
     pImpl_->log("INIT", "LuaVM initialized with real Lua 5.3.6 interpreter");
     LUA_LOGI("LuaVM: registered %zu MTA client function stubs",
@@ -1252,6 +1722,14 @@ static void PumpCursorEvents() {
         if (!GuiCursorShown()) break;  // a handler closed the panel; the rest of the gesture is not a click
         g_cursorX = ev.x;
         g_cursorY = ev.y;
+        // Mouse-down activates the widget under the cursor (CEGUI). A gui-edit takes
+        // the soft keyboard; a tap anywhere else blurs the edit that had it.
+        if (ev.action == 0) {
+            g_imeDismissed = false;
+            const uint32_t hit = GuiPick(ev.x, ev.y);
+            if (GuiIsEdit(hit)) GuiSetFocused(hit);
+            else if (GuiFocusedEdit()) GuiSetFocused(0);
+        }
         lua_State* L = g_dx.L;
         if (ev.action == 2) {
             if (g_dx.handlers.find("onClientCursorMove") == g_dx.handlers.end()) continue;
@@ -1297,11 +1775,22 @@ std::string LuaVMStub::pumpDx() {
     g_dx.timers.erase(std::remove_if(g_dx.timers.begin(), g_dx.timers.end(),
         [](const DxRuntime::Timer& timer) { return timer.times == 0; }), g_dx.timers.end());
     PumpCursorEvents();
+    ApplyScriptInput();
+    PumpEndedSounds();
     g_dx.frame.clear();
+    // login_camera.lua moves the tour in onClientPreRender, before the DX menu.
+    fireHandlers("onClientPreRender", 0);
     if (!WorldRPG::Debug::Flag("nodx")) fireHandlers("onClientRender", 0);
     GuiAppendDraws(g_dx.frame);
     // "C" line: the cursor is showing, so the Android overlay takes touches (MtaDxView).
+    // "K" line: a gui-edit has focus, or a script called guiSetInputEnabled(true), so the
+    // activity opens the soft keyboard. EngineHostActivity reads that line.
     std::string out = GuiCursorShown() ? "C\n" + g_dx.frame : g_dx.frame;
+    const bool wantKeys = !g_imeDismissed && (GuiFocusedEdit() != 0 || (GuiCursorShown() && GuiKeyCapture()));
+    if (wantKeys) {
+        if (out.compare(0, 2, "C\n") == 0) out.insert(2, "K\n");
+        else out.insert(0, "K\n");
+    }
     if (out.size() > 24000) out.resize(24000);
     std::string clean;
     clean.reserve(out.size());
@@ -1314,6 +1803,7 @@ std::string LuaVMStub::pumpDx() {
 void LuaVMStub::shutdown() {
     if (!pImpl_->initialized) return;
     if (g_active == this) g_active = nullptr;
+    g_imeDismissed = false;
     g_dx = DxRuntime{};
     GuiReset();
 
@@ -1573,6 +2063,26 @@ const std::string& ActiveVmOwner() {
 void ActiveVmQueueCursor(int action, float x, float y) {
     std::lock_guard<std::mutex> lock(g_cursorMutex);
     if (g_cursorQueue.size() < 256) g_cursorQueue.push_back(CursorEvent{action, x, y});
+}
+void ActiveVmNoteSoundEnded(uint32_t id) {
+    std::lock_guard<std::mutex> lock(g_soundEndMu);
+    if (g_soundEnded.size() < 32) g_soundEnded.push_back(id);
+}
+
+void ActiveVmQueueScriptInput(const char* text, int backspaces, const char* key) {
+    ScriptInput ev;
+    if (text) {
+        const size_t n = std::strlen(text);
+        ev.text.assign(text, n > 1024 ? 1024 : n);
+    }
+    ev.backspaces = std::clamp(backspaces, 0, 256);
+    if (key && key[0]) {
+        const size_t n = std::strlen(key);
+        ev.key.assign(key, n > 32 ? 32 : n);
+    }
+    if (ev.text.empty() && ev.backspaces == 0 && ev.key.empty()) return;
+    std::lock_guard<std::mutex> lock(g_inputMutex);
+    if (g_inputQueue.size() < 64) g_inputQueue.push_back(std::move(ev));
 }
 void ActiveVmSetScreen(int width, int height) {
     if (g_active) g_active->setScreenSize(width, height);

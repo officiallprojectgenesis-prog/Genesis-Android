@@ -137,7 +137,7 @@ bool PickCar(float ox, float oy, uint32_t& id, int& model, float& x, float& y, f
     std::map<uint32_t, Candidate> candidates;
 
     static WorldRPG::ServerWorld::ActorSpawn actors[512];
-    const int actorCount = WorldRPG::ServerWorld::CopyActors(actors, 512);
+    const int actorCount = WorldRPG::ServerWorld::CopyActors(actors, 512, 0, 512);
     knownVehicles = 0;
     for (int i = 0; i < actorCount; ++i) {
         const auto& a = actors[i];
@@ -358,6 +358,18 @@ void CopyBody(float& x, float& y, float& z, float& heading,
     health = 100.f;
 }
 float CopyLocalArmor() { return 0.f; }
+// No libGTASA in this build, so getGroundPosition cannot query the world.
+bool FindGroundZFor3DPosition(float, float, float, float&) { return false; }
+uint32_t NoteScriptPed(int, float, float, float, float) { return 0; }
+bool ReleaseScriptPed(uint32_t) { return false; }
+bool ScriptPedAlive(uint32_t) { return false; }
+void NoteScriptClothes(uint32_t, const char*, const char*, int, bool) {}
+void NoteScriptRotation(uint32_t, float) {}
+void NoteScriptFrozen(uint32_t, bool) {}
+void NoteScriptCamera(float, float, float, float, float, float) {}
+void ClearScriptCamera() {}
+bool NoteScriptTime(int, int) { return false; }
+bool NoteScriptWeather(int) { return false; }
 
 void NoteDamage(uint32_t, float, uint8_t) {}
 bool ConsumeDamage(uint32_t&, uint8_t&) { return false; }
@@ -365,7 +377,8 @@ void NoteRemoteAim(uint32_t, float, float, int, int, bool, bool) {}
 void NoteRemoteWeapon(uint32_t, int) {}
 bool RemoteFacingLocal(uint32_t, float, float) { return false; }
 void CopyOnFoot(float, float, float, OnFootKeys& keys) { keys = {}; }
-void NoteRemotePed(uint32_t, float, float, float, float, float, float, float) {}
+void NoteRemotePlayerSync(uint32_t, float, float, float, float, float, float, float, bool, int, int, float, bool, bool, bool, float, bool, float) {}
+void NoteRemotePed(uint32_t, float, float, float, float, float, float, float, bool) {}
 void SetPedHost(uint32_t, bool) {}
 void ForgetRemote(uint32_t) {}
 void RequestRemoteReset() {}
