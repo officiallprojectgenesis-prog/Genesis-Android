@@ -83,6 +83,14 @@ bool FindOccupant(uint32_t playerId, uint32_t& vehicleId, uint8_t& seat) {
     return true;
 }
 
+void ForgetElement(uint32_t id) {
+    std::lock_guard<std::mutex> lock(g_mutex);
+    g_occupants.erase(id);
+    for (auto it = g_occupants.begin(); it != g_occupants.end();) {
+        it = it->second.vehicleId == id ? g_occupants.erase(it) : std::next(it);
+    }
+}
+
 bool FindSeatOccupant(uint32_t vehicleId, uint8_t seat, uint32_t& playerId) {
     std::lock_guard<std::mutex> lock(g_mutex);
     for (const auto& [id, occupant] : g_occupants) {

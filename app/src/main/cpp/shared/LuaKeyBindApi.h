@@ -23,11 +23,16 @@ void KeyBindsDropResource(lua_State* L, const std::string& owner, uint16_t netId
 
 // A key went down or up (any thread). Unknown key names are ignored.
 void KeyBindsQueueKey(const char* key, bool down);
+// The key names that have a function or a command bound, in table order, joined by '|'.
+// Any thread: the on-screen key list reads it.
+std::string KeyBindsBoundKeys();
 // Pops the oldest queued key in its table spelling and records its state for getKeyState. VM thread.
 bool KeyBindsNextKey(std::string& key, bool& down);
 
 // One bound function to call: registry refs of the function and its extra arguments.
 struct KeyBindCall {
+    // Serial of the bind. A registry ref can be reused after an unbind, a serial cannot.
+    uint64_t id = 0;
     int ref = 0;
     std::vector<int> args;
     std::string owner;
@@ -44,6 +49,6 @@ struct KeyBindCommand {
 void KeyBindsCollect(const std::string& key, bool down, std::vector<KeyBindCall>& calls,
                      std::vector<KeyBindCommand>& commands);
 // False when the bind was removed after KeyBindsCollect (desktop beingDeleted).
-bool KeyBindLive(int ref);
+bool KeyBindLive(uint64_t id);
 
 }  // namespace WorldRPG::Script

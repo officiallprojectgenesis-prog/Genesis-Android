@@ -134,6 +134,15 @@ void EnsureDynamicNode(uint32_t resourceRoot, uint32_t dynamicRoot);
 // are forgotten too, so isElement is false after the stop.
 void ReleaseResourceElements(uint32_t resourceRoot, uint32_t dynamicRoot);
 bool ActiveVmOnServerEvent(const uint8_t* body, size_t length, size_t bits);
+// Runs the client command handlers of this command, each as the resource that registered it.
+// False when none is registered. VM thread.
+bool ActiveVmRunCommand(const char* name, const char* args);
+// A command line the player entered in the chat box ("say hello", "panel open"), already sent to
+// the server by the caller. The client handlers and onClientConsole run on the next pump. Any thread.
+void ActiveVmQueueCommand(const char* line);
+// Command lines that a key bind ran and that still have to go to the server (desktop
+// COMMAND_Executed sends every command). Drained by the caller that owns the connection.
+std::vector<std::string> ActiveVmTakeServerCommands();
 // RESOURCE_STOP (83): removes the resource and stops its scripts (desktop Packet_ResourceStop).
 void ActiveVmOnResourceStop(const uint8_t* body, size_t length, size_t bits);
 

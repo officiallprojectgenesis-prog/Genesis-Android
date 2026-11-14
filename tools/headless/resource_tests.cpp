@@ -18,6 +18,7 @@
 #include "MtaCipher.h"
 #include "MtaOfflineCodec.h"
 #include "MtaReliabilityCodec.h"
+#include "RemoteVehicle.h"
 #include "ResourceFiles.h"
 #include "ResourceLoader.h"
 #include "ResourcePackets.h"
@@ -764,6 +765,18 @@ void CheckMtaWindow(WorldRPG::Script::LuaVMStub& vm) {
     )LUA");
     // Occupancy (CLuaPedDefs.cpp:834-880, 1214-1238; CLuaVehicleDefs.cpp:692-777). The host has no
     // vehicle element, so only the on-foot and bad-argument results are checked here.
+    {
+        // A player or a vehicle that leaves takes its seats with it, so a reused id starts on foot.
+        uint32_t vehicle = 0;
+        uint8_t seat = 0;
+        WorldRPG::RemoteVehicle::SetOccupant(50, 60, 1);
+        WorldRPG::RemoteVehicle::SetOccupant(51, 60, 2);
+        WorldRPG::RemoteVehicle::ForgetElement(50);
+        CHECK(!WorldRPG::RemoteVehicle::FindOccupant(50, vehicle, seat));
+        CHECK(WorldRPG::RemoteVehicle::FindOccupant(51, vehicle, seat) && vehicle == 60 && seat == 2);
+        WorldRPG::RemoteVehicle::ForgetElement(60);
+        CHECK(!WorldRPG::RemoteVehicle::FindOccupant(51, vehicle, seat));
+    }
     RunLua(vm, "occupancy-on-foot", R"LUA(
         local me = {id = 777, element = true}
         assert(getPedOccupiedVehicle(me) == false, 'local player on foot')
@@ -795,16 +808,47 @@ void CheckMtaWindow(WorldRPG::Script::LuaVMStub& vm) {
         assert(getCommandsBoundToKey('p').panel == 'open' and getKeyBoundToCommand('panel') == 'p', 'command getters')
         assert(getKeyBoundToCommand('nothing') == false, 'unbound command')
         addCommandHandler('panel', function(name, args) keyLog[#keyLog + 1] = 'cmd:' .. name .. ':' .. tostring(args) end)
-        addEventHandler('onClientKey', root, function(key, press) if key == 'F3' then cancelEvent() end end)
+        addEventHandler('onClientKey', root, function(key, press)
+            _G.keySource = source
+            if key == 'F3' then cancelEvent() end
+        end)
+        local cmd = function(name, a, b, c) _G.lastCmd = name .. '|' .. tostring(a) .. '|' .. tostring(b) .. '|' .. tostring(c) end
+        assert(addCommandHandler('Greet', cmd, false) == true, 'command added')
+        assert(addCommandHandler('greet', cmd, false) == false, 'same function is not added twice')
+        addEventHandler('onClientConsole', root, function(text) _G.consoleText = text; _G.consoleSource = source end)
         assert(bindKey('F3', 'down', onBoth) == true, 'F3 bound')
+        -- A bind removed by an earlier bind of the same key press is not called.
+        _G.second = function() keyLog[#keyLog + 1] = 'second' end
+        assert(bindKey('F4', 'down', function() unbindKey('F4', 'down', second) end) == true, 'F4 first')
+        assert(bindKey('F4', 'down', second) == true, 'F4 second')
     )LUA");
+    // The on-screen key list shows key binds only (not the "fire" control), in table order.
+    CHECK(WorldRPG::Script::KeyBindsBoundKeys() == "e|p|F2|F3|F4");
     WorldRPG::Script::KeyBindsQueueKey("E", true);
     WorldRPG::Script::KeyBindsQueueKey("f2", true);
     WorldRPG::Script::KeyBindsQueueKey("f2", false);
     WorldRPG::Script::KeyBindsQueueKey("p", true);
     WorldRPG::Script::KeyBindsQueueKey("F3", true);
     WorldRPG::Script::KeyBindsQueueKey("F8", true);
+    WorldRPG::Script::KeyBindsQueueKey("F4", true);
+    // A chat command reaches the client handlers, one argument per word, then onClientConsole.
+    WorldRPG::Script::ActiveVmQueueCommand("greet  one two");
     WorldRPG::Script::ActiveVmPump();
+    {
+        // The key-bound command is handed back for the server, as a typed command is sent.
+        const std::vector<std::string> toServer = WorldRPG::Script::ActiveVmTakeServerCommands();
+        CHECK(toServer.size() == 1 && toServer[0] == "panel open");
+        CHECK(WorldRPG::Script::ActiveVmTakeServerCommands().empty());
+    }
+    RunLua(vm, "chat-command", R"LUA(
+        assert(lastCmd == 'Greet|one|two|nil', 'arguments are split on spaces: ' .. tostring(lastCmd))
+        assert(consoleText == 'greet  one two', 'onClientConsole text: ' .. tostring(consoleText))
+        assert(consoleSource and consoleSource.id == 777, 'onClientConsole source is the local player')
+        assert(keySource and keySource.id == root.id, 'onClientKey source is root')
+    )LUA");
+    WorldRPG::Script::ActiveVmQueueCommand("login secret");
+    WorldRPG::Script::ActiveVmPump();
+    RunLua(vm, "chat-command-login", "assert(consoleText == 'login ***', 'login is censored: ' .. tostring(consoleText))");
     RunLua(vm, "bind-key-fired", R"LUA(
         local got = table.concat(keyLog, ' ')
         assert(got == 'e:down:x both:F2:down both:F2:up cmd:panel:open', 'binds fired: ' .. got)
@@ -819,6 +863,7 @@ void CheckMtaWindow(WorldRPG::Script::LuaVMStub& vm) {
     WorldRPG::Script::KeyBindsQueueKey("e", false);
     WorldRPG::Script::KeyBindsQueueKey("f2", true);
     WorldRPG::Script::ActiveVmPump();
+    CHECK(WorldRPG::Script::KeyBindsBoundKeys() == "F3|F4");
     RunLua(vm, "bind-key-removed", "assert(#keyLog == 0 and getKeyState('e') == false, 'removed binds do not fire')");
     RunLua(vm, "chatbox-limit-set", "assert(setChatboxCharacterLimit(40) == true)");
     WorldRPG::Script::MtaWindowResetSession();
@@ -883,6 +928,7 @@ void CheckStopLifecycle(WorldRPG::Script::LuaVMStub& vm) {
         _G.demoExports = getResourceExportedFunctions(res)
         _G.demoState = getResourceState(res)
         assert(addEvent("onMine") == true, "resource event")
+        addCommandHandler("democmd", function(name, args) _G.demoCmd = (getThisResource() == _G.demoRes) and args end)
         addEventHandler("onMine", root, function() _G.demoSource = sourceResource == getThisResource() end)
         triggerEvent("onMine", root)
         setTimer(function() _G.demoTicks = (_G.demoTicks or 0) + 1 end, 1, 0)
@@ -944,6 +990,10 @@ void CheckStopLifecycle(WorldRPG::Script::LuaVMStub& vm) {
            "assert(getResourceRootElement(_G.demoRes).id == 0x1234, 'old root')\n"
            "_G.snapTicks, _G.snapRenders = _G.demoTicks, _G.demoRenders");
 
+    // A command handler runs as the resource that registered it, and leaves with it.
+    CHECK(WorldRPG::Script::ActiveVmRunCommand("democmd", "hello"));
+    RunLua(vm, "command-owner", "assert(_G.demoCmd == 'hello', 'command ran as its resource: ' .. tostring(_G.demoCmd))");
+
     // RESOURCE_STOP for net id 5: CResourceStopPacket writes the id as a uint16.
     WorldRPG::Net::BitStreamWriter stop;
     stop.Write(static_cast<uint16_t>(5));
@@ -967,6 +1017,7 @@ void CheckStopLifecycle(WorldRPG::Script::LuaVMStub& vm) {
            "assert(_G.demoRenders == _G.snapRenders, 'demo render handler dropped')\n"
            "assert(_G.demoTicks == _G.snapTicks, 'demo timer dropped')\n"
            "assert(_G.otherRenders == 5, 'other resource keeps rendering')");
+    CHECK(!WorldRPG::Script::ActiveVmRunCommand("democmd", "again"));
     // CEvents::RemoveAllEvents(CLuaMain*): the stopped resource's event is gone, a core one stays.
     CHECK(!WorldRPG::Script::Events::Exists("onMine"));
     CHECK(WorldRPG::Script::Events::Exists("onTest"));

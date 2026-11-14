@@ -916,7 +916,23 @@ int l_print(lua_State* L) {
     return 0;
 }
 
-struct Command { std::string name; int ref = 0; bool sensitive = true; };
+struct Command {
+    std::string name;
+    int ref = 0;
+    bool sensitive = true;
+    uint64_t id = 0;
+    // The resource instance that registered it.
+    std::string owner;
+    uint16_t netId = 0;
+    uint32_t generation = 0;
+};
+uint64_t g_nextCommandId = 1;
+
+// The handler was registered by the resource instance that is running now (desktop pLuaMain match).
+bool SameInstance(const Command& command) {
+    return command.owner == ActiveVmOwner() && command.netId == ActiveVmOwnerNet() &&
+           command.generation == ActiveVmOwnerGeneration();
+}
 std::vector<Command> g_commands;
 bool g_devMode = false;
 bool g_transferVisible = false;
@@ -942,8 +958,23 @@ int l_addCommandHandler(lua_State* L) {
         return 1;
     }
     const bool sensitive = lua_isnoneornil(L, 3) ? true : lua_toboolean(L, 3) != 0;
+    // CRegisteredCommands::AddCommand (CRegisteredCommands.cpp:42-48): the first command of this
+    // name in this resource with the same function is not added again.
+    for (const Command& command : g_commands) {
+        const bool match = command.sensitive ? command.name == name : Lower(command.name) == Lower(name);
+        if (!match || !SameInstance(command)) continue;
+        lua_rawgeti(L, LUA_REGISTRYINDEX, command.ref);
+        const bool same = lua_rawequal(L, -1, 2) != 0;
+        lua_pop(L, 1);
+        if (same) {
+            lua_pushboolean(L, 0);
+            return 1;
+        }
+        break;
+    }
     lua_pushvalue(L, 2);
-    g_commands.push_back({name, luaL_ref(L, LUA_REGISTRYINDEX), sensitive});
+    g_commands.push_back({name, luaL_ref(L, LUA_REGISTRYINDEX), sensitive, g_nextCommandId++, ActiveVmOwner(),
+                          ActiveVmOwnerNet(), ActiveVmOwnerGeneration()});
     lua_pushboolean(L, 1);
     return 1;
 }
@@ -957,7 +988,8 @@ int l_removeCommandHandler(lua_State* L) {
     bool removed = false;
     for (auto it = g_commands.begin(); it != g_commands.end();) {
         const bool match = it->sensitive ? it->name == name : Lower(it->name) == Lower(name);
-        if (!match) { ++it; continue; }
+        // CRegisteredCommands::RemoveCommand (CRegisteredCommands.cpp:62-95): only this resource's handlers.
+        if (!match || !SameInstance(*it)) { ++it; continue; }
         luaL_unref(L, LUA_REGISTRYINDEX, it->ref);
         it = g_commands.erase(it);
         removed = true;
@@ -973,20 +1005,7 @@ int l_executeCommandHandler(lua_State* L) {
         return 1;
     }
     const char* args = lua_isstring(L, 2) ? lua_tostring(L, 2) : "";
-    bool handled = false;
-    for (const Command& command : g_commands) {
-        const bool match = command.sensitive ? command.name == name : Lower(command.name) == Lower(name);
-        if (!match) continue;
-        lua_rawgeti(L, LUA_REGISTRYINDEX, command.ref);
-        lua_pushstring(L, command.name.c_str());
-        lua_pushstring(L, args);
-        if (lua_pcall(L, 2, 0, 0) != 0) {
-            LUA_LOGE("executeCommandHandler: %s", lua_tostring(L, -1));
-            lua_pop(L, 1);
-        }
-        handled = true;
-    }
-    lua_pushboolean(L, handled ? 1 : 0);
+    lua_pushboolean(L, ActiveVmRunCommand(name, args) ? 1 : 0);
     return 1;
 }
 
@@ -1141,7 +1160,37 @@ int l_isWeaponRenderEnabled(lua_State* L) {
 
 }  // namespace
 
+void CommandHandlersCollect(const char* name, std::vector<CommandCall>& out) {
+    if (!name) return;
+    for (const Command& command : g_commands) {
+        const bool match = command.sensitive ? command.name == name : Lower(command.name) == Lower(name);
+        if (!match) continue;
+        out.push_back(CommandCall{command.id, command.ref, command.name, command.owner, command.netId, command.generation});
+    }
+}
+
+bool CommandHandlerLive(uint64_t id) {
+    for (const Command& command : g_commands)
+        if (command.id == id) return true;
+    return false;
+}
+
+void CommandHandlersDropResource(lua_State* L, const std::string& owner, uint16_t netId, uint32_t generation) {
+    for (auto it = g_commands.begin(); it != g_commands.end();) {
+        const bool mine = it->owner == owner && (netId == 0 || it->netId == 0 || it->netId == netId) &&
+                          (generation == 0 || it->generation == 0 || it->generation == generation);
+        if (!mine) {
+            ++it;
+            continue;
+        }
+        luaL_unref(L, LUA_REGISTRYINDEX, it->ref);
+        it = g_commands.erase(it);
+    }
+}
+
 void InstallUtilLua(lua_State* L) {
+    // The refs belonged to the previous Lua state.
+    g_commands.clear();
     const struct { const char* name; lua_CFunction fn; } binds[] = {
         {"getEasingValue", l_getEasingValue},
         {"interpolateBetween", l_interpolateBetween},

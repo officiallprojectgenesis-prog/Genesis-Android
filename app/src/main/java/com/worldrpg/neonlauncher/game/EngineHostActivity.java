@@ -106,6 +106,12 @@ public final class EngineHostActivity extends GTASA {
     private native boolean nativeSendChat(String text);
     private native void nativeChatInputActive(boolean active);
     private native void nativeKeyEvent(String key, boolean down);
+    private native String nativeBoundKeys();
+    // On-screen key list (legacy SA-MP launcher ButtonPanel: ">>" opens a row of keys, "<<" closes it).
+    private Button keysOpenButton;
+    private LinearLayout keysRow;
+    private View keysPanel;
+    private boolean keyListAvailable;
     private native void nativeDropConnection();
     private native String nativeMapSnapshot();
 
@@ -267,6 +273,7 @@ public final class EngineHostActivity extends GTASA {
         buttonParams.leftMargin = chatParams.leftMargin;
         buttonParams.bottomMargin = dp(24);
         addContentView(chatButton, buttonParams);
+        installKeyList(buttonParams.leftMargin + dp(96), buttonParams.bottomMargin);
 
         chatInput = new EditText(this);
         chatInput.setHint("Say:");
@@ -305,6 +312,97 @@ public final class EngineHostActivity extends GTASA {
         addContentView(bar, inputParams);
         chatInputBar = bar;
         installScriptInput();
+    }
+
+    // The key list of the legacy SA-MP launcher (samp/gui/samp_widgets/buttonpanel.cpp): ">>" opens a
+    // horizontal row and "<<" closes it. The row holds the keys that scripts bound with bindKey, read
+    // when it opens. A tap is one key press (down, then up).
+    private void installKeyList(int leftMargin, int bottomMargin) {
+        keysOpenButton = new Button(this);
+        keysOpenButton.setText(">>");
+        keysOpenButton.setTextColor(Color.WHITE);
+        keysOpenButton.setBackgroundColor(0xCC101820);
+        keysOpenButton.setOnClickListener(v -> openKeyList());
+        // Shown while connected (legacy ButtonPanel::draw returns unless GAMESTATE_CONNECTED).
+        keysOpenButton.setVisibility(View.GONE);
+        FrameLayout.LayoutParams openParams =
+                new FrameLayout.LayoutParams(dp(56), dp(40), Gravity.BOTTOM | Gravity.START);
+        openParams.leftMargin = leftMargin;
+        openParams.bottomMargin = bottomMargin;
+        addContentView(keysOpenButton, openParams);
+
+        keysRow = new LinearLayout(this);
+        keysRow.setOrientation(LinearLayout.HORIZONTAL);
+        android.widget.HorizontalScrollView scroll = new android.widget.HorizontalScrollView(this);
+        scroll.setHorizontalScrollBarEnabled(false);
+        scroll.addView(keysRow, new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT));
+        scroll.setVisibility(View.GONE);
+        FrameLayout.LayoutParams rowParams = new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.WRAP_CONTENT, dp(40), Gravity.BOTTOM | Gravity.START);
+        rowParams.leftMargin = leftMargin;
+        rowParams.rightMargin = dp(12);
+        rowParams.bottomMargin = bottomMargin;
+        addContentView(scroll, rowParams);
+        keysPanel = scroll;
+    }
+
+    private Button keyListButton(String label) {
+        Button button = new Button(this);
+        button.setText(label);
+        button.setAllCaps(false);
+        button.setTextColor(Color.WHITE);
+        button.setBackgroundColor(0xCC101820);
+        button.setMinWidth(dp(48));
+        button.setMinimumWidth(dp(48));
+        button.setPadding(dp(10), 0, dp(10), 0);
+        LinearLayout.LayoutParams params =
+                new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, dp(40));
+        params.rightMargin = dp(4);
+        button.setLayoutParams(params);
+        return button;
+    }
+
+    private void openKeyList() {
+        if (keysRow == null || keysPanel == null) return;
+        keysRow.removeAllViews();
+        Button close = keyListButton("<<");
+        close.setOnClickListener(v -> closeKeyList());
+        keysRow.addView(close);
+        String bound = nativeBoundKeys();
+        if (bound == null || bound.isEmpty()) {
+            TextView none = new TextView(this);
+            none.setText("No keys bound");
+            none.setTextColor(0xFFD5DEE8);
+            none.setGravity(Gravity.CENTER_VERTICAL);
+            none.setPadding(dp(8), 0, dp(8), 0);
+            keysRow.addView(none, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, dp(40)));
+        } else {
+            for (String key : bound.split("\\|")) {
+                if (key.isEmpty()) continue;
+                Button button = keyListButton(key.length() == 1 ? key.toUpperCase(java.util.Locale.ROOT) : key);
+                button.setOnClickListener(v -> {
+                    nativeKeyEvent(key, true);
+                    // The release is a later event, so getKeyState is true for a few frames.
+                    v.postDelayed(() -> nativeKeyEvent(key, false), 80);
+                });
+                keysRow.addView(button);
+            }
+        }
+        keysOpenButton.setVisibility(View.GONE);
+        keysPanel.setVisibility(View.VISIBLE);
+    }
+
+    private void closeKeyList() {
+        if (keysPanel != null) keysPanel.setVisibility(View.GONE);
+        if (keysOpenButton != null) keysOpenButton.setVisibility(keyListAvailable ? View.VISIBLE : View.GONE);
+    }
+
+    // The key list exists only during a session, and gives way to the chat input bar, which opens
+    // over the same strip of the screen.
+    private void setKeyListAvailable(boolean available) {
+        keyListAvailable = available;
+        closeKeyList();
     }
 
     // The game surface is not an Android editor. This field only exists so InputMethodManager
@@ -497,6 +595,9 @@ public final class EngineHostActivity extends GTASA {
         hideScriptKeyboard();
         chatInputBar.setVisibility(View.VISIBLE);
         nativeChatInputActive(true);
+        // The chat bar covers the key list; hide both key views until the chat closes.
+        if (keysPanel != null) keysPanel.setVisibility(View.GONE);
+        if (keysOpenButton != null) keysOpenButton.setVisibility(View.GONE);
         chatInput.requestFocus();
         InputMethodManager keyboard = (InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
         if (keyboard != null) keyboard.showSoftInput(chatInput, InputMethodManager.SHOW_IMPLICIT);
@@ -509,6 +610,7 @@ public final class EngineHostActivity extends GTASA {
         chatInput.setText("");
         if (chatInputBar != null) chatInputBar.setVisibility(View.GONE);
         nativeChatInputActive(false);
+        closeKeyList();
         InputMethodManager keyboard = (InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
         if (keyboard != null) keyboard.hideSoftInputFromWindow(chatInput.getWindowToken(), 0);
         if (typed.isEmpty()) return;
@@ -549,8 +651,10 @@ public final class EngineHostActivity extends GTASA {
                 // The "Connecting to server" panel ends with the join, as the desktop connect dialog does.
                 hideDownload();
                 appendChat("#ACD5FEConnected to the server.");
+                setKeyListAvailable(true);
             } else {
                 hideDownload();
+                setKeyListAvailable(false);
                 String text = message == null || message.isEmpty() ? "Disconnected." : message;
                 appendChat("#FF6666" + text);
                 // A drop after a join offers Retry / Quit (P3.1), and so does a retried join that fails later

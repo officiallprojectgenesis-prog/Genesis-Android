@@ -401,6 +401,10 @@ Java_com_worldrpg_neonlauncher_game_GameActivity_nativePulse(JNIEnv* env, jobjec
     WorldRPG::Script::ActiveVmPulseResources();
     if (!g_onDxFrameMethod || !g_gameActivityRef) return;
     const std::string frame = WorldRPG::Script::ActiveVmPump();
+    // Commands that a key bind ran go to the server as a typed command does (COMMAND_Executed).
+    for (const std::string& line : WorldRPG::Script::ActiveVmTakeServerCommands()) {
+        if (g_state->join) g_state->join->SendChat(line);
+    }
     // An empty frame is sent once, so the overlay clears what the scripts stopped drawing.
     static bool lastFrameEmpty = true;
     if (frame.empty() && lastFrameEmpty) return;
@@ -531,6 +535,8 @@ Java_com_worldrpg_neonlauncher_game_EngineHostActivity_nativeSendChat(JNIEnv* en
     const char* raw = env->GetStringUTFChars(text, nullptr);
     if (!raw) return JNI_FALSE;
     const bool sent = g_state->join->SendChat(raw);
+    // The client command handlers and onClientConsole see the same line (COMMAND_Executed).
+    if (sent) WorldRPG::Script::ActiveVmQueueCommand(raw);
     env->ReleaseStringUTFChars(text, raw);
     return sent ? JNI_TRUE : JNI_FALSE;
 }
@@ -542,6 +548,12 @@ Java_com_worldrpg_neonlauncher_game_EngineHostActivity_nativeKeyEvent(JNIEnv* en
     if (!name) return;
     WorldRPG::Script::KeyBindsQueueKey(name, down == JNI_TRUE);
     env->ReleaseStringUTFChars(key, name);
+}
+
+// The keys scripts have bound ("e|F1|p"), for the on-screen key list.
+JNIEXPORT jstring JNICALL
+Java_com_worldrpg_neonlauncher_game_EngineHostActivity_nativeBoundKeys(JNIEnv* env, jobject) {
+    return env->NewStringUTF(WorldRPG::Script::KeyBindsBoundKeys().c_str());
 }
 
 // The chat input bar opened or closed (desktop CLocalGUI::IsChatBoxInputEnabled, read by

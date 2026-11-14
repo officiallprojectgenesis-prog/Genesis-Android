@@ -48,6 +48,7 @@ const char* Find(const char* const (&table)[N], const char* name) {
 }
 
 struct FunctionBind {
+    uint64_t id = 0;
     const char* name = nullptr;  // points into kKeys or kControls
     bool control = false;
     bool down = true;
@@ -64,10 +65,14 @@ struct CommandBind {
     std::string arguments;
     bool down = true;
     std::string resource;
+    // The instance that bound it, so stopping an old start keeps the binds of a newer one.
+    uint16_t netId = 0;
+    uint32_t generation = 0;
 };
 
 // VM thread only.
 std::vector<FunctionBind> g_functions;
+uint64_t g_nextBindId = 1;
 std::vector<CommandBind> g_commands;
 std::unordered_set<std::string> g_pressed;
 
@@ -77,6 +82,27 @@ struct KeyEvent {
 };
 std::mutex g_queueMutex;
 std::vector<KeyEvent> g_queue;
+
+// Copy of the bound key names for the UI thread (KeyBindsBoundKeys).
+std::mutex g_boundMutex;
+std::string g_boundKeys;
+
+// Call after every change to g_functions or g_commands.
+void RefreshBoundKeys() {
+    std::string out;
+    for (const char* key : kKeys) {
+        bool bound = false;
+        for (const FunctionBind& bind : g_functions)
+            if (!bind.control && bind.name == key) bound = true;
+        for (const CommandBind& bind : g_commands)
+            if (bind.key == key) bound = true;
+        if (!bound) continue;
+        if (!out.empty()) out.push_back('|');
+        out += key;
+    }
+    std::lock_guard<std::mutex> lock(g_boundMutex);
+    g_boundKeys = std::move(out);
+}
 
 void Unref(lua_State* L, const FunctionBind& bind) {
     luaL_unref(L, LUA_REGISTRYINDEX, bind.ref);
@@ -136,12 +162,12 @@ bool BindCommand(const char* key, const char* state, const char* command, const 
     bool success = false;
     if (CommandExists(key, command, true, arguments, resource)) return true;
     if (strcasecmp(state, "down") == 0 || strcasecmp(state, "both") == 0) {
-        g_commands.push_back(CommandBind{key, command, arguments, true, resource});
+        g_commands.push_back(CommandBind{key, command, arguments, true, resource, ActiveVmOwnerNet(), ActiveVmOwnerGeneration()});
         success = true;
     }
     if (CommandExists(key, command, false, arguments, resource)) return true;
     if (strcasecmp(state, "up") == 0 || strcasecmp(state, "both") == 0) {
-        g_commands.push_back(CommandBind{key, command, arguments, false, resource});
+        g_commands.push_back(CommandBind{key, command, arguments, false, resource, ActiveVmOwnerNet(), ActiveVmOwnerGeneration()});
         success = true;
     }
     return success;
@@ -160,6 +186,7 @@ int BindKey(lua_State* L) {
         if (!lua_isnoneornil(L, 4) && !IsStringArg(L, 4)) return Fail(L, "bindKey", "string", 4);
         const char* arguments = lua_isnoneornil(L, 4) ? "" : lua_tostring(L, 4);
         const bool bound = key && BindCommand(key, state, lua_tostring(L, 3), arguments, ActiveVmOwner());
+        RefreshBoundKeys();
         lua_pushboolean(L, bound ? 1 : 0);
         return 1;
     }
@@ -180,6 +207,7 @@ int BindKey(lua_State* L) {
     for (int pass = 0; pass < 2; ++pass) {
         if (pass == 0 ? !wantDown : !wantUp) continue;
         FunctionBind bind;
+        bind.id = g_nextBindId++;
         bind.name = target;
         bind.control = control != nullptr;
         bind.down = pass == 0;
@@ -194,6 +222,7 @@ int BindKey(lua_State* L) {
         bind.generation = ActiveVmOwnerGeneration();
         g_functions.push_back(std::move(bind));
     }
+    RefreshBoundKeys();
     lua_pushboolean(L, 1);
     return 1;
 }
@@ -225,6 +254,7 @@ int UnbindKey(lua_State* L) {
             if ((strcasecmp(state, "down") == 0 || strcasecmp(state, "both") == 0) && remove(down)) success = true;
             if ((strcasecmp(state, "up") == 0 || strcasecmp(state, "both") == 0) && remove(false)) success = true;
         }
+        RefreshBoundKeys();
         lua_pushboolean(L, success ? 1 : 0);
         return 1;
     }
@@ -251,6 +281,7 @@ int UnbindKey(lua_State* L) {
             return true;
         }), g_functions.end());
     }
+    RefreshBoundKeys();
     lua_pushboolean(L, found ? 1 : 0);
     return 1;
 }
@@ -335,9 +366,18 @@ void KeyBindsDropResource(lua_State* L, const std::string& owner, uint16_t netId
         Unref(L, bind);
         return true;
     }), g_functions.end());
-    g_commands.erase(std::remove_if(g_commands.begin(), g_commands.end(),
-                                    [&](const CommandBind& bind) { return bind.resource == owner; }),
-                     g_commands.end());
+    g_commands.erase(std::remove_if(g_commands.begin(), g_commands.end(), [&](const CommandBind& bind) {
+        if (bind.resource != owner) return false;
+        if (netId != 0 && bind.netId != 0 && bind.netId != netId) return false;
+        if (generation != 0 && bind.generation != 0 && bind.generation != generation) return false;
+        return true;
+    }), g_commands.end());
+    RefreshBoundKeys();
+}
+
+std::string KeyBindsBoundKeys() {
+    std::lock_guard<std::mutex> lock(g_boundMutex);
+    return g_boundKeys;
 }
 
 void KeyBindsQueueKey(const char* key, bool down) {
@@ -366,7 +406,7 @@ void KeyBindsCollect(const std::string& key, bool down, std::vector<KeyBindCall>
                      std::vector<KeyBindCommand>& commands) {
     for (const FunctionBind& bind : g_functions) {
         if (bind.control || bind.down != down || key != bind.name) continue;
-        calls.push_back(KeyBindCall{bind.ref, bind.args, bind.owner, bind.netId, bind.generation});
+        calls.push_back(KeyBindCall{bind.id, bind.ref, bind.args, bind.owner, bind.netId, bind.generation});
     }
     for (const CommandBind& bind : g_commands) {
         if (bind.down != down || key != bind.key) continue;
@@ -374,9 +414,9 @@ void KeyBindsCollect(const std::string& key, bool down, std::vector<KeyBindCall>
     }
 }
 
-bool KeyBindLive(int ref) {
+bool KeyBindLive(uint64_t id) {
     for (const FunctionBind& bind : g_functions)
-        if (bind.ref == ref) return true;
+        if (bind.id == id) return true;
     return false;
 }
 
@@ -385,6 +425,7 @@ void InstallKeyBindLua(lua_State* L) {
     g_functions.clear();
     g_commands.clear();
     g_pressed.clear();
+    RefreshBoundKeys();
     {
         std::lock_guard<std::mutex> lock(g_queueMutex);
         g_queue.clear();

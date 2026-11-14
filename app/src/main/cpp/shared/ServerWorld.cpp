@@ -1,6 +1,7 @@
 #include "ServerWorld.h"
 #include "ResourceFiles.h"
 #include "../gtasa/GameEngine.h"
+#include "../gtasa/RemoteVehicle.h"
 #include "../net/raknet/RakNetWrapper.h"
 #include "entity/EntityAddTypes.h"
 #include "entity/PedSyncState.h"
@@ -529,6 +530,7 @@ void OnEntityRemove(const uint8_t* body, size_t length, size_t bits) {
         Game::ForgetPedNativeTaskState(id);
         // ForgetRemote takes g_remoteMutex and only queues; the body is dropped on the game thread.
         Game::ForgetRemote(id);
+        WorldRPG::RemoteVehicle::ForgetElement(id);
         ++removed;
     }
     if (removed > 1) DIAG("ENTITY_REMOVE removed %d element(s)", removed);
@@ -561,6 +563,7 @@ void OnPlayerQuit(uint32_t id) {
     Game::ForgetPedNativeTaskState(id);
     // The body is destroyed on the game thread (ApplyRemotePeds g_forget -> DropBody -> DestroyRemotePlayerPed).
     Game::ForgetRemote(id);
+    WorldRPG::RemoteVehicle::ForgetElement(id);
     DIAG("PLAYER_QUIT id=%u removed", id);
 }
 

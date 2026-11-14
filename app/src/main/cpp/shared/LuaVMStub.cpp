@@ -251,12 +251,17 @@ static bool fireHandlers(const char* name, int nargs, uint32_t base) {
 
 // Desktop onClientKey is one down and one up (CClientGame key handler). state is the press boolean.
 static void FireKey(const char* key) {
+    // source is the root element (CClientGame.cpp 2326: m_pRootEntity->CallEvent).
+    lua_getglobal(g_dx.L, "source");
+    PushElement(g_dx.L, ClientRootElement());
+    lua_setglobal(g_dx.L, "source");
     lua_pushstring(g_dx.L, key);
     lua_pushboolean(g_dx.L, 1);
     fireHandlers("onClientKey", 2, ClientRootElement());
     lua_pushstring(g_dx.L, key);
     lua_pushboolean(g_dx.L, 0);
     fireHandlers("onClientKey", 2, ClientRootElement());
+    lua_setglobal(g_dx.L, "source");
 }
 
 // source is the element. Changed and Accepted also take it as their argument
@@ -344,6 +349,92 @@ static void ApplyScriptInput() {
     }
 }
 
+// Desktop CRegisteredCommands::ProcessCommand: every handler of the command, called as the resource
+// that registered it, with the registered name and the argument string. The matches are taken
+// first because a handler may add or remove command handlers.
+bool ActiveVmRunCommand(const char* name, const char* args) {
+    if (!g_dx.L || !name) return false;
+    lua_State* L = g_dx.L;
+    std::vector<CommandCall> calls;
+    CommandHandlersCollect(name, calls);
+    bool handled = false;
+    for (const CommandCall& call : calls) {
+        if (!CommandHandlerLive(call.id)) continue;
+        OwnerScope scope(call.owner, call.netId, call.generation);
+        lua_rawgeti(L, LUA_REGISTRYINDEX, call.ref);
+        lua_pushstring(L, call.name.c_str());
+        // CRegisteredCommands::CallCommandHandler (CRegisteredCommands.cpp:183-206): one string per
+        // space-separated word, as strtok splits them.
+        int count = 1;
+        const std::string text = args ? args : "";
+        for (size_t at = 0; at < text.size();) {
+            const size_t start = text.find_first_not_of(' ', at);
+            if (start == std::string::npos) break;
+            const size_t end = text.find(' ', start);
+            const size_t stop = end == std::string::npos ? text.size() : end;
+            lua_pushlstring(L, text.data() + start, stop - start);
+            ++count;
+            at = stop;
+        }
+        if (lua_pcall(L, count, 0, 0) != LUA_OK) {
+            LUA_LOGE("Lua command %s: %s", call.name.c_str(), lua_tostring(L, -1));
+            lua_pop(L, 1);
+        }
+        handled = true;
+    }
+    return handled;
+}
+
+static std::mutex g_commandMutex;
+static std::vector<std::string> g_commandQueue;
+// VM thread only.
+static std::vector<std::string> g_serverCommands;
+
+void ActiveVmQueueCommand(const char* line) {
+    if (!line || !*line) return;
+    std::lock_guard<std::mutex> lock(g_commandMutex);
+    if (g_commandQueue.size() < 64) g_commandQueue.emplace_back(line);
+}
+
+std::vector<std::string> ActiveVmTakeServerCommands() {
+    std::vector<std::string> out;
+    out.swap(g_serverCommands);
+    return out;
+}
+
+// Desktop COMMAND_Executed (ClientCommands.cpp:32-90) for a command the core did not handle: the
+// registered handlers, then onClientConsole on the local player with the whole line ("login" is
+// censored). Sending the line to the server is the caller's part.
+static void ProcessClientCommand(const std::string& name, const std::string& args) {
+    if (!g_dx.L || name.empty()) return;
+    lua_State* L = g_dx.L;
+    ActiveVmRunCommand(name.c_str(), args.c_str());
+    const uint32_t local = WorldRPG::ServerWorld::LocalPlayer();
+    if (local == 0) return;
+    std::string line = args.empty() ? name : name + " " + args;
+    if (strcasecmp(name.c_str(), "login") == 0) line = name + " ***";
+    lua_getglobal(L, "source");
+    PushElement(L, local);
+    lua_setglobal(L, "source");
+    lua_pushstring(L, line.c_str());
+    fireHandlers("onClientConsole", 1, local);
+    lua_setglobal(L, "source");
+}
+
+static void ApplyChatCommands() {
+    std::vector<std::string> lines;
+    {
+        std::lock_guard<std::mutex> lock(g_commandMutex);
+        lines.swap(g_commandQueue);
+    }
+    for (const std::string& line : lines) {
+        const size_t space = line.find(' ');
+        const std::string name = line.substr(0, space);
+        const std::string args = space == std::string::npos ? std::string() : line.substr(space + 1);
+        ProcessClientCommand(name, args);
+    }
+}
+
 // A hardware key (KeyBindsQueueKey). Desktop CClientGame::KeyStrokeHandler fires onClientKey first, and a
 // cancelled event stops the binds. CKeyBinds then calls the bound functions and commands unless the
 // input goes to a GUI (INPUTMODE_NO_BINDS) or the chat box. CScriptKeyBinds::Call passes the key
@@ -354,15 +445,21 @@ static void ApplyKeyEvents() {
     std::string key;
     bool down = false;
     while (KeyBindsNextKey(key, down)) {
+        // source is the root element (CClientGame.cpp 2326: m_pRootEntity->CallEvent).
+        lua_getglobal(L, "source");
+        PushElement(L, ClientRootElement());
+        lua_setglobal(L, "source");
         lua_pushstring(L, key.c_str());
         lua_pushboolean(L, down ? 1 : 0);
-        if (!fireHandlers("onClientKey", 2, ClientRootElement())) continue;
+        const bool allowed = fireHandlers("onClientKey", 2, ClientRootElement());
+        lua_setglobal(L, "source");
+        if (!allowed) continue;
         if (GuiKeyCapture() || MtaWindowChatInputActive()) continue;
         std::vector<KeyBindCall> calls;
         std::vector<KeyBindCommand> commands;
         KeyBindsCollect(key, down, calls, commands);
         for (const KeyBindCall& call : calls) {
-            if (!KeyBindLive(call.ref)) continue;
+            if (!KeyBindLive(call.id)) continue;
             OwnerScope scope(call.owner, call.netId, call.generation);
             lua_rawgeti(L, LUA_REGISTRYINDEX, call.ref);
             lua_pushstring(L, key.c_str());
@@ -374,14 +471,12 @@ static void ApplyKeyEvents() {
             }
         }
         for (const KeyBindCommand& command : commands) {
-            // Client command handlers only. DIAG: the command is not also sent to the server
-            // (CClientGame::ProcessCommand); the VM has no command sender.
-            lua_getglobal(L, "executeCommandHandler");
-            lua_pushstring(L, command.command.c_str());
-            lua_pushstring(L, command.arguments.c_str());
-            if (lua_pcall(L, 2, 0, 0) != LUA_OK) {
-                LUA_LOGE("Lua bindKey command %s: %s", command.command.c_str(), lua_tostring(L, -1));
-                lua_pop(L, 1);
+            // COMMAND_Executed: the client handlers and onClientConsole here, then the line goes
+            // to the server through ActiveVmTakeServerCommands.
+            ProcessClientCommand(command.command, command.arguments);
+            if (g_serverCommands.size() < 64) {
+                g_serverCommands.push_back(command.arguments.empty() ? command.command
+                                                                      : command.command + " " + command.arguments);
             }
         }
     }
@@ -2375,6 +2470,7 @@ std::string LuaVMStub::pumpDx() {
     PumpCursorEvents();
     ApplyScriptInput();
     ApplyKeyEvents();
+    ApplyChatCommands();
     PumpEndedSounds();
     g_dx.frame.clear();
     PulseCamera();
@@ -2571,6 +2667,7 @@ static void DropResourceState(lua_State* L, const std::string& name, uint16_t ne
     GuiDropResource(name, netId, generation);
     Events::DropOwner(name, netId, generation);
     KeyBindsDropResource(L, name, netId, generation);
+    CommandHandlersDropResource(L, name, netId, generation);
     for (auto& [event, refs] : g_dx.handlers) {
         refs.erase(std::remove_if(refs.begin(), refs.end(), [&](const DxRuntime::Handler& handler) {
             if (OwnerOfHandler(handler.ref) != name) return false;
