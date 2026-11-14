@@ -5,8 +5,8 @@ Timers, event handling, network latent transfers, file I/O, XML parsing, JSON se
 ## Parity Status
 
 - **Total Functions:** 195
-- **Implemented:** 159 (81.5%)
-- **Stubs:** 5
+- **Implemented:** 160 (82.1%)
+- **Stubs:** 4
 - **Missing:** 31
 
 > **Technical Requirement:** Pure CPU/platform logic. Mostly ported or needs standard library wrappers (e.g. tinyxml2, sha256, zlib).
@@ -19,7 +19,7 @@ Timers, event handling, network latent transfers, file I/O, XML parsing, JSON se
 | `addClothingModel` | **Implemented** | `CLuaManager.cpp:193` | `CLuaFunctionDefs::AddClothingModel` | Operational on Android. (l_addClothingModel) |
 | `addCommandHandler` | **Implemented** | `CLuaManager.cpp:225` | `CLuaFunctionDefs::AddCommandHandler` | Operational on Android. (l_addCommandHandler) |
 | `addDebugHook` | Missing | `CLuaManager.cpp:236` | `CLuaFunctionDefs::AddDebugHook` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `addEvent` | *Stub* | `CLuaManager.cpp:163` | `CLuaFunctionDefs::AddEvent` | Currently stubbed: `l_addEvent: lua_pushboolean(L, 1)`. Needs native engine wiring. |
+| `addEvent` | **Implemented** | `CLuaManager.cpp:163` | `CLuaFunctionDefs::AddEvent` | Operational on Android. (l_addEvent) |
 | `addEventHandler` | **Implemented** | `CLuaManager.cpp:164` | `CLuaFunctionDefs::AddEventHandler` | Operational on Android. (l_addEventHandler) |
 | `base64Decode` | **Implemented** | `CLuaCryptDefs.cpp:28` | `ArgumentParserWarn<false, Base64decode>` | Operational on Android. (l_base64Decode) |
 | `base64Encode` | **Implemented** | `CLuaCryptDefs.cpp:27` | `ArgumentParserWarn<false, Base64encode>` | Operational on Android. (l_base64Encode) |

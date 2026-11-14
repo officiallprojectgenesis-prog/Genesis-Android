@@ -16,6 +16,8 @@ namespace WorldRPG::RemoteVehicle {
 void SetOccupant(uint32_t playerId, uint32_t vehicleId, uint8_t seat);
 void ClearOccupant(uint32_t playerId);
 bool FindOccupant(uint32_t playerId, uint32_t& vehicleId, uint8_t& seat);
+// The ped stored in this seat of the vehicle (desktop CClientVehicle::GetOccupant). Read only.
+bool FindSeatOccupant(uint32_t vehicleId, uint8_t seat, uint32_t& playerId);
 
 // Reconnect: drops every stored vehicle state and occupant of the old session.
 void ResetSession();

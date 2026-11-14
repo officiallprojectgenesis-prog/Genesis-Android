@@ -1,6 +1,8 @@
 #include "LuaApiExtra.h"
 #include "LuaVMStub.h"
 #include "ServerWorld.h"
+#include "../gtasa/GameEngine.h"
+#include "../gtasa/RemoteVehicle.h"
 
 extern "C" {
 #include "lua.h"
@@ -626,12 +628,80 @@ int GetVehicleUpgradeSlotName(lua_State* L) {
     return Fail(L);
 }
 
+// Desktop CClientVehicle::GetOccupant (CClientVehicle.cpp:1884-1897). The local player is the
+// driver of the car the game reports; other peds come from the seat table (see PedOccupiedVehicle
+// in LuaPedApi.cpp). A ped that left the session is not returned.
+uint32_t VehicleOccupant(uint32_t vehicleId, unsigned seat) {
+    if (seat > 8) return 0;
+    uint32_t ped = 0;
+    if (seat == 0 && WorldRPG::Game::LocalVehicleId() == vehicleId) {
+        ped = ServerWorld::LocalPlayer();
+    } else if (!WorldRPG::RemoteVehicle::FindSeatOccupant(vehicleId, static_cast<uint8_t>(seat), ped)) {
+        return 0;
+    }
+    if (ped == 0 || ped == 0xFFFFFFFFu) return 0;
+    const char* kind = ServerWorld::ElementKindName(ped);
+    if (std::strcmp(kind, "player") != 0 && std::strcmp(kind, "ped") != 0) return 0;
+    return ped;
+}
+
+// getVehicleOccupant(vehicle [, seat = 0]). CLuaVehicleDefs.cpp:692-714.
+int GetVehicleOccupant(lua_State* L) {
+    int model = 0;
+    if (!ReadVehicleModel(L, "getVehicleOccupant", model)) return Fail(L);
+    // ReadIfNextIsNumber: a number or a numeric string, otherwise seat 0.
+    unsigned seat = 0;
+    if (lua_isnumber(L, 2)) {
+        const lua_Number raw = lua_tonumber(L, 2);
+        if (!(raw >= 0 && raw <= 8)) return Fail(L);
+        seat = static_cast<unsigned>(raw);
+    }
+    const uint32_t ped = VehicleOccupant(ElementIdOf(L, 1), seat);
+    if (ped == 0) return Fail(L);
+    PushElement(L, ped);
+    return 1;
+}
+
+// getVehicleOccupants(vehicle). CLuaVehicleDefs.cpp:716-755: a table keyed by seat, or false
+// when the model has no seats.
+int GetVehicleOccupants(lua_State* L) {
+    int model = 0;
+    if (!ReadVehicleModel(L, "getVehicleOccupants", model)) return Fail(L);
+    const unsigned char maxPassengers = IsStandardModel(model) ? kMaxPassengers[model - 400] : 255;
+    if (maxPassengers == 255) return Fail(L);
+    const uint32_t vehicle = ElementIdOf(L, 1);
+    lua_newtable(L);
+    for (unsigned seat = 0; seat <= maxPassengers; ++seat) {
+        const uint32_t ped = VehicleOccupant(vehicle, seat);
+        if (ped == 0) continue;
+        lua_pushinteger(L, seat);
+        PushElement(L, ped);
+        lua_settable(L, -3);
+    }
+    return 1;
+}
+
+// getVehicleController(vehicle). CLuaVehicleDefs.cpp:757-777 and CClientVehicle::GetControllingPlayer
+// (CClientVehicle.cpp:1899-1930): the driver. The towing-vehicle and train-chain walks are not
+// ported (no tow link or chain is stored), so a towed vehicle reports its own driver only.
+int GetVehicleController(lua_State* L) {
+    int model = 0;
+    if (!ReadVehicleModel(L, "getVehicleController", model)) return Fail(L);
+    const uint32_t ped = VehicleOccupant(ElementIdOf(L, 1), 0);
+    if (ped == 0) return Fail(L);
+    PushElement(L, ped);
+    return 1;
+}
+
 void Register(lua_State* L) {
     const struct {
         const char* name;
         lua_CFunction fn;
     } binds[] = {
+        {"getVehicleController", GetVehicleController},
         {"getVehicleMaxPassengers", GetVehicleMaxPassengers},
+        {"getVehicleOccupant", GetVehicleOccupant},
+        {"getVehicleOccupants", GetVehicleOccupants},
         {"getVehicleModelFromName", GetVehicleModelFromName},
         {"getVehicleName", GetVehicleName},
         {"getVehicleNameFromModel", GetVehicleNameFromModel},

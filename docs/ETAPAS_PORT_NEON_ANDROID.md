@@ -23,7 +23,7 @@ The [full architectural plan](PLANO_PORT_NEON_ANDROID.md) details audits, depend
 | **P3.2 Chat Layout** | P2 | The chat does not match the MTA desktop client: lines are spaced too far apart and the layout differs. Match the desktop chat box (line height, padding, font, colour codes, and the line limit) so both clients show the same chat. Verify with a screenshot of the desktop and the phone side by side. | Implemented (line step = font height, one background box); side-by-side desktop screenshot pending |
 | **P4. Lua, DX, GUI & Browser** | P2, P3 | RenderWare 2D DX draw calls, custom UI interactions, CEGUI/WebView bindings. | In Progress (Desktop Tahoma 15px text scaling matched in MtaDxView; GUI element model with window, button, edit, memo, grid list, tabs, scroll pane, static text, setVisible, destroyElement; showCursor touch routing to onClientClick; mobile HUD component toggles via CWidgetPlayerInfo::Draw NOP patching. Open: DX shaders, `guiCreateFont` (CreateGuiFont is not hooked), CEF webview browser) |
 | **P4.1 Wardrobe preview** | P4 | Registration clothes preview matches the desktop client. Port order and desktop line ranges: [ROADMAP_WARDROBE_PREVIEW.md](ROADMAP_WARDROBE_PREVIEW.md). | In progress. The eight preview calls are bound. The login cinematic (`setCameraMatrix` from `onClientPreRender`) is confirmed on the S25. Opening music uses `playSound`, `stopSound` and `setSoundVolume`. The clothes preview itself has not been recorded on a device. |
-| **P5. Neon Parity Matrix** | P3, P4 | Complete API matrix, events, and elements matching MTA Neon desktop capabilities. | In Progress (Derived from source via tools/parity_matrix.py -> docs/PARITY_MATRIX.md. 2026-11-14: Lua functions 578 implemented / 150 stub / 853 missing of 1581 (36.6%); GUI 136/199 (68.3%); camera 47/47; client events 10/144 (6.9%); inbound packets 24/62; outbound 9/31; element types 13/17) |
+| **P5. Neon Parity Matrix** | P3, P4 | Complete API matrix, events, and elements matching MTA Neon desktop capabilities. | In Progress (Derived from source via tools/parity_matrix.py -> docs/PARITY_MATRIX.md. 2026-11-14: Lua functions 595 implemented / 140 stub / 846 missing of 1581 (37.6%); GUI 146/199 (73.4%), CLuaGUIDefs 137/137; camera 47/47; client events 10/144 (6.9%); inbound packets 24/62; outbound 9/31; element types 13/17) |
 | **P6. Release Distribution** | P5 | Reproducible release builds, multi-device hardware validation, automated updates. | Pending |
 
 P1A (Engine/Platform) and P1B (Network Transport) are independent parallel tracks. The approval of the port requires a fully native Android ARM64 session connecting to a live server.
@@ -120,7 +120,7 @@ Derived directly from `mta_neon_source` vs `app/src/main/cpp/` via `tools/parity
 
 | Category | Desktop Total | Android Implemented | Android Stubs | Remaining / Missing | Priority |
 |---|---|---|---|---|---|
-| **Lua Core Functions** | 1,581 | 578 (36.6%) | 150 (9.5%) | 853 (54.0%) | High |
+| **Lua Core Functions** | 1,581 | 595 (37.6%) | 140 (8.9%) | 846 (53.5%) | High |
 | **Client Events** | 144 | 10 (6.9%) | 0 | 134 (93.1%) | High |
 | **Inbound Packets (S->C)** | 62 | 24 (38.7%) | 0 | 38 (61.3%) | Medium |
 | **Outbound Packets (C->S)** | 31 | 9 (29.0%) | 0 | 22 (71.0%) | Medium |

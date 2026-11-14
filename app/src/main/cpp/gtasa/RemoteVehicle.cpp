@@ -83,6 +83,16 @@ bool FindOccupant(uint32_t playerId, uint32_t& vehicleId, uint8_t& seat) {
     return true;
 }
 
+bool FindSeatOccupant(uint32_t vehicleId, uint8_t seat, uint32_t& playerId) {
+    std::lock_guard<std::mutex> lock(g_mutex);
+    for (const auto& [id, occupant] : g_occupants) {
+        if (occupant.vehicleId != vehicleId || occupant.seat != seat) continue;
+        playerId = id;
+        return true;
+    }
+    return false;
+}
+
 // CClientVehicle::SetTargetPosition / SetTargetRotation / SetMoveSpeed / SetTurnSpeed / SetHealth /
 // SetEngineOn / SetDerailed. The phone has no remote VehicleHandle yet, so each call records the
 // desktop state and logs it. Engine effects are the open gap listed in the roadmap.

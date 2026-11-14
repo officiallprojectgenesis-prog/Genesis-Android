@@ -5,8 +5,8 @@ Vehicle physics, handling, sirens, doors, colors, lights, engine state, trailers
 ## Parity Status
 
 - **Total Functions:** 165
-- **Implemented:** 6 (3.6%)
-- **Stubs:** 22
+- **Implemented:** 9 (5.5%)
+- **Stubs:** 19
 - **Missing:** 137
 
 > **Technical Requirement:** Requires hooking libGTASA.so `CVehicle` vtable / offsets (`0x3A0000+` in ARM64), handling structures (`tHandlingData`), and vehicle damage packets (33, 56, 58).
@@ -38,7 +38,7 @@ Vehicle physics, handling, sirens, doors, colors, lights, engine state, trailers
 | `getVehicleComponentScale` | Missing | `CLuaVehicleDefs.cpp:127` | `GetVehicleComponentScale` | Needs reading/writing CVehicle struct fields in libGTASA.so. |
 | `getVehicleComponentVisible` | Missing | `CLuaVehicleDefs.cpp:128` | `GetVehicleComponentVisible` | Needs reading/writing CVehicle struct fields in libGTASA.so. |
 | `getVehicleComponents` | Missing | `CLuaVehicleDefs.cpp:129` | `GetVehicleComponents` | Needs reading/writing CVehicle struct fields in libGTASA.so. |
-| `getVehicleController` | *Stub* | `CLuaVehicleDefs.cpp:72` | `GetVehicleController` | Currently stubbed: `DefaultValue(kFalse)`. Needs native engine wiring. |
+| `getVehicleController` | **Implemented** | `CLuaVehicleDefs.cpp:72` | `GetVehicleController` | Operational on Android. (GetVehicleController) |
 | `getVehicleCurrentGear` | Missing | `CLuaVehicleDefs.cpp:113` | `GetVehicleCurrentGear` | Needs reading/writing CVehicle struct fields in libGTASA.so. |
 | `getVehicleDoorLockMode` | Missing | `CLuaVehicleDefs.cpp:145` | `ArgumentParser<GetVehicleDoorLockMode>` | Needs reading/writing CVehicle struct fields in libGTASA.so. |
 | `getVehicleDoorOpenRatio` | Missing | `CLuaVehicleDefs.cpp:116` | `GetVehicleDoorOpenRatio` | Needs reading/writing CVehicle struct fields in libGTASA.so. |
@@ -63,8 +63,8 @@ Vehicle physics, handling, sirens, doors, colors, lights, engine state, trailers
 | `getVehicleNativeAutoPilotDiagnostic` | Missing | `CLuaVehicleDefs.cpp:148` | `GetVehicleNativeAutoPilotDiagnostic` | Needs reading/writing CVehicle struct fields in libGTASA.so. |
 | `getVehicleNitroCount` | Missing | `CLuaVehicleDefs.cpp:121` | `GetVehicleNitroCount` | Needs reading/writing CVehicle struct fields in libGTASA.so. |
 | `getVehicleNitroLevel` | Missing | `CLuaVehicleDefs.cpp:122` | `GetVehicleNitroLevel` | Needs reading/writing CVehicle struct fields in libGTASA.so. |
-| `getVehicleOccupant` | *Stub* | `CLuaVehicleDefs.cpp:70` | `GetVehicleOccupant` | Currently stubbed: `DefaultValue(kFalse)`. Needs native engine wiring. |
-| `getVehicleOccupants` | *Stub* | `CLuaVehicleDefs.cpp:71` | `GetVehicleOccupants` | Currently stubbed: `DefaultValue(kEmptyTable)`. Needs native engine wiring. |
+| `getVehicleOccupant` | **Implemented** | `CLuaVehicleDefs.cpp:70` | `GetVehicleOccupant` | Operational on Android. (GetVehicleOccupant) |
+| `getVehicleOccupants` | **Implemented** | `CLuaVehicleDefs.cpp:71` | `GetVehicleOccupants` | Operational on Android. (GetVehicleOccupants) |
 | `getVehicleOverrideLights` | *Stub* | `CLuaVehicleDefs.cpp:85` | `GetVehicleOverrideLights` | Currently stubbed: `DefaultValue(kZero)`. Needs native engine wiring. |
 | `getVehiclePaintjob` | Missing | `CLuaVehicleDefs.cpp:88` | `GetVehiclePaintjob` | Needs reading/writing CVehicle struct fields in libGTASA.so. |
 | `getVehiclePanelState` | Missing | `CLuaVehicleDefs.cpp:83` | `GetVehiclePanelState` | Needs reading/writing CVehicle struct fields in libGTASA.so. |

@@ -5,6 +5,8 @@
 #include "LuaApiExtra.h"
 #include "LuaVMStub.h"
 #include "ServerWorld.h"
+#include "../gtasa/GameEngine.h"
+#include "../gtasa/RemoteVehicle.h"
 #include "../net/raknet/RakNetWrapper.h"
 
 extern "C" {
@@ -330,6 +332,65 @@ int SetPlayerNametagShowing(lua_State* L) {
     return 1;
 }
 
+// CScriptArgReader::ReadUserData<CClientPed>: a ped or a player.
+bool IsPed(lua_State* L, int index, uint32_t& id) {
+    if (!lua_istable(L, index)) return false;
+    id = ElementIdOf(L, index);
+    if (id == 0 || id == 0xFFFFFFFFu) return false;
+    const char* kind = ServerWorld::ElementKindName(id);
+    return kind && (std::strcmp(kind, "player") == 0 || std::strcmp(kind, "ped") == 0);
+}
+
+// Desktop CClientPed::GetOccupiedVehicle / GetOccupiedVehicleSeat. The local player is in the
+// car the game reports (WatchLocalVehicle); its seat is 0 because the phone only requests the
+// driver seat (NeonJoinProtocol.cpp VEHICLE_REQUEST_IN). Other peds are seated by
+// VEHICLE_INOUT (PacketHandler.cpp ApplyRemoteVehicleInOut). A ped that ENTITY_ADD placed in a
+// vehicle is not seated yet (the warp logs DIAG), so it reports no vehicle.
+bool PedOccupiedVehicle(uint32_t pedId, uint32_t& vehicleId, uint8_t& seat) {
+    if (pedId == ServerWorld::LocalPlayer()) {
+        vehicleId = WorldRPG::Game::LocalVehicleId();
+        seat = 0;
+    } else if (!WorldRPG::RemoteVehicle::FindOccupant(pedId, vehicleId, seat)) {
+        return false;
+    }
+    if (vehicleId == 0 || vehicleId == 0xFFFFFFFFu) return false;
+    const char* kind = ServerWorld::ElementKindName(vehicleId);
+    return kind && std::strcmp(kind, "vehicle") == 0;
+}
+
+// CLuaPedDefs.cpp:834-857.
+int GetPedOccupiedVehicle(lua_State* L) {
+    uint32_t id = 0, vehicle = 0;
+    uint8_t seat = 0;
+    if (!IsPed(L, 1, id)) return Fail(L, "getPedOccupiedVehicle", "expected a ped");
+    if (!PedOccupiedVehicle(id, vehicle, seat)) return PushFalse(L);
+    PushElement(L, vehicle);
+    return 1;
+}
+
+// CLuaPedDefs.cpp:859-880 and CStaticFunctionDefinitions.cpp:1972-1980.
+int GetPedOccupiedVehicleSeat(lua_State* L) {
+    uint32_t id = 0, vehicle = 0;
+    uint8_t seat = 0;
+    if (!IsPed(L, 1, id)) return Fail(L, "getPedOccupiedVehicleSeat", "expected a ped");
+    if (!PedOccupiedVehicle(id, vehicle, seat)) return PushFalse(L);
+    lua_pushinteger(L, seat);
+    return 1;
+}
+
+// CLuaPedDefs.cpp:1214-1238 and CStaticFunctionDefinitions.cpp:1966-1970. A bad argument is nil.
+int IsPedInVehicle(lua_State* L) {
+    uint32_t id = 0, vehicle = 0;
+    uint8_t seat = 0;
+    if (!IsPed(L, 1, id)) {
+        LUA_LOGE("isPedInVehicle: expected a ped");
+        lua_pushnil(L);
+        return 1;
+    }
+    lua_pushboolean(L, PedOccupiedVehicle(id, vehicle, seat) ? 1 : 0);
+    return 1;
+}
+
 }  // namespace
 
 void BindPedLua(lua_State* L) {
@@ -338,6 +399,9 @@ void BindPedLua(lua_State* L) {
         const char* name;
         lua_CFunction fn;
     } binds[] = {
+        {"getPedOccupiedVehicle", GetPedOccupiedVehicle},
+        {"getPedOccupiedVehicleSeat", GetPedOccupiedVehicleSeat},
+        {"isPedInVehicle", IsPedInVehicle},
         {"getPlayerFromName", GetPlayerFromName},
         {"getPlayerFromNick", GetPlayerFromName},
         {"getPlayerName", GetPlayerName},

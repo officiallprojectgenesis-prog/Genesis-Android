@@ -5,8 +5,8 @@ Ped animations, tasks, fighting styles, bone transforms, clothes, stats, voice, 
 ## Parity Status
 
 - **Total Functions:** 206
-- **Implemented:** 24 (11.7%)
-- **Stubs:** 80
+- **Implemented:** 27 (13.1%)
+- **Stubs:** 77
 - **Missing:** 102
 
 > **Technical Requirement:** Requires hooking libGTASA.so `CPed` / `CPlayerPed` (`_ZN10CPlayerPed...`), `CPedIK`, `CTask` hierarchy (wander, fight, duck), and clothing pools.
@@ -59,8 +59,8 @@ Ped animations, tasks, fighting styles, bone transforms, clothes, stats, voice, 
 | `getPedNativeGroupDiagnostic` | *Stub* | `CLuaPedDefs.cpp:344` | `GetPedNativeGroupDiagnostic` | Currently stubbed: `l_false: lua_pushboolean(L, 0)`. Needs native engine wiring. |
 | `getPedNativeVehicleResponse` | *Stub* | `CLuaPedDefs.cpp:360` | `GetPedNativeVehicleResponse` | Currently stubbed: `DefaultValue(kNil)`. Needs native engine wiring. |
 | `getPedNoiseLevel` | Missing | `CLuaPedDefs.cpp:329` | `GetPedNoiseLevel` | Needs reading/writing CPed / CPlayerPed struct fields in libGTASA.so. |
-| `getPedOccupiedVehicle` | *Stub* | `CLuaPedDefs.cpp:423` | `GetPedOccupiedVehicle` | Currently stubbed: `l_false: lua_pushboolean(L, 0)`. Needs native engine wiring. |
-| `getPedOccupiedVehicleSeat` | *Stub* | `CLuaPedDefs.cpp:424` | `GetPedOccupiedVehicleSeat` | Currently stubbed: `l_false: lua_pushboolean(L, 0)`. Needs native engine wiring. |
+| `getPedOccupiedVehicle` | **Implemented** | `CLuaPedDefs.cpp:423` | `GetPedOccupiedVehicle` | Operational on Android. (GetPedOccupiedVehicle) |
+| `getPedOccupiedVehicleSeat` | **Implemented** | `CLuaPedDefs.cpp:424` | `GetPedOccupiedVehicleSeat` | Operational on Android. (GetPedOccupiedVehicleSeat) |
 | `getPedOxygenLevel` | Missing | `CLuaPedDefs.cpp:407` | `GetPedOxygenLevel` | Needs reading/writing CPed / CPlayerPed struct fields in libGTASA.so. |
 | `getPedPhysicalProofs` | *Stub* | `CLuaPedDefs.cpp:404` | `ArgumentParser<GetPedPhysicalProofs>` | Currently stubbed: `DefaultValue(kFalse)`. Needs native engine wiring. |
 | `getPedRotation` | **Implemented** | `CLuaPedDefs.cpp:379` | `GetPedRotation` | Operational on Android. (l_getPedRotation) |
@@ -107,7 +107,7 @@ Ped animations, tasks, fighting styles, bone transforms, clothes, stats, voice, 
 | `isPedFootBloodEnabled` | Missing | `CLuaPedDefs.cpp:395` | `IsPedFootBloodEnabled` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
 | `isPedFrozen` | Missing | `CLuaPedDefs.cpp:394` | `IsPedFrozen` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
 | `isPedHeadless` | Missing | `CLuaPedDefs.cpp:393` | `IsPedHeadless` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `isPedInVehicle` | *Stub* | `CLuaPedDefs.cpp:431` | `IsPedInVehicle` | Currently stubbed: `DefaultValue(kFalse)`. Needs native engine wiring. |
+| `isPedInVehicle` | **Implemented** | `CLuaPedDefs.cpp:431` | `IsPedInVehicle` | Operational on Android. (IsPedInVehicle) |
 | `isPedMissionActor` | *Stub* | `CLuaPedDefs.cpp:397` | `ArgumentParser<IsPedMissionActor>` | Currently stubbed: `DefaultValue(kFalse)`. Needs native engine wiring. |
 | `isPedNativeAmbientCopWanderTask` | *Stub* | `CLuaPedDefs.cpp:320` | `ArgumentParser<IsPedNativeAmbientCopWanderTask>` | Currently stubbed: `l_false: lua_pushboolean(L, 0)`. Needs native engine wiring. |
 | `isPedNativeCoupleActive` | *Stub* | `CLuaPedDefs.cpp:348` | `IsPedNativeCoupleActive` | Currently stubbed: `l_false: lua_pushboolean(L, 0)`. Needs native engine wiring. |

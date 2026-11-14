@@ -21,6 +21,7 @@
 #include "../shared/SyncManager.h"
 #include "../shared/PacketHandler.h"
 #include "../shared/LuaVMStub.h"
+#include "../shared/LuaMtaWindowApi.h"
 #include "../shared/ServerWorld.h"
 #include "../shared/AssetManager.h"
 
@@ -460,6 +461,8 @@ Java_com_worldrpg_neonlauncher_game_GameActivity_nativeDestroy(JNIEnv* env, jobj
     g_state->network->Shutdown();
     g_hudRenderer = nullptr;
     g_enterServer = false;
+    // The Activity and its chat input bar are gone.
+    WorldRPG::Script::MtaWindowSetChatInputActive(false);
     g_state.reset();
     env->DeleteGlobalRef(g_gameActivityRef);
     g_gameActivityRef = nullptr;
@@ -529,6 +532,13 @@ Java_com_worldrpg_neonlauncher_game_EngineHostActivity_nativeSendChat(JNIEnv* en
     const bool sent = g_state->join->SendChat(raw);
     env->ReleaseStringUTFChars(text, raw);
     return sent ? JNI_TRUE : JNI_FALSE;
+}
+
+// The chat input bar opened or closed (desktop CLocalGUI::IsChatBoxInputEnabled, read by
+// isChatBoxInputActive and isMTAWindowActive).
+JNIEXPORT void JNICALL
+Java_com_worldrpg_neonlauncher_game_EngineHostActivity_nativeChatInputActive(JNIEnv*, jobject, jboolean active) {
+    WorldRPG::Script::MtaWindowSetChatInputActive(active == JNI_TRUE);
 }
 
 JNIEXPORT void JNICALL

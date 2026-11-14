@@ -5,9 +5,9 @@
 ## Parity Status
 
 - **Total Functions:** 199
-- **Implemented:** 136 (68.3%)
-- **Stubs:** 5
-- **Missing:** 58
+- **Implemented:** 146 (73.4%)
+- **Stubs:** 2
+- **Missing:** 51
 
 > **Technical Requirement:** Desktop uses CEGUI and Direct3D9. Mobile uses `MtaDxView.java` (Android Canvas) + `LuaGuiApi.cpp`. Windows, edits, memos, tabs, scroll panes and grid lists are stored and drawn into the DX frame. Grid sorting does not reorder rows. `guiCreateFont` returns false because CreateGuiFont is not hooked. Shaders (HLSL -> GLSL ES) and the browser are still missing.
 
@@ -59,8 +59,8 @@
 | `dxSetTextureEdge` | Missing | `CLuaDrawingDefs.cpp:67` | `DxSetTextureEdge` | Needs Android Canvas / OpenGL ES draw line routing. |
 | `dxSetTexturePixels` | Missing | `CLuaDrawingDefs.cpp:57` | `DxSetTexturePixels` | Needs Android Canvas / OpenGL ES draw line routing. |
 | `dxUpdateScreenSource` | Missing | `CLuaDrawingDefs.cpp:53` | `DxUpdateScreenSource` | Needs Android Canvas / OpenGL ES draw line routing. |
-| `getChatboxCharacterLimit` | Missing | `CLuaGUIDefs.cpp:54` | `ArgumentParser<GUIGetChatboxCharacterLimit>` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `getChatboxLayout` | Missing | `CLuaGUIDefs.cpp:186` | `GUIGetChatboxLayout` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
+| `getChatboxCharacterLimit` | **Implemented** | `CLuaGUIDefs.cpp:54` | `ArgumentParser<GUIGetChatboxCharacterLimit>` | Operational on Android. (GetChatboxCharacterLimit) |
+| `getChatboxLayout` | **Implemented** | `CLuaGUIDefs.cpp:186` | `GUIGetChatboxLayout` | Operational on Android. (GetChatboxLayout) |
 | `getModel2DFXCount` | Missing | `CLua2DFXDefs.cpp:573` | `GetModel2DFXCount` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
 | `getModel2DFXEffects` | Missing | `CLua2DFXDefs.cpp:572` | `GetModel2DFXEffects` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
 | `getModel2DFXPosition` | Missing | `CLua2DFXDefs.cpp:571` | `GetModel2DFXPosition` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
@@ -193,19 +193,19 @@
 | `guiWindowIsSizable` | **Implemented** | `CLuaGUIDefs.cpp:184` | `GUIWindowIsSizable` | Operational on Android. (GuiWindowIsSizable) |
 | `guiWindowSetMovable` | **Implemented** | `CLuaGUIDefs.cpp:181` | `GUIWindowSetMovable` | Operational on Android. (GuiWindowSetMovable) |
 | `guiWindowSetSizable` | **Implemented** | `CLuaGUIDefs.cpp:182` | `GUIWindowSetSizable` | Operational on Android. (GuiWindowSetSizable) |
-| `isChatBoxInputActive` | *Stub* | `CLuaGUIDefs.cpp:45` | `GUIIsChatBoxInputActive` | Currently stubbed: `l_false: lua_pushboolean(L, 0)`. Needs native engine wiring. |
-| `isConsoleActive` | *Stub* | `CLuaGUIDefs.cpp:46` | `GUIIsConsoleActive` | Currently stubbed: `DefaultValue(kFalse)`. Needs native engine wiring. |
-| `isDebugViewActive` | Missing | `CLuaGUIDefs.cpp:47` | `GUIIsDebugViewActive` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `isMTAWindowActive` | Missing | `CLuaGUIDefs.cpp:50` | `GUIIsMTAWindowActive` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `isMainMenuActive` | *Stub* | `CLuaGUIDefs.cpp:49` | `GUIIsMainMenuActive` | Currently stubbed: `DefaultValue(kFalse)`. Needs native engine wiring. |
-| `isTransferBoxActive` | Missing | `CLuaGUIDefs.cpp:51` | `GUIIsTransferBoxActive` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
+| `isChatBoxInputActive` | **Implemented** | `CLuaGUIDefs.cpp:45` | `GUIIsChatBoxInputActive` | Operational on Android. (IsChatBoxInputActive) |
+| `isConsoleActive` | **Implemented** | `CLuaGUIDefs.cpp:46` | `GUIIsConsoleActive` | Operational on Android. (IsConsoleActive) |
+| `isDebugViewActive` | **Implemented** | `CLuaGUIDefs.cpp:47` | `GUIIsDebugViewActive` | Operational on Android. (IsDebugViewActive) |
+| `isMTAWindowActive` | **Implemented** | `CLuaGUIDefs.cpp:50` | `GUIIsMTAWindowActive` | Operational on Android. (IsMTAWindowActive) |
+| `isMainMenuActive` | **Implemented** | `CLuaGUIDefs.cpp:49` | `GUIIsMainMenuActive` | Operational on Android. (IsMainMenuActive) |
+| `isTransferBoxActive` | **Implemented** | `CLuaGUIDefs.cpp:51` | `GUIIsTransferBoxActive` | Operational on Android. (IsTransferBoxActive) |
 | `removeModel2DFX` | Missing | `CLua2DFXDefs.cpp:568` | `RemoveModel2DFX` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
 | `resetModel2DFXEffects` | Missing | `CLua2DFXDefs.cpp:569` | `ResetModel2DFXEffects` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
 | `resetModel2DFXPosition` | Missing | `CLua2DFXDefs.cpp:571` | `ResetModel2DFXPosition` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
 | `resetModel2DFXProperty` | Missing | `CLua2DFXDefs.cpp:570` | `ResetModel2DFXProperty` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
 | `restoreModel2DFX` | Missing | `CLua2DFXDefs.cpp:568` | `RestoreModel2DFX` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `setChatboxCharacterLimit` | Missing | `CLuaGUIDefs.cpp:53` | `ArgumentParser<GUISetChatboxCharacterLimit>` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `setDebugViewActive` | Missing | `CLuaGUIDefs.cpp:48` | `GUISetDebugViewActive` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
+| `setChatboxCharacterLimit` | **Implemented** | `CLuaGUIDefs.cpp:53` | `ArgumentParser<GUISetChatboxCharacterLimit>` | Operational on Android. (SetChatboxCharacterLimit) |
+| `setDebugViewActive` | **Implemented** | `CLuaGUIDefs.cpp:48` | `GUISetDebugViewActive` | Operational on Android. (SetDebugViewActive) |
 | `setModel2DFXPosition` | Missing | `CLua2DFXDefs.cpp:569` | `SetModel2DFXPosition` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
 | `setModel2DFXProperty` | Missing | `CLua2DFXDefs.cpp:570` | `SetModel2DFXProperty` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
 | `svgCreate` | Missing | `CLuaVectorGraphicDefs.cpp:17` | `ArgumentParser<SVGCreate>` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |

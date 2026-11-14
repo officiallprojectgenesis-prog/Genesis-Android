@@ -11,6 +11,8 @@
 // Usage: neon_resource_tests [path/to/catalog.json]
 
 #include "HttpDownloader.h"
+#include "LuaEventRegistry.h"
+#include "LuaMtaWindowApi.h"
 #include "LuaVMStub.h"
 #include "MtaCipher.h"
 #include "MtaOfflineCodec.h"
@@ -476,8 +478,17 @@ void CheckHelpers(WorldRPG::Script::LuaVMStub& vm) {
         assert(onRoot == false, "handler stays on the player")
         assert(getEventHandlers("onClientRender") == false, "event handlers need an element")
         local hit = false
+        -- CEvents: a custom event exists only after addEvent (CStaticFunctionDefinitions.cpp:115-174).
+        assert(addEventHandler("onTest", me, function() end) == false, "handler needs an added event")
+        assert(triggerEvent("onTest", me) == nil, "trigger needs an added event")
+        assert(addEvent() == false and addEvent("") == false and addEvent("onTest", 1) == false, "addEvent arguments")
+        assert(addEvent("onTest") == true and addEvent("onTest", false) == true, "addEvent twice")
+        assert(addEvent("onTest", true) == false, "remote flag cannot change")
+        assert(addEvent("onRemoteTest", true) == true and addEvent("onRemoteTest") == false, "remote event")
+        assert(addEvent("onClientRender") == true and addEvent("onClientRender", true) == false, "built-in event")
         addEventHandler("onTest", me, function(n) hit = n == 5 end)
         assert(triggerEvent("onTest", me, 5) == true and hit == true, "triggerEvent")
+        assert(addEvent("onStop") and addEvent("onOuter") and addEvent("onBubble") and addEvent("onPlayerOnly"), "test events")
         addEventHandler("onStop", me, function() cancelEvent() end)
         assert(triggerEvent("onStop", me) == false and wasEventCancelled() == true, "trigger cancel")
         local nested = true
@@ -704,6 +715,69 @@ void CheckGui(WorldRPG::Script::LuaVMStub& vm) {
     CHECK(!Has(frame, "\nK\n"));
 }
 
+// Client window state calls (desktop CLuaGUIDefs.cpp:642-700, 3631-3748, 4066-4086).
+void CheckMtaWindow(WorldRPG::Script::LuaVMStub& vm) {
+    RunLua(vm, "mta-window-state", R"LUA(
+        assert(isChatBoxInputActive() == false and isConsoleActive() == false, 'chat input and console closed')
+        assert(isMainMenuActive() == false and isTransferBoxActive() == false, 'menu and transfer box closed')
+        assert(isMTAWindowActive() == false, 'no MTA window open')
+        assert(isDebugViewActive() == false, 'debug view starts hidden')
+        assert(setDebugViewActive() == false and setDebugViewActive(1) == false, 'debug view needs a boolean')
+        assert(setDebugViewActive(true) == true and isDebugViewActive() == true, 'debug view on')
+        assert(setDebugViewActive(false) == true and isDebugViewActive() == false, 'debug view off')
+    )LUA");
+    WorldRPG::Script::MtaWindowSetChatInputActive(true);
+    RunLua(vm, "mta-window-chat-open",
+           "assert(isChatBoxInputActive() == true and isMTAWindowActive() == true, 'chat input open')");
+    WorldRPG::Script::MtaWindowSetChatInputActive(false);
+    RunLua(vm, "mta-window-chat-closed",
+           "assert(isChatBoxInputActive() == false and isMTAWindowActive() == false, 'chat input closed')");
+    RunLua(vm, "chatbox-character-limit", R"LUA(
+        assert(getChatboxCharacterLimit() == 96, 'default limit')
+        assert(setChatboxCharacterLimit(120) == true and getChatboxCharacterLimit() == 120, 'limit set')
+        assert(setChatboxCharacterLimit('64') == true and getChatboxCharacterLimit() == 64, 'numeric string')
+        assert(setChatboxCharacterLimit(0) == true and getChatboxCharacterLimit() == 0, 'limit 0')
+        assert(setChatboxCharacterLimit(255) == true and getChatboxCharacterLimit() == 255, 'limit max')
+        local ok, err = pcall(setChatboxCharacterLimit, 256)
+        assert(not ok and err:find('less than, or equal to 255 %(got: 256%)'), 'over max: ' .. tostring(err))
+        ok, err = pcall(setChatboxCharacterLimit, -2)
+        assert(not ok and err:find('greater than, or equal to 0 %(got: %-2%)'), 'negative: ' .. tostring(err))
+        assert(not pcall(setChatboxCharacterLimit) and not pcall(setChatboxCharacterLimit, 'abc'), 'bad argument')
+        assert(getChatboxCharacterLimit() == 255, 'rejected values keep the limit')
+        assert(setChatboxCharacterLimit(-1) == true and getChatboxCharacterLimit() == 96, '-1 resets')
+    )LUA");
+    RunLua(vm, "chatbox-layout", R"LUA(
+        local all = getChatboxLayout()
+        local count = 0
+        for _ in pairs(all) do count = count + 1 end
+        assert(count == 21, 'layout holds 21 values, got ' .. count)
+        assert(all.chat_lines == 10 and all.chat_font == 2 and all.chat_width == 1.5, 'numbers')
+        assert(all.chat_use_cegui == false and all.chat_text_outline == 0 and all.chat_css_style_text == 0, 'only cegui is boolean')
+        local c = all.chat_text_color
+        assert(#c == 4 and c[1] == 172 and c[2] == 213 and c[3] == 254 and c[4] == 255, 'text colour')
+        assert(#all.chat_scale == 2 and all.chat_scale[1] == 1 and all.chat_scale[2] == 1, 'scale')
+        assert(getChatboxLayout('chat_lines') == 10 and getChatboxLayout('CHAT_LINES') == 10, 'one value, any case')
+        assert(#getChatboxLayout('chat_input_color') == 4, 'one colour')
+        assert(getChatboxLayout('text_scale') == 1 and getChatboxLayout('nope') == false, 'unknown name')
+        assert(getChatboxLayout({}) == false and getChatboxLayout(nil) == false, 'bad argument')
+    )LUA");
+    // Occupancy (CLuaPedDefs.cpp:834-880, 1214-1238; CLuaVehicleDefs.cpp:692-777). The host has no
+    // vehicle element, so only the on-foot and bad-argument results are checked here.
+    RunLua(vm, "occupancy-on-foot", R"LUA(
+        local me = {id = 777, element = true}
+        assert(getPedOccupiedVehicle(me) == false, 'local player on foot')
+        assert(getPedOccupiedVehicleSeat(me) == false, 'no seat on foot')
+        assert(isPedInVehicle(me) == false, 'not in a vehicle')
+        assert(isPedInVehicle() == nil and isPedInVehicle({}) == nil, 'bad ped is nil')
+        assert(getPedOccupiedVehicle() == false and getPedOccupiedVehicleSeat(5) == false, 'bad ped is false')
+        assert(getVehicleOccupant(me) == false and getVehicleOccupants() == false, 'not a vehicle')
+        assert(getVehicleController({}) == false, 'not a vehicle')
+    )LUA");
+    RunLua(vm, "chatbox-limit-set", "assert(setChatboxCharacterLimit(40) == true)");
+    WorldRPG::Script::MtaWindowResetSession();
+    RunLua(vm, "chatbox-limit-session", "assert(getChatboxCharacterLimit() == 96, 'a new session resets the limit')");
+}
+
 void CheckStopLifecycle(WorldRPG::Script::LuaVMStub& vm) {
     // Resource "demo" (net id 5, root 0x1234) and "other" (net id 6, root 0x2222). Both start
     // from one no-cache script each (packet 95).
@@ -761,6 +835,7 @@ void CheckStopLifecycle(WorldRPG::Script::LuaVMStub& vm) {
         _G.demoChild = guiCreateWindow(0, 0, 40, 40, "child", false, _G.demoGui)
         _G.demoExports = getResourceExportedFunctions(res)
         _G.demoState = getResourceState(res)
+        assert(addEvent("onMine") == true, "resource event")
         addEventHandler("onMine", root, function() _G.demoSource = sourceResource == getThisResource() end)
         triggerEvent("onMine", root)
         setTimer(function() _G.demoTicks = (_G.demoTicks or 0) + 1 end, 1, 0)
@@ -845,6 +920,13 @@ void CheckStopLifecycle(WorldRPG::Script::LuaVMStub& vm) {
            "assert(_G.demoRenders == _G.snapRenders, 'demo render handler dropped')\n"
            "assert(_G.demoTicks == _G.snapTicks, 'demo timer dropped')\n"
            "assert(_G.otherRenders == 5, 'other resource keeps rendering')");
+    // CEvents::RemoveAllEvents(CLuaMain*): the stopped resource's event is gone, a core one stays.
+    CHECK(!WorldRPG::Script::Events::Exists("onMine"));
+    CHECK(WorldRPG::Script::Events::Exists("onTest"));
+    CHECK(WorldRPG::Script::Events::RemoteState("onMine") == WorldRPG::Script::Events::Remote::NotAdded);
+    CHECK(WorldRPG::Script::Events::RemoteState("onTest") == WorldRPG::Script::Events::Remote::NotRemote);
+    CHECK(WorldRPG::Script::Events::RemoteState("onRemoteTest") == WorldRPG::Script::Events::Remote::Allowed);
+    CHECK(WorldRPG::Script::Events::RemoteState("onClientRender") == WorldRPG::Script::Events::Remote::NotRemote);
 
     // A second RESOURCE_STOP for the same id is unknown and does nothing.
     WorldRPG::Script::ActiveVmOnResourceStop(stop.GetData(), stop.GetByteLength(), stop.GetBitLength());
@@ -1477,6 +1559,7 @@ int main(int argc, char** argv) {
     CheckJson(vm, argc > 1 ? argv[1] : nullptr);
     CheckHelpers(vm);
     CheckGui(vm);
+    CheckMtaWindow(vm);
     CheckStopLifecycle(vm);
     CheckDxImage(vm);
     CheckNetworkCalls(vm);

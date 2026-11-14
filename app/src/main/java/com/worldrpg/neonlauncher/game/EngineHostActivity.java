@@ -9,6 +9,7 @@ import android.util.Log;
 import android.util.TypedValue;
 import android.os.Build;
 import android.text.Editable;
+import android.text.InputFilter;
 import android.text.InputType;
 import android.text.TextWatcher;
 import android.view.Gravity;
@@ -103,6 +104,7 @@ public final class EngineHostActivity extends GTASA {
     private final java.util.HashMap<Integer, Boolean> soundLoop = new java.util.HashMap<>();
     private final java.util.HashMap<Integer, Boolean> soundPaused = new java.util.HashMap<>();
     private native boolean nativeSendChat(String text);
+    private native void nativeChatInputActive(boolean active);
     private native void nativeDropConnection();
     private native String nativeMapSnapshot();
 
@@ -268,6 +270,8 @@ public final class EngineHostActivity extends GTASA {
         chatInput = new EditText(this);
         chatInput.setHint("Say:");
         chatInput.setSingleLine(true);
+        // Desktop CChat default character limit (CChat.h:308). setChatboxCharacterLimit changes it (kind 17).
+        chatInput.setFilters(new InputFilter[] {new InputFilter.LengthFilter(96)});
         chatInput.setTextColor(Color.WHITE);
         chatInput.setHintTextColor(0xFFACD5FE);
         chatInput.setImeOptions(EditorInfo.IME_ACTION_SEND);
@@ -491,6 +495,7 @@ public final class EngineHostActivity extends GTASA {
         scriptKeyboardShown = false;
         hideScriptKeyboard();
         chatInputBar.setVisibility(View.VISIBLE);
+        nativeChatInputActive(true);
         chatInput.requestFocus();
         InputMethodManager keyboard = (InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
         if (keyboard != null) keyboard.showSoftInput(chatInput, InputMethodManager.SHOW_IMPLICIT);
@@ -502,6 +507,7 @@ public final class EngineHostActivity extends GTASA {
         String typed = chatInput.getText() == null ? "" : chatInput.getText().toString().trim();
         chatInput.setText("");
         if (chatInputBar != null) chatInputBar.setVisibility(View.GONE);
+        nativeChatInputActive(false);
         InputMethodManager keyboard = (InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
         if (keyboard != null) keyboard.hideSoftInputFromWindow(chatInput.getWindowToken(), 0);
         if (typed.isEmpty()) return;
@@ -738,6 +744,17 @@ public final class EngineHostActivity extends GTASA {
             }
             if (kind == 10) {
                 if (chatLog != null) chatLog.setChatVisible(!"0".equals(text));
+                return;
+            }
+            if (kind == 17) {
+                // Chat input length limit in UTF-16 units (setChatboxCharacterLimit, desktop CChat.cpp:806).
+                if (chatInput != null) {
+                    try {
+                        int limit = Math.max(0, Math.min(255, Integer.parseInt(text)));
+                        chatInput.setFilters(new InputFilter[] {new InputFilter.LengthFilter(limit)});
+                    } catch (NumberFormatException ignored) {
+                    }
+                }
                 return;
             }
             if (kind == 3) {

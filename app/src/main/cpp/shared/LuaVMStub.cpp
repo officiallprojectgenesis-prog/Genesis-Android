@@ -9,6 +9,8 @@
 #include "LuaClothesApi.h"
 #include "LuaWeaponApi.h"
 #include "LuaResourceApi.h"
+#include "LuaMtaWindowApi.h"
+#include "LuaEventRegistry.h"
 #include "LuaApiExtra.h"
 #include "LuaGuiApi.h"
 #include "ResourceLoader.h"
@@ -382,6 +384,13 @@ static int l_addEventHandler(lua_State* L) {
         lua_pushboolean(L, 0);
         return 1;
     }
+    // CStaticFunctionDefinitions::AddEventHandler (CStaticFunctionDefinitions.cpp:129-143):
+    // the event must be built in or added with addEvent.
+    if (!Events::Exists(name)) {
+        LUA_LOGI("WARNING: addEventHandler: event '%s' is not added (addEvent)", name);
+        lua_pushboolean(L, 0);
+        return 1;
+    }
     bool propagated = true;
     if (!lua_isnoneornil(L, 4)) {
         if (!lua_isboolean(L, 4)) {
@@ -435,7 +444,9 @@ static int l_triggerEvent(lua_State* L) {
     // CLuaFunctionDefs::TriggerEvent (lua/CLuaFunctionDefs.Event.cpp 174-201).
     const char* name = lua_tostring(L, 1);
     const uint32_t id = ElementIdOf(L, 2);
-    if (!name || id == 0) {
+    // CStaticFunctionDefinitions::TriggerEvent (CStaticFunctionDefinitions.cpp:162-174): nil when
+    // no such event exists.
+    if (!name || id == 0 || !Events::Exists(name)) {
         lua_pushnil(L);
         return 1;
     }
@@ -1177,8 +1188,26 @@ static int l_getElementsByType(lua_State* L) {
     return 1;
 }
 
+// CLuaFunctionDefs::AddEvent (lua/CLuaFunctionDefs.Event.cpp 13-43) and
+// CStaticFunctionDefinitions::AddEvent (CStaticFunctionDefinitions.cpp:115-127).
+// bool addEvent ( string eventName [, bool allowRemoteTrigger = false ] )
 static int l_addEvent(lua_State* L) {
-    lua_pushboolean(L, 1);
+    const int nameType = lua_type(L, 1);
+    const int remoteType = lua_type(L, 2);
+    const bool remoteOk = remoteType == LUA_TBOOLEAN || remoteType == LUA_TNONE || remoteType == LUA_TNIL;
+    if ((nameType != LUA_TSTRING && nameType != LUA_TNUMBER) || !remoteOk) {
+        LUA_LOGI("WARNING: Bad argument @ 'addEvent' [Expected %s at argument %d, got %s]",
+                 remoteOk ? "string" : "bool", remoteOk ? 1 : 2, luaL_typename(L, remoteOk ? 1 : 2));
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+    size_t length = 0;
+    const char* text = lua_tolstring(L, 1, &length);
+    const std::string name(text ? text : "", length);
+    const bool allowRemoteTrigger = remoteType == LUA_TBOOLEAN && lua_toboolean(L, 2) != 0;
+    const bool added = !name.empty() &&
+                       Events::Add(name, allowRemoteTrigger, g_dx.owner, g_dx.ownerNetId, g_dx.ownerGeneration);
+    lua_pushboolean(L, added ? 1 : 0);
     return 1;
 }
 
@@ -1705,8 +1734,6 @@ static void installDxBindings(lua_State* L) {
         {"getElementHealth", l_getElementHealth},
         {"getPedArmor", l_getPedArmor},
         {"getTime", l_getTime},
-        {"getPedOccupiedVehicle", l_false},
-        {"getPedOccupiedVehicleSeat", l_false},
         {"getPlayerWantedLevel", l_num0},
         {"getElementModel", l_num0},
         {"getElementVelocity", l_getElementVelocity},
@@ -1797,7 +1824,6 @@ static void installDxBindings(lua_State* L) {
         {"getLocalPlayer", l_getLocalPlayer},
         {"isPedDead", l_false},
         {"setElementAlpha", l_true},
-        {"isChatBoxInputActive", l_false},
         {"setPlayerHudComponentVisible", l_setPlayerHudComponentVisible},
         {"showPlayerHudComponent", l_setPlayerHudComponentVisible},
         {"isPlayerHudComponentVisible", l_isPlayerHudComponentVisible},
@@ -1826,6 +1852,7 @@ static void installDxBindings(lua_State* L) {
     InstallClothesLua(L);
     InstallWeaponLua(L);
     InstallResourceLua(L);
+    InstallMtaWindowLua(L);
     // These two stay on this file even if extra bindings register the same names.
     lua_pushcfunction(L, l_getNetworkStats);
     lua_setglobal(L, "getNetworkStats");
@@ -2334,6 +2361,7 @@ void LuaVMStub::shutdown() {
     if (g_active == this) g_active = nullptr;
     g_imeDismissed = false;
     g_dx = DxRuntime{};
+    Events::Reset();
     GuiReset();
 
     if (pImpl_->L) {
@@ -2472,6 +2500,17 @@ bool ActiveVmOnServerEvent(const uint8_t* body, size_t length, size_t bits) {
             return false;
         }
     }
+    // CPacketHandler::Packet_LuaEvent (CPacketHandler.cpp:5226-5244): the event must exist and
+    // be marked as remotely triggerable.
+    const Events::Remote remote = Events::RemoteState(name);
+    if (remote != Events::Remote::Allowed) {
+        LUA_LOGE(remote == Events::Remote::NotAdded
+                     ? "ERROR: Server triggered clientside event %s, but event is not added clientside"
+                     : "ERROR: Server triggered clientside event %s, but event is not marked as remotely triggerable",
+                 name.c_str());
+        lua_settop(L, top);
+        return true;
+    }
     PushElement(L, source);
     lua_setglobal(L, "source");
     const auto handlers = g_dx.handlers.find(name);
@@ -2486,6 +2525,7 @@ bool ActiveVmOnServerEvent(const uint8_t* body, size_t length, size_t bits) {
 // Lua state with them (its environment is only referenced by those closures).
 static void DropResourceState(lua_State* L, const std::string& name, uint16_t netId, uint32_t generation) {
     GuiDropResource(name, netId, generation);
+    Events::DropOwner(name, netId, generation);
     for (auto& [event, refs] : g_dx.handlers) {
         refs.erase(std::remove_if(refs.begin(), refs.end(), [&](const DxRuntime::Handler& handler) {
             if (OwnerOfHandler(handler.ref) != name) return false;
@@ -2588,6 +2628,7 @@ bool ActiveVmPulseResources() {
 }
 void ActiveVmResetSession() {
     WorldRPG::Script::ResourceLoader::Reset();
+    WorldRPG::Script::MtaWindowResetSession();
     if (!g_active) return;
     // A new session starts from a clean VM: no handlers, timers or globals from the old one.
     const int width = g_dx.screenW, height = g_dx.screenH;
