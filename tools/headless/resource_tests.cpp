@@ -273,7 +273,7 @@ void CheckHelpers(WorldRPG::Script::LuaVMStub& vm) {
         assert(setElementHealth(me, 50) == true and getElementHealth(me) == 50, "health")
         assert(type(getElementModel(me)) == "number", "model")
         local rx, ry, rz = getElementRotation(me)
-        assert(type(rz) == "number", "rotation")
+        assert(type(rz) == "number" and rx == 0 and ry == 0, "rotation")
         assert(setGravity(0.01) == true and math.abs(getGravity() - 0.01) < 0.0001, "gravity")
         assert(setGravity(2) == false, "gravity range")
         assert(setGameSpeed(2) == true and getGameSpeed() == 2, "game speed")
@@ -360,6 +360,8 @@ void CheckHelpers(WorldRPG::Script::LuaVMStub& vm) {
         assert(fileExists("note.txt") == true and pathIsFile("note.txt") == true, "file exists")
         assert(fileDelete("note.txt") == true and fileExists("note.txt") == false, "file delete")
         assert(fileOpen("../secret") == false, "file sandbox")
+        local dotted = fileCreate("a..b.txt")
+        assert(type(dotted) == "number" and fileClose(dotted) == true and fileDelete("a..b.txt") == true, "dots in a file name")
         local matrix = getElementMatrix(me)
         assert(type(matrix) == "table" and type(matrix[4][1]) == "number" and matrix[4][4] == 1, "matrix")
         assert(setHeatHaze(10) == true and getHeatHaze() == 10, "heat haze")
@@ -443,6 +445,12 @@ void CheckHelpers(WorldRPG::Script::LuaVMStub& vm) {
         assert(setWeaponProperty(22, "std", "damage", 99) == true, "weapon set")
         assert(getWeaponProperty(22, "std", "damage") == 99, "weapon override")
         assert(getOriginalWeaponProperty(22, "std", "damage") == 25, "weapon original")
+        assert(getWeaponProperty(22, "std", "flag_aim_1st_person") == false, "colt aim flag")
+        assert(setWeaponProperty(22, "std", "flag_aim_1st_person", true) == true, "colt flag set")
+        assert(getWeaponProperty(22, "std", "flag_aim_1st_person") == true, "colt flag read")
+        assert(getWeaponProperty(22, "std", "flags") == 12343, "colt flags word")
+        assert(setWeaponProperty(22, "std", "flag_aim_1st_person", true) == false, "colt flag already set")
+        assert(getOriginalWeaponProperty(22, "std", "flags") == 12339, "colt flags original")
         assert(getWeaponProperty(22, "std", "nope") == false and getWeaponProperty(0, "std", "damage") == false, "weapon range")
         assert(addClothingModel("customtex", "custommod", 0) == true, "add clothes")
         local addedType, addedIndex = getTypeIndexFromClothes("customtex", "custommod")
@@ -452,19 +460,38 @@ void CheckHelpers(WorldRPG::Script::LuaVMStub& vm) {
         assert(removeClothingModel("customtex", "custommod", 0) == true, "remove clothes")
         assert(getTypeIndexFromClothes("customtex", "custommod") == false, "removed clothes")
         local function onRender() end
-        addEventHandler("onClientRender", me, onRender)
+        assert(addEventHandler("onClientRender", me, onRender) == true, "add handler")
+        assert(addEventHandler("onClientRender", me, onRender) == false, "duplicate handler")
         local handlers = getEventHandlers("onClientRender", me)
         local found = false
         if type(handlers) == "table" then
             for _, fn in ipairs(handlers) do if fn == onRender then found = true end end
         end
         assert(found, "event handlers")
+        local rootHandlers = getEventHandlers("onClientRender", root)
+        local onRoot = false
+        if type(rootHandlers) == "table" then
+            for _, fn in ipairs(rootHandlers) do if fn == onRender then onRoot = true end end
+        end
+        assert(onRoot == false, "handler stays on the player")
         assert(getEventHandlers("onClientRender") == false, "event handlers need an element")
         local hit = false
         addEventHandler("onTest", me, function(n) hit = n == 5 end)
         assert(triggerEvent("onTest", me, 5) == true and hit == true, "triggerEvent")
         addEventHandler("onStop", me, function() cancelEvent() end)
         assert(triggerEvent("onStop", me) == false and wasEventCancelled() == true, "trigger cancel")
+        local nested = true
+        addEventHandler("onOuter", me, function() nested = triggerEvent("onStop", me) end)
+        assert(triggerEvent("onOuter", me) == true and nested == false, "nested cancel")
+        local playerOnly = false
+        local function onlyMe() playerOnly = true end
+        assert(addEventHandler("onPlayerOnly", me, onlyMe) == true, "player handler")
+        assert(triggerEvent("onPlayerOnly", root) == true and playerOnly == false, "element filter")
+        assert(removeEventHandler("onPlayerOnly", root, onlyMe) == false, "remove is per element")
+        assert(removeEventHandler("onPlayerOnly", me, onlyMe) == true, "remove on the element")
+        local bubbled = false
+        addEventHandler("onBubble", root, function() bubbled = true end)
+        assert(triggerEvent("onBubble", me) == true and bubbled == true, "bubble to root")
         assert(triggerEvent("onTest") == nil, "trigger needs an element")
     )LUA");
 }
@@ -488,6 +515,81 @@ void CheckGui(WorldRPG::Script::LuaVMStub& vm) {
         local w, h = guiGetSize(btn, false)
         assert(w == 480 and h == 108, 'absolute size of relative element')
         assert(showCursor(true) == true and isCursorShowing() == true, 'cursor flag')
+        local bar = guiCreateProgressBar(0, 0, 100, 20, false)
+        assert(guiProgressBarSetProgress(bar, 40) == true and guiProgressBarGetProgress(bar) == 40, 'progress')
+        local a = guiCreateRadioButton(0, 0, 80, 20, 'A', false)
+        local b = guiCreateRadioButton(0, 0, 80, 20, 'B', false)
+        assert(guiRadioButtonSetSelected(a, true) == true and guiRadioButtonSetSelected(b, true) == true, 'radios')
+        assert(guiRadioButtonGetSelected(a) == false and guiRadioButtonGetSelected(b) == true, 'one radio')
+        local scroll = guiCreateScrollBar(0, 0, 100, 16, true, false)
+        assert(guiScrollBarSetScrollPosition(scroll, 150) == true and guiScrollBarGetScrollPosition(scroll) == 100, 'scrollbar')
+        local edit = guiCreateEdit(0, 0, 80, 20, 'ab', false)
+        assert(guiEditSetMaxLength(edit, 2) == true and guiSetText(edit, 'abcd') == true and guiGetText(edit) == 'ab', 'edit length')
+        assert(guiEditSetCaretIndex(edit, 1) == true and guiEditGetCaretIndex(edit) == 1, 'caret')
+        assert(guiProgressBarSetProgress(bar, 40.9) == true and guiProgressBarGetProgress(bar) == 40, 'progress truncates')
+        local dotted = guiCreateStaticImage(0, 0, 8, 8, 'a..b.png', false)
+        assert(isElement(dotted) == true and guiCreateStaticImage(0, 0, 8, 8, '../x.png', false) == false, 'image path')
+        assert(guiEditSetReadOnly(edit, true) == true and guiEditIsReadOnly(edit) == true, 'readonly')
+        local memo = guiCreateMemo(0, 0, 80, 40, 'note', false)
+        assert(guiMemoSetVerticalScrollPosition(memo, 10) == true and guiMemoGetVerticalScrollPosition(memo) == 10, 'memo')
+        assert(guiWindowSetMovable(win, false) == true and guiWindowIsMovable(win) == false, 'window')
+        assert(guiLabelSetColor(lab, 1, 2, 3) == true, 'label color')
+        local cr, cg, cb = guiLabelGetColor(lab)
+        assert(cr == 1 and cg == 2 and cb == 3, 'label color read')
+        guiLabelSetColor(lab, 255, 255, 255)
+        local panel = guiCreateTabPanel(0, 0, 100, 80, false)
+        local tab = guiCreateTab('One', panel)
+        assert(guiGetSelectedTab(panel).id == tab.id, 'first tab')
+        local tab2 = guiCreateTab('Two', panel)
+        assert(guiSetSelectedTab(panel, tab2) == true and guiGetSelectedTab(panel).id == tab2.id, 'select tab')
+        assert(guiDeleteTab(tab, panel) == true and isElement(tab) == false, 'delete tab')
+        assert(guiSetProperty(btn, 'AlwaysOnTop', 'True') == true and guiGetProperty(btn, 'AlwaysOnTop') == 'True', 'property')
+        assert(guiMoveToBack(btn) == true, 'move back')
+        local image = guiCreateStaticImage(0, 0, 10, 10, 'face.png', false)
+        assert(isElement(image) == true and guiStaticImageGetNativeSize(image) == false, 'static image')
+        assert(guiSetFont(lab, 'default-bold') == true and guiGetFont(lab) == 'default-bold', 'font')
+        assert(guiGetCursorType() == 'arrow', 'cursor')
+        assert(guiCreateFont('../x.ttf') == false and guiCreateFont('face.ttf', 12) == false, 'font file')
+        local grid = guiCreateGridList(0, 0, 200, 100, false)
+        assert(getElementType(grid) == 'gui-gridlist', 'grid type')
+        assert(guiGridListAddColumn(grid, 'Name', 0.5) == 1 and guiGridListAddColumn(grid, 'Score', 0.3) == 2, 'columns')
+        assert(guiGridListGetColumnCount(grid) == 2 and guiGridListGetColumnTitle(grid, 1) == 'Name', 'column title')
+        assert(guiGridListGetColumnWidth(grid, 1, true) == 0.5 and guiGridListGetColumnWidth(grid, 1, false) == 100, 'column width')
+        assert(guiGridListSetColumnWidth(grid, 1, 40, false) == true and guiGridListGetColumnWidth(grid, 1, false) == 40, 'absolute width')
+        local row = guiGridListAddRow(grid, nil, 'B')
+        assert(row == 0 and guiGridListGetItemText(grid, 0, 1) == 'B' and guiGridListGetItemText(grid, 9, 1) == '', 'skipped value')
+        assert(guiGridListAddRow(grid, 'Sam', 3) == 1 and guiGridListGetItemText(grid, 1, 2) == '3', 'row text')
+        assert(guiGridListSetItemData(grid, 1, 1, 'id') == true and guiGridListGetItemData(grid, 1, 1) == 'id', 'item data')
+        assert(guiGridListGetItemData(grid, 0, 1) == nil, 'empty data')
+        assert(guiGridListSetItemColor(grid, 1, 1, 1, 2, 3, 4) == true, 'item color')
+        local cr, cg, cb, ca = guiGridListGetItemColor(grid, 1, 1)
+        assert(cr == 1 and cg == 2 and cb == 3 and ca == 4, 'item color read')
+        local sr, sc = guiGridListGetSelectedItem(grid)
+        assert(sr == -1 and sc == 0 and guiGridListGetSelectionMode(grid) == 0, 'no selection')
+        assert(guiGridListSetSelectedItem(grid, 1, 2) == true, 'select')
+        sr, sc = guiGridListGetSelectedItem(grid)
+        assert(sr == 1 and sc == 1 and guiGridListGetSelectedCount(grid) == 2, 'selected row')
+        local picked = guiGridListGetSelectedItems(grid)
+        assert(picked[1].row == 1 and picked[1].column == 0 and picked[2].column == 1, 'selected table')
+        assert(guiGridListInsertRowAfter(grid, -1, 'Top', 1) == 0 and guiGridListGetItemText(grid, 0, 1) == 'Top', 'insert')
+        assert(guiGridListGetItemText(grid, 2, 1) == 'Sam' and guiGridListGetRowCount(grid) == 3, 'shifted row')
+        assert(guiGridListSetSelectionMode(grid, 2) == true and guiGridListGetSelectionMode(grid) == 2, 'cell mode')
+        assert(guiGridListSetSelectedItem(grid, 2, 2, true) == true, 'select cell')
+        sr, sc = guiGridListGetSelectedItem(grid)
+        assert(sr == 2 and sc == 2 and guiGridListGetSelectedCount(grid) == 1, 'one cell')
+        assert(guiGridListSetSelectionMode(grid, 1) == true, 'multi row')
+        assert(guiGridListSetSelectedItem(grid, 0, 1, false) == true and guiGridListGetSelectedCount(grid) == 3, 'extra selection')
+        assert(guiGridListSetSelectionMode(grid, 0) == true and guiGridListSetSelectedItem(grid, 1, 1, false) == true, 'single mode')
+        assert(guiGridListGetSelectedCount(grid) == 2, 'single replaces')
+        assert(guiGridListIsSortingEnabled(grid) == true and guiGridListSetSortingEnabled(grid, false) == true, 'sort flag')
+        assert(guiGridListIsSortingEnabled(grid) == false and guiGridListGetItemText(grid, 0, 1) == 'Top', 'sort keeps order')
+        assert(guiGridListSetVerticalScrollPosition(grid, 150) == true and guiGridListGetVerticalScrollPosition(grid) == 100, 'grid scroll')
+        assert(guiGridListSetScrollBars(grid, true, false) == true and guiGridListAutoSizeColumn(grid, 1) == true, 'bars and autosize')
+        assert(guiGridListRemoveRow(grid, 0) == true and guiGridListGetItemText(grid, 0, 1) == 'B', 'remove row')
+        assert(guiGridListRemoveColumn(grid, 2) == true and guiGridListGetColumnCount(grid) == 1, 'remove column')
+        assert(guiGridListSetItemText(grid, 9, 1, 'no', false, false) == true, 'missing row')
+        assert(guiGridListRemoveRow(grid, 50) == true and guiGridListGetRowCount(grid) == 2, 'missing remove')
+        assert(guiGridListClear(grid) == true and guiGridListGetRowCount(grid) == 0, 'clear')
     )LUA");
 
     std::string frame = WorldRPG::Script::ActiveVmPump();
@@ -612,6 +714,7 @@ void CheckStopLifecycle(WorldRPG::Script::LuaVMStub& vm) {
     demo.dynamicEntityId = 0x1235;
     demo.noClientCacheScripts = 1;
     demo.startCounter = 3;
+    demo.exportedFunctions = {"ping"};
     WorldRPG::Net::ResourceStartInfo other = demo;
     other.name = "other";
     other.resourceId = 6;
@@ -624,9 +727,42 @@ void CheckStopLifecycle(WorldRPG::Script::LuaVMStub& vm) {
 
     const std::string demoScript = R"LUA(
         _G.demoStarts = (_G.demoStarts or 0) + 1
-        addEventHandler("onClientResourceStart", root, function() _G.demoStarted = true end)
-        addEventHandler("onClientRender", root, function() _G.demoRenders = (_G.demoRenders or 0) + 1 end)
-        addEventHandler("onClientResourceStop", root, function(res) _G.demoStopped = res end)
+        addEventHandler("onClientResourceStart", root, function(started)
+            _G.demoStarted = true
+            if getResourceName(started) == "demo" then
+                _G.demoStartArg = started
+                _G.demoStartSource = source
+            end
+        end)
+        addEventHandler("onClientRender", root, function()
+            _G.demoRenders = (_G.demoRenders or 0) + 1
+            _G.demoSelf = getThisResource()
+        end)
+        addEventHandler("onClientResourceStop", root, function(res)
+            _G.demoStopped = res
+            _G.demoStopSource = source
+            _G.demoStopState = getResourceState(getThisResource())
+        end)
+        local created = createElement("coin")
+        _G.demoCreated = created
+        _G.demoParent = getElementParent(created)
+        showCursor(true)
+        local res = getThisResource()
+        _G.demoRes = res
+        _G.demoResName = getResourceName(res)
+        _G.demoResRoot = getResourceRootElement(res)
+        _G.demoDyn = getResourceDynamicElementRoot(res)
+        local maps = 0
+        for _, child in ipairs(getElementChildren(_G.demoResRoot)) do
+            if getElementType(child) == "map" then maps = maps + 1 end
+        end
+        _G.demoMaps = maps
+        _G.demoGui = getResourceGUIElement()
+        _G.demoChild = guiCreateWindow(0, 0, 40, 40, "child", false, _G.demoGui)
+        _G.demoExports = getResourceExportedFunctions(res)
+        _G.demoState = getResourceState(res)
+        addEventHandler("onMine", root, function() _G.demoSource = sourceResource == getThisResource() end)
+        triggerEvent("onMine", root)
         setTimer(function() _G.demoTicks = (_G.demoTicks or 0) + 1 end, 1, 0)
         _G.demoWin = guiCreateWindow(0, 0, 50, 50, "demo window", false)
     )LUA";
@@ -639,7 +775,38 @@ void CheckStopLifecycle(WorldRPG::Script::LuaVMStub& vm) {
     CHECK(WorldRPG::Script::ActiveVmFeedScripts(otherBody.data(), otherBody.size(), otherBody.size() * 8));
 
     WorldRPG::Script::ActiveVmPulseResources();
-    RunLua(vm, "after-start", "assert(_G.demoStarted == true and _G.demoStarts == 1, 'demo started once')");
+    RunLua(vm, "after-start", R"LUA(
+        assert(_G.demoStarted == true and _G.demoStarts == 1, "demo started once")
+        assert(_G.demoStartArg == _G.demoRes, "start passes the resource")
+        assert(_G.demoStartSource.id == 0x1234, "start source is the root")
+        assert(_G.demoResName == "demo" and _G.demoState == "running", "this resource")
+        assert(_G.demoRes == getResourceFromName("demo"), "same resource handle")
+        assert(isElement(_G.demoResRoot) and _G.demoResRoot.id == 0x1234, "resource root")
+        assert(getElementType(_G.demoResRoot) == "resource", "resource type")
+        assert(isElement(_G.demoDyn) and _G.demoDyn.id == 0x1235 and getElementType(_G.demoDyn) == "map", "dynamic root")
+        assert(_G.demoParent.id == _G.demoDyn.id and _G.demoMaps == 1, "one dynamic map")
+        assert(isElement(_G.demoGui) and getElementType(_G.demoGui) == "guiroot", "gui root")
+        assert(isElement(_G.demoChild), "window parented to gui root")
+        assert(_G.demoSource == true, "sourceResource")
+        assert(_G.demoExports[1] == "ping", "exports")
+        assert(getResourceName(getResourceFromName("other")) == "other", "resource by name")
+        assert(getResourceFromName("missing") == false, "unknown resource")
+        local names = {}
+        for _, res in ipairs(getResources()) do names[getResourceName(res)] = true end
+        assert(names.demo and names.other, "resource list")
+        assert(getThisResource() == false, "core code has no resource")
+    )LUA");
+
+    WorldRPG::Net::ResourceStartInfo again = demo;
+    again.resourceId = 7;
+    again.entityId = 0x1236;
+    again.dynamicEntityId = 0x1237;
+    again.noClientCacheScripts = 1;
+    again.exportedFunctions = {"pong"};
+    WorldRPG::Script::ActiveVmOnResourceStart(again);
+    const std::vector<uint8_t> againBody = NoCacheScriptBody(7, "showCursor(true)\n");
+    CHECK(WorldRPG::Script::ActiveVmFeedScripts(againBody.data(), againBody.size(), againBody.size() * 8));
+    WorldRPG::Script::ActiveVmPulseResources();
 
     WorldRPG::Script::ActiveVmPump();
     WorldRPG::Script::ActiveVmPump();
@@ -648,6 +815,11 @@ void CheckStopLifecycle(WorldRPG::Script::LuaVMStub& vm) {
     RunLua(vm, "before-stop",
            "assert(_G.demoRenders == 3 and _G.otherRenders == 3, 'both resources render')\n"
            "assert(_G.demoTicks and _G.demoTicks >= 1, 'demo timer fired')\n"
+           "assert(_G.demoSelf == _G.demoRes, 'handler stays on the old resource')\n"
+           "assert(getResourceFromName('demo') ~= _G.demoRes, 'name finds the new start')\n"
+           "assert(getResourceExportedFunctions(getResourceFromName('demo'))[1] == 'pong', 'new exports')\n"
+           "assert(getResourceState(_G.demoRes) == 'running', 'old one still running')\n"
+           "assert(getResourceRootElement(_G.demoRes).id == 0x1234, 'old root')\n"
            "_G.snapTicks, _G.snapRenders = _G.demoTicks, _G.demoRenders");
 
     // RESOURCE_STOP for net id 5: CResourceStopPacket writes the id as a uint16.
@@ -655,7 +827,14 @@ void CheckStopLifecycle(WorldRPG::Script::LuaVMStub& vm) {
     stop.Write(static_cast<uint16_t>(5));
     WorldRPG::Script::ActiveVmOnResourceStop(stop.GetData(), stop.GetByteLength(), stop.GetBitLength());
     RunLua(vm, "stop-event",
-           "assert(_G.demoStopped ~= nil and _G.demoStopped.id == 0x1234, 'onClientResourceStop got the root')");
+           "assert(_G.demoStopped == _G.demoRes, 'stop passes the resource')\n"
+           "assert(_G.demoStopSource.id == 0x1234, 'stop source is the root')\n"
+           "assert(_G.demoStopState == 'stopping', 'stop state')\n"
+           "assert(getResourceFromName('demo') ~= _G.demoRes, 'old handle is not the current demo')\n"
+           "assert(not isElement(_G.demoResRoot), 'old root is gone')\n"
+           "assert(not isElement(_G.demoCreated), 'client elements are destroyed')\n"
+           "assert(not isElement(_G.demoGui) and not isElement(_G.demoChild), 'old gui is gone')\n"
+           "assert(isCursorShowing() == true, 'the other start still holds the cursor')");
     RunLua(vm, "stop-gui", "assert(not isElement(_G.demoWin), 'stopped resource GUI elements are destroyed')");
 
     // The stopped resource's handlers and timers are gone; the other resource still runs.

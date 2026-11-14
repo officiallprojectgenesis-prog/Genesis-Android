@@ -8,6 +8,7 @@
 #include "LuaStoredElementApi.h"
 #include "LuaClothesApi.h"
 #include "LuaWeaponApi.h"
+#include "LuaResourceApi.h"
 #include "LuaApiExtra.h"
 #include "LuaGuiApi.h"
 #include "ResourceLoader.h"
@@ -47,7 +48,14 @@ struct DxRuntime {
     int screenW = 1920;
     int screenH = 1080;
     bool chatHooked = false;
-    std::unordered_map<std::string, std::vector<int>> handlers;
+    struct Handler {
+        int ref = 0;
+        uint32_t element = 0;
+        bool propagated = true;
+        uint16_t netId = 0;
+        uint32_t generation = 0;
+    };
+    std::unordered_map<std::string, std::vector<Handler>> handlers;
     // Resource that registered each handler, keyed by registry ref ("" for core scripts).
     std::unordered_map<int, std::string> handlerOwner;
     struct Timer {
@@ -58,12 +66,16 @@ struct DxRuntime {
         std::uint64_t left = 0;
         bool paused = false;
         std::string owner;
+        uint16_t netId = 0;
+        uint32_t generation = 0;
     };
     std::vector<Timer> timers;
     struct PendingChat { std::string text; int r = 255, g = 255, b = 255; };
     std::vector<PendingChat> pendingChat;
     std::string frame;
     std::string owner;  // resource whose code is running; tags the handlers and timers it registers
+    uint16_t ownerNetId = 0;
+    uint32_t ownerGeneration = 0;
 };
 DxRuntime g_dx;
 
@@ -104,13 +116,52 @@ static LuaVMStub* g_active = nullptr;
 
 // Sets the running resource for the duration of a Lua call (a load or a callback).
 struct OwnerScope {
-    explicit OwnerScope(std::string owner) : saved_(std::move(g_dx.owner)) { g_dx.owner = std::move(owner); }
-    ~OwnerScope() { g_dx.owner = std::move(saved_); }
+    OwnerScope(std::string owner, uint16_t netId, uint32_t generation)
+        : saved_(std::move(g_dx.owner)), savedNet_(g_dx.ownerNetId), savedGen_(g_dx.ownerGeneration) {
+        g_dx.owner = std::move(owner);
+        g_dx.ownerNetId = netId;
+        g_dx.ownerGeneration = generation;
+    }
+    ~OwnerScope() {
+        g_dx.owner = std::move(saved_);
+        g_dx.ownerNetId = savedNet_;
+        g_dx.ownerGeneration = savedGen_;
+    }
     OwnerScope(const OwnerScope&) = delete;
     OwnerScope& operator=(const OwnerScope&) = delete;
 
 private:
     std::string saved_;
+    uint16_t savedNet_ = 0;
+    uint32_t savedGen_ = 0;
+};
+
+// Saves sourceResource and sourceResourceRoot, then sets them for this call.
+struct EventSourceScope {
+    EventSourceScope(uint16_t netId, uint32_t generation) : state_(g_dx.L) {
+        if (!state_) return;
+        lua_getglobal(state_, "sourceResource");
+        resourceRef_ = luaL_ref(state_, LUA_REGISTRYINDEX);
+        lua_getglobal(state_, "sourceResourceRoot");
+        rootRef_ = luaL_ref(state_, LUA_REGISTRYINDEX);
+        ApplyEventSource(state_, netId, generation);
+    }
+    ~EventSourceScope() {
+        if (!state_) return;
+        lua_rawgeti(state_, LUA_REGISTRYINDEX, rootRef_);
+        lua_setglobal(state_, "sourceResourceRoot");
+        lua_rawgeti(state_, LUA_REGISTRYINDEX, resourceRef_);
+        lua_setglobal(state_, "sourceResource");
+        luaL_unref(state_, LUA_REGISTRYINDEX, rootRef_);
+        luaL_unref(state_, LUA_REGISTRYINDEX, resourceRef_);
+    }
+    EventSourceScope(const EventSourceScope&) = delete;
+    EventSourceScope& operator=(const EventSourceScope&) = delete;
+
+private:
+    lua_State* state_ = nullptr;
+    int resourceRef_ = LUA_NOREF;
+    int rootRef_ = LUA_NOREF;
 };
 
 static std::string OwnerOfHandler(int ref) {
@@ -124,6 +175,7 @@ static std::uint64_t DxNow() {
 }
 
 static bool g_eventCancelled = false;
+static bool g_wasEventCancelled = false;
 
 static int l_cancelEvent(lua_State* L) {
     bool cancel = lua_isboolean(L, 1) ? lua_toboolean(L, 1) : true;
@@ -132,27 +184,58 @@ static int l_cancelEvent(lua_State* L) {
 }
 
 static int l_wasEventCancelled(lua_State* L) {
-    lua_pushboolean(L, g_eventCancelled ? 1 : 0);
+    // CEvents::WasEventCancelled reads the flag PostEventPulse stored (CEvents.cpp 143-157).
+    lua_pushboolean(L, g_wasEventCancelled ? 1 : 0);
     return 1;
 }
 
-static void fireHandlers(const char* name, int nargs) {
-    if (!g_dx.L) return;
-    auto found = g_dx.handlers.find(name);
-    if (found == g_dx.handlers.end() || found->second.empty()) {
-        lua_pop(g_dx.L, nargs);
-        return;
-    }
+static bool HandlerLive(const std::vector<DxRuntime::Handler>& live, int ref) {
+    for (const DxRuntime::Handler& handler : live)
+        if (handler.ref == ref) return true;
+    return false;
+}
+
+// CEvents::PreEventPulse / PostEventPulse (CEvents.cpp 136-147) around
+// CClientEntity::CallParentEvent (CClientEntity.cpp 811-823). Returns false when
+// cancelEvent ran. A nested call saves the outer cancel flag and restores it.
+static bool fireHandlers(const char* name, int nargs, uint32_t base) {
+    if (!g_dx.L) return true;
+    const bool saved = g_eventCancelled;
     g_eventCancelled = false;
-    // Args are already on the stack. Copy them for every handler. Iterate over a copy
-    // of the list, and skip handlers removed by an earlier handler of the same event.
-    const std::vector<int> refs = found->second;
-    for (int ref : refs) {
-        const auto& live = g_dx.handlers[name];
-        if (std::find(live.begin(), live.end(), ref) == live.end()) continue;
+    g_wasEventCancelled = false;
+    EventSourceScope source(g_dx.ownerNetId, g_dx.ownerGeneration);
+    auto finish = [&](bool cancelled) {
+        g_wasEventCancelled = cancelled;
+        g_eventCancelled = saved;
+        lua_pop(g_dx.L, nargs);
+        return !cancelled;
+    };
+    auto found = g_dx.handlers.find(name);
+    if (found == g_dx.handlers.end() || found->second.empty() || base == 0) return finish(false);
+    std::vector<uint32_t> chain;
+    CollectEventChain(base, chain);
+    const std::vector<DxRuntime::Handler> copy = found->second;
+    std::vector<int> order;
+    for (size_t i = 0; i < chain.size(); ++i) {
+        for (const DxRuntime::Handler& handler : copy) {
+            if (handler.element != chain[i]) continue;
+            if (i > 0 && !handler.propagated) continue;
+            order.push_back(handler.ref);
+        }
+    }
+    for (int ref : order) {
+        const auto live = g_dx.handlers.find(name);
+        if (live == g_dx.handlers.end() || !HandlerLive(live->second, ref)) continue;
         const std::string owner = OwnerOfHandler(ref);
         if (std::strcmp(name, "onClientRender") == 0 && WorldRPG::Debug::Flag(("nodx:" + owner + ";").c_str())) continue;
-        OwnerScope scope(owner);
+        uint16_t netId = 0;
+        uint32_t generation = 0;
+        for (const DxRuntime::Handler& handler : copy)
+            if (handler.ref == ref) {
+                netId = handler.netId;
+                generation = handler.generation;
+            }
+        OwnerScope scope(owner, netId, generation);
         lua_rawgeti(g_dx.L, LUA_REGISTRYINDEX, ref);
         for (int i = 0; i < nargs; ++i) lua_pushvalue(g_dx.L, -1 - nargs);
         if (lua_pcall(g_dx.L, nargs, 0, 0) != LUA_OK) {
@@ -160,17 +243,17 @@ static void fireHandlers(const char* name, int nargs) {
             lua_pop(g_dx.L, 1);
         }
     }
-    lua_pop(g_dx.L, nargs);
+    return finish(g_eventCancelled);
 }
 
 // Desktop onClientKey is one down and one up (CClientGame key handler). state is the press boolean.
 static void FireKey(const char* key) {
     lua_pushstring(g_dx.L, key);
     lua_pushboolean(g_dx.L, 1);
-    fireHandlers("onClientKey", 2);
+    fireHandlers("onClientKey", 2, ClientRootElement());
     lua_pushstring(g_dx.L, key);
     lua_pushboolean(g_dx.L, 0);
-    fireHandlers("onClientKey", 2);
+    fireHandlers("onClientKey", 2, ClientRootElement());
 }
 
 // source is the element. Changed and Accepted also take it as their argument
@@ -181,7 +264,7 @@ static void FireElementEvent(const char* name, uint32_t id, bool withArg) {
     PushElement(g_dx.L, id);
     lua_setglobal(g_dx.L, "source");
     if (withArg) PushElement(g_dx.L, id);
-    fireHandlers(name, withArg ? 1 : 0);
+    fireHandlers(name, withArg ? 1 : 0, id);
     lua_setglobal(g_dx.L, "source");
 }
 
@@ -250,7 +333,7 @@ static void ApplyScriptInput() {
             const unsigned char lead = static_cast<unsigned char>(ev.text[i]);
             if (ev.text[i] != '\n' && ev.text[i] != '\r' && lead >= 32) {
                 lua_pushlstring(g_dx.L, ev.text.data() + i, n);
-                fireHandlers("onClientCharacter", 1);
+                fireHandlers("onClientCharacter", 1, ClientRootElement());
             }
             i += n;
         }
@@ -285,26 +368,53 @@ static void PumpEndedSounds() {
         PushElement(g_dx.L, id);
         lua_setglobal(g_dx.L, "source");
         lua_pushstring(g_dx.L, "finished");
-        fireHandlers("onClientSoundStopped", 1);
+        fireHandlers("onClientSoundStopped", 1, id);
         lua_setglobal(g_dx.L, "source");
     }
 }
 
 static int l_addEventHandler(lua_State* L) {
-    const char* name = luaL_checkstring(L, 1);
-    if (!lua_isfunction(L, 3)) return 0;
+    // CLuaFunctionDefs::AddEventHandler (lua/CLuaFunctionDefs.Event.cpp 45-105).
+    // Priority is not stored. getPropagated defaults to true.
+    const char* name = lua_tostring(L, 1);
+    const uint32_t element = ElementIdOf(L, 2);
+    if (!name || element == 0 || !lua_isfunction(L, 3)) {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+    bool propagated = true;
+    if (!lua_isnoneornil(L, 4)) {
+        if (!lua_isboolean(L, 4)) {
+            lua_pushboolean(L, 0);
+            return 1;
+        }
+        propagated = lua_toboolean(L, 4) != 0;
+    }
+    auto& list = g_dx.handlers[name];
+    for (const DxRuntime::Handler& handler : list) {
+        if (handler.element != element) continue;
+        lua_rawgeti(L, LUA_REGISTRYINDEX, handler.ref);
+        const bool same = lua_rawequal(L, -1, 3) != 0;
+        lua_pop(L, 1);
+        if (!same) continue;
+        lua_pushboolean(L, 0);
+        return 1;
+    }
     lua_pushvalue(L, 3);
     const int ref = luaL_ref(L, LUA_REGISTRYINDEX);
-    g_dx.handlers[name].push_back(ref);
+    DxRuntime::Handler added{ref, element, propagated, g_dx.ownerNetId, g_dx.ownerGeneration};
+    list.push_back(added);
     g_dx.handlerOwner[ref] = g_dx.owner;
     if (std::strcmp(name, "onClientChatMessage") == 0) g_dx.chatHooked = true;
-    return 0;
+    lua_pushboolean(L, 1);
+    return 1;
 }
 
 static int l_getEventHandlers(lua_State* L) {
-    // CLuaFunctionDefs::GetEventHandlers (142-171). Handlers are kept by event name.
+    // CLuaFunctionDefs::GetEventHandlers (lua/CLuaFunctionDefs.Event.cpp 142-171).
     const char* name = lua_tostring(L, 1);
-    if (!name || ElementIdOf(L, 2) == 0) {
+    const uint32_t element = ElementIdOf(L, 2);
+    if (!name || element == 0) {
         lua_pushboolean(L, 0);
         return 1;
     }
@@ -312,16 +422,17 @@ static int l_getEventHandlers(lua_State* L) {
     const auto found = g_dx.handlers.find(name);
     if (found == g_dx.handlers.end()) return 1;
     int index = 0;
-    for (int ref : found->second) {
+    for (const DxRuntime::Handler& handler : found->second) {
+        if (handler.element != element) continue;
         lua_pushinteger(L, ++index);
-        lua_rawgeti(L, LUA_REGISTRYINDEX, ref);
+        lua_rawgeti(L, LUA_REGISTRYINDEX, handler.ref);
         lua_settable(L, -3);
     }
     return 1;
 }
 
 static int l_triggerEvent(lua_State* L) {
-    // CLuaFunctionDefs::TriggerEvent (174-201). Calls the handlers stored for the name.
+    // CLuaFunctionDefs::TriggerEvent (lua/CLuaFunctionDefs.Event.cpp 174-201).
     const char* name = lua_tostring(L, 1);
     const uint32_t id = ElementIdOf(L, 2);
     if (!name || id == 0) {
@@ -334,10 +445,9 @@ static int l_triggerEvent(lua_State* L) {
     PushElement(L, id);
     lua_setglobal(L, "source");
     for (int i = 3; i <= top; ++i) lua_pushvalue(L, i);
-    g_eventCancelled = false;
-    fireHandlers(name, nargs);
+    const bool ran = fireHandlers(name, nargs, id);
     lua_setglobal(L, "source");
-    lua_pushboolean(L, g_eventCancelled ? 0 : 1);
+    lua_pushboolean(L, ran ? 1 : 0);
     return 1;
 }
 
@@ -453,24 +563,33 @@ static int l_dxDrawImage(lua_State* L) { return AppendImageDraw(L, false); }
 static int l_dxDrawImageSection(lua_State* L) { return AppendImageDraw(L, true); }
 
 static int l_removeEventHandler(lua_State* L) {
-    const char* name = luaL_checkstring(L, 1);
-    lua_pushboolean(L, 0);
-    if (!lua_isfunction(L, 3)) return 1;
+    // CLuaFunctionDefs::RemoveEventHandler (lua/CLuaFunctionDefs.Event.cpp 107-140).
+    const char* name = lua_tostring(L, 1);
+    const uint32_t element = ElementIdOf(L, 2);
+    if (!name || element == 0 || !lua_isfunction(L, 3)) {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
     auto found = g_dx.handlers.find(name);
-    if (found == g_dx.handlers.end()) return 1;
+    if (found == g_dx.handlers.end()) {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
     auto& refs = found->second;
     for (auto it = refs.begin(); it != refs.end(); ++it) {
-        lua_rawgeti(L, LUA_REGISTRYINDEX, *it);
+        if (it->element != element) continue;
+        lua_rawgeti(L, LUA_REGISTRYINDEX, it->ref);
         const bool same = lua_rawequal(L, -1, 3) != 0;
         lua_pop(L, 1);
         if (!same) continue;
-        const int ref = *it;
-        luaL_unref(L, LUA_REGISTRYINDEX, ref);
-        g_dx.handlerOwner.erase(ref);
+        luaL_unref(L, LUA_REGISTRYINDEX, it->ref);
+        g_dx.handlerOwner.erase(it->ref);
         refs.erase(it);
+        if (std::strcmp(name, "onClientChatMessage") == 0) g_dx.chatHooked = !refs.empty();
         lua_pushboolean(L, 1);
-        break;
+        return 1;
     }
+    lua_pushboolean(L, 0);
     return 1;
 }
 
@@ -550,6 +669,8 @@ static int l_setTimer(lua_State* L) {
     timer.next = DxNow() + static_cast<std::uint64_t>(interval);
     timer.left = static_cast<std::uint64_t>(interval);
     timer.owner = g_dx.owner;
+    timer.netId = g_dx.ownerNetId;
+    timer.generation = g_dx.ownerGeneration;
     g_dx.timers.push_back(timer);
     lua_pushinteger(L, timer.ref);
     return 1;
@@ -1704,6 +1825,7 @@ static void installDxBindings(lua_State* L) {
     InstallStoredElementLua(L);
     InstallClothesLua(L);
     InstallWeaponLua(L);
+    InstallResourceLua(L);
     // These two stay on this file even if extra bindings register the same names.
     lua_pushcfunction(L, l_getNetworkStats);
     lua_setglobal(L, "getNetworkStats");
@@ -1829,21 +1951,9 @@ bool LuaVMStub::initialize() {
 
     pImpl_->registerStdLibs();
 
-    // Register default MTA client-side function stubs
-    // Names still without an implementation. Anything else is bound in installDxBindings
-    // or LuaApiExtra.cpp, which replace these stubs.
-    const char* mtaClientFunctions[] = {
-        "getResourceName"
-    };
-
-    for (const char* fn : mtaClientFunctions) {
-        std::string name(fn);
-        pImpl_->registeredFunctions[name] = [name]() -> int {
-            LUA_LOGI("LuaVM: call to unimplemented MTA function '%s'", name.c_str());
-            return 0;
-        };
-    }
-
+    // Names still without an implementation go in registeredFunctions before
+    // registerAllFunctions. The list is empty: getResourceName is a real function now.
+    // installDxBindings and LuaApiExtra bind everything else.
     pImpl_->registerAllFunctions();
 
     g_active = this;
@@ -2055,7 +2165,7 @@ static void SendResourceStarted(const WorldRPG::Script::ResourceLoadJob& job) {
 // list order, then onClientResourceStart with the resource root as source.
 static void RunResourceJob(lua_State* L, const WorldRPG::Script::ResourceLoadJob& job) {
     if (WorldRPG::Debug::Flag("nolua")) return;
-    OwnerScope owner(job.name);
+    OwnerScope owner(job.name, job.netId, job.generation);
     refreshLocalPlayer(L);
     lua_newtable(L);                       // resource environment
     lua_newtable(L);                       // its metatable: reads fall through to the VM globals
@@ -2083,7 +2193,10 @@ static void RunResourceJob(lua_State* L, const WorldRPG::Script::ResourceLoadJob
     luaL_unref(L, LUA_REGISTRYINDEX, envRef);
     PushElement(L, job.rootElement);
     lua_setglobal(L, "source");
-    fireHandlers("onClientResourceStart", 0);
+    // CResource::Load (CResource.cpp 1626-1628): the argument is the resource, and
+    // the event is called on the resource element so it reaches its parents.
+    const int startArgs = PushResourceInstance(L, job.netId, job.generation) ? 1 : 0;
+    fireHandlers("onClientResourceStart", startArgs, job.rootElement ? job.rootElement : ClientRootElement());
     LUA_LOGI("LuaVM: resource %s started: %d cached scripts, %d no-cache scripts", job.name.c_str(), cachedOk, noCacheOk);
     if (failed) LUA_LOGE("LuaVM: resource %s: %d script(s) failed to load", job.name.c_str(), failed);
     SendResourceStarted(job);
@@ -2091,22 +2204,15 @@ static void RunResourceJob(lua_State* L, const WorldRPG::Script::ResourceLoadJob
 
 static void FlushPendingChat(lua_State* L) {
     if (!g_dx.chatHooked || g_dx.pendingChat.empty()) return;
-    auto found = g_dx.handlers.find("onClientChatMessage");
-    if (found != g_dx.handlers.end()) {
+    if (g_dx.handlers.find("onClientChatMessage") != g_dx.handlers.end()) {
         for (const auto& chat : g_dx.pendingChat) {
-            for (int ref : found->second) {
-                OwnerScope scope(OwnerOfHandler(ref));
-                lua_rawgeti(L, LUA_REGISTRYINDEX, ref);
-                lua_pushlstring(L, chat.text.data(), chat.text.size());
-                lua_pushinteger(L, chat.r);
-                lua_pushinteger(L, chat.g);
-                lua_pushinteger(L, chat.b);
-                lua_pushinteger(L, 0);
-                if (lua_pcall(L, 5, 0, 0) != LUA_OK) {
-                    LUA_LOGE("Lua chat: %s", lua_tostring(L, -1));
-                    lua_pop(L, 1);
-                }
-            }
+            lua_pushlstring(L, chat.text.data(), chat.text.size());
+            lua_pushinteger(L, chat.r);
+            lua_pushinteger(L, chat.g);
+            lua_pushinteger(L, chat.b);
+            lua_pushinteger(L, 0);
+            // outputChatBox calls the event on the root (CStaticFunctionDefinitions.cpp 292).
+            fireHandlers("onClientChatMessage", 5, ClientRootElement());
         }
     }
     g_dx.pendingChat.clear();
@@ -2121,21 +2227,12 @@ bool LuaVMStub::onChatMessage(const char* text, int red, int green, int blue) {
     auto found = g_dx.handlers.find("onClientChatMessage");
     if (found == g_dx.handlers.end() || found->second.empty()) return true;
 
-    g_eventCancelled = false;
-    for (int ref : found->second) {
-        OwnerScope scope(OwnerOfHandler(ref));
-        lua_rawgeti(L, LUA_REGISTRYINDEX, ref);
-        lua_pushstring(L, text);
-        lua_pushinteger(L, red);
-        lua_pushinteger(L, green);
-        lua_pushinteger(L, blue);
-        lua_pushinteger(L, 0);
-        if (lua_pcall(L, 5, 0, 0) != LUA_OK) {
-            LUA_LOGE("Lua chat: %s", lua_tostring(L, -1));
-            lua_pop(L, 1);
-        }
-    }
-    return !g_eventCancelled;
+    lua_pushstring(L, text);
+    lua_pushinteger(L, red);
+    lua_pushinteger(L, green);
+    lua_pushinteger(L, blue);
+    lua_pushinteger(L, 0);
+    return fireHandlers("onClientChatMessage", 5, ClientRootElement());
 }
 
 // Fires onClientClick (and onClientCursorMove) for the queued touches. Signature as on desktop:
@@ -2171,7 +2268,7 @@ static void PumpCursorEvents() {
             lua_pushnumber(L, px);
             lua_pushnumber(L, py);
             lua_pushnumber(L, pz);
-            fireHandlers("onClientCursorMove", 7);
+            fireHandlers("onClientCursorMove", 7, ClientRootElement());
             continue;
         }
         lua_pushstring(L, "left");
@@ -2182,7 +2279,7 @@ static void PumpCursorEvents() {
         lua_pushnumber(L, py);
         lua_pushnumber(L, pz);
         lua_pushboolean(L, 0);
-        fireHandlers("onClientClick", 8);
+        fireHandlers("onClientClick", 8, ClientRootElement());
     }
 }
 
@@ -2193,7 +2290,7 @@ std::string LuaVMStub::pumpDx() {
     for (size_t i = 0; i < g_dx.timers.size(); ++i) {
         if (g_dx.timers[i].times == 0 || g_dx.timers[i].paused || now < g_dx.timers[i].next) continue;
         {
-            OwnerScope scope(g_dx.timers[i].owner);
+            OwnerScope scope(g_dx.timers[i].owner, g_dx.timers[i].netId, g_dx.timers[i].generation);
             lua_rawgeti(pImpl_->L, LUA_REGISTRYINDEX, g_dx.timers[i].ref);
             if (lua_pcall(pImpl_->L, 0, 0, 0) != LUA_OK) {
                 LUA_LOGE("Lua timer: %s", lua_tostring(pImpl_->L, -1));
@@ -2211,8 +2308,8 @@ std::string LuaVMStub::pumpDx() {
     g_dx.frame.clear();
     PulseCamera();
     // login_camera.lua moves the tour in onClientPreRender, before the DX menu.
-    fireHandlers("onClientPreRender", 0);
-    if (!WorldRPG::Debug::Flag("nodx")) fireHandlers("onClientRender", 0);
+    fireHandlers("onClientPreRender", 0, ClientRootElement());
+    if (!WorldRPG::Debug::Flag("nodx")) fireHandlers("onClientRender", 0, ClientRootElement());
     GuiAppendDraws(g_dx.frame);
     // "C" line: the cursor is showing, so the Android overlay takes touches (MtaDxView).
     // "K" line: a gui-edit has focus, or a script called guiSetInputEnabled(true), so the
@@ -2381,24 +2478,28 @@ bool ActiveVmOnServerEvent(const uint8_t* body, size_t length, size_t bits) {
     if (handlers == g_dx.handlers.end() || handlers->second.empty()) {
         LUA_LOGI("LuaVM: server event %s has no client handler (%u args)", name.c_str(), static_cast<unsigned>(count));
     }
-    fireHandlers(name.c_str(), static_cast<int>(count));
+    fireHandlers(name.c_str(), static_cast<int>(count), source ? source : ClientRootElement());
     return true;
 }
 
 // Removes the handlers and timers that a resource registered, and the resource's
 // Lua state with them (its environment is only referenced by those closures).
-static void DropResourceState(lua_State* L, const std::string& name) {
-    GuiDropResource(name);
+static void DropResourceState(lua_State* L, const std::string& name, uint16_t netId, uint32_t generation) {
+    GuiDropResource(name, netId, generation);
     for (auto& [event, refs] : g_dx.handlers) {
-        refs.erase(std::remove_if(refs.begin(), refs.end(), [&](int ref) {
-            if (OwnerOfHandler(ref) != name) return false;
-            luaL_unref(L, LUA_REGISTRYINDEX, ref);
-            g_dx.handlerOwner.erase(ref);
+        refs.erase(std::remove_if(refs.begin(), refs.end(), [&](const DxRuntime::Handler& handler) {
+            if (OwnerOfHandler(handler.ref) != name) return false;
+            if (netId != 0 && handler.netId != 0 && handler.netId != netId) return false;
+            if (generation != 0 && handler.generation != 0 && handler.generation != generation) return false;
+            luaL_unref(L, LUA_REGISTRYINDEX, handler.ref);
+            g_dx.handlerOwner.erase(handler.ref);
             return true;
         }), refs.end());
     }
     for (auto& timer : g_dx.timers) {
         if (timer.owner != name) continue;
+        if (netId != 0 && timer.netId != 0 && timer.netId != netId) continue;
+        if (generation != 0 && timer.generation != 0 && timer.generation != generation) continue;
         luaL_unref(L, LUA_REGISTRYINDEX, timer.ref);
         timer.times = 0;
     }
@@ -2410,26 +2511,41 @@ static void DropResourceState(lua_State* L, const std::string& name) {
 
 // Desktop CResource::Stop: onClientResourceStop runs with the resource root as source and
 // argument, then the resource's state is dropped. Only that resource's handlers run.
-static void RunResourceStop(lua_State* L, const std::string& name, uint32_t root) {
+static void RunResourceStop(lua_State* L, const std::string& name, uint32_t root, uint16_t netId, uint32_t generation) {
     PushElement(L, root);
     lua_setglobal(L, "source");
     const auto found = g_dx.handlers.find("onClientResourceStop");
     if (found != g_dx.handlers.end()) {
-        const std::vector<int> refs = found->second;
-        for (int ref : refs) {
-            const auto& live = g_dx.handlers["onClientResourceStop"];
-            if (std::find(live.begin(), live.end(), ref) == live.end()) continue;
-            if (OwnerOfHandler(ref) != name) continue;
-            OwnerScope scope(name);
-            lua_rawgeti(L, LUA_REGISTRYINDEX, ref);
-            PushElement(L, root);
+        const std::vector<DxRuntime::Handler> refs = found->second;
+        std::vector<uint32_t> chain;
+        CollectEventChain(root ? root : ClientRootElement(), chain);
+        for (const DxRuntime::Handler& handler : refs) {
+            const auto live = g_dx.handlers.find("onClientResourceStop");
+            if (live == g_dx.handlers.end() || !HandlerLive(live->second, handler.ref)) continue;
+            if (OwnerOfHandler(handler.ref) != name) continue;
+            if (netId != 0 && handler.netId != 0 && handler.netId != netId) continue;
+            if (generation != 0 && handler.generation != 0 && handler.generation != generation) continue;
+            bool match = false;
+            for (size_t i = 0; i < chain.size(); ++i) {
+                if (handler.element != chain[i]) continue;
+                if (i > 0 && !handler.propagated) break;
+                match = true;
+                break;
+            }
+            if (!match) continue;
+            OwnerScope scope(name, handler.netId, handler.generation);
+            lua_rawgeti(L, LUA_REGISTRYINDEX, handler.ref);
+            // CResource::Stop (CResource.cpp 1651-1653) passes the resource. source
+            // stays the resource root, set above.
+            const bool pushed = PushResourceInstance(L, netId, generation);
+            if (!pushed) PushElement(L, root);
             if (lua_pcall(L, 1, 0, 0) != LUA_OK) {
                 LUA_LOGE("Lua onClientResourceStop (%s): %s", name.c_str(), lua_tostring(L, -1));
                 lua_pop(L, 1);
             }
         }
     }
-    DropResourceState(L, name);
+    DropResourceState(L, name, netId, generation);
 }
 
 // RESOURCE_STOP (83), desktop CPacketHandler::Packet_ResourceStop: the resource is removed
@@ -2446,9 +2562,11 @@ void ActiveVmOnResourceStop(const uint8_t* body, size_t length, size_t bits) {
         return;
     }
     if (g_dx.L) {
-        if (gone.started) RunResourceStop(g_dx.L, gone.name, gone.rootElement);
-        else DropResourceState(g_dx.L, gone.name);
+        if (gone.started) RunResourceStop(g_dx.L, gone.name, gone.rootElement, netId, gone.generation);
+        else DropResourceState(g_dx.L, gone.name, netId, gone.generation);
+        ReleaseResourceElements(gone.rootElement, gone.dynamicElement);
     }
+    ResourceLoader::FinishStop(netId, gone.generation);
     ReleaseCameraOwner(gone.name);
     LUA_LOGI("LuaVM: resource %s stopped (net id %u, scripts ran: %s)", gone.name.c_str(), static_cast<unsigned>(netId),
              gone.started ? "yes" : "no");
@@ -2492,6 +2610,14 @@ void ActiveVmScreenSize(int& width, int& height) {
 }
 const std::string& ActiveVmOwner() {
     return g_dx.owner;
+}
+
+uint16_t ActiveVmOwnerNet() {
+    return g_dx.ownerNetId;
+}
+
+uint32_t ActiveVmOwnerGeneration() {
+    return g_dx.ownerGeneration;
 }
 void ActiveVmQueueCursor(int action, float x, float y) {
     std::lock_guard<std::mutex> lock(g_cursorMutex);

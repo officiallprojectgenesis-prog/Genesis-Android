@@ -24,7 +24,13 @@ const char* GuiElementType(uint32_t id);
 // Destroys a GUI element and its children. False when id is not a GUI element.
 bool GuiDestroy(uint32_t id);
 // Destroys the GUI elements a resource created (desktop: the resource GUI entity on stop).
-void GuiDropResource(const std::string& owner);
+// netId 0 drops every element of that resource name. A non-zero netId drops only
+// the elements created by that instance, so a restarted resource keeps its own.
+void GuiDropResource(const std::string& owner, uint16_t netId, uint32_t generation);
+// The resource GUI parent (CResource.cpp 87-88). One full-screen guiroot per
+// resource instance, accepted by guiCreate* as a parent. The same id is returned
+// every call for that instance.
+uint32_t GuiEnsureResourceRoot(const std::string& owner, uint16_t netId, uint32_t generation);
 // Drops every GUI element (new VM or session).
 void GuiReset();
 // True while any resource still holds the cursor (showCursor). One resource's

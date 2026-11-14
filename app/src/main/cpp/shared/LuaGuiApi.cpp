@@ -26,6 +26,7 @@ namespace {
 
 // Server element ids are 17 bits, so GUI ids start above them and never collide.
 constexpr uint32_t kFirstGuiId = 0x40000000u;
+lua_State* g_guiVm = nullptr;
 
 // Desktop "default" font (tahoma, D3DX height 15) is the scale-1 reference size.
 constexpr double kDefaultFontHeight = 15.0;
@@ -48,6 +49,8 @@ struct Box {
 struct GuiElement {
     std::string type;
     std::string owner;              // resource that created it
+    uint16_t netId = 0;             // which start of that resource, 0 when unknown
+    uint32_t generation = 0;
     uint32_t parent = 0;            // 0 = top level, drawn on the screen
     double x = 0, y = 0, w = 0, h = 0;
     bool relPos = false;
@@ -56,7 +59,7 @@ struct GuiElement {
     bool visible = true;
     bool enabled = true;
     double alpha = 1.0;
-    uint32_t z = 0;                 // sibling draw order; higher is in front
+    int z = 0;                      // sibling draw order; higher is in front
     bool selected = false;          // checkbox (desktop GetSelected, not the CEGUI invert)
     bool masked = false;            // gui-edit, guiEditSetMasked (CGUIEdit::SetMasked)
     bool dropOpen = false;          // combobox drop list
@@ -64,12 +67,39 @@ struct GuiElement {
     int selectedItem = -1;          // combobox, -1 is none (CGUIComboBox_Impl::GetSelectedItemIndex)
     std::string caption;            // combobox storedCaption, restored when the selection clears
     std::vector<std::string> items; // combobox rows, index 0 is the first item
+    int caret = 0;
+    int maxLength = 0;              // 0: no script limit (the edit still stops at 4096)
+    bool readOnly = false;
+    double scroll = 0;              // progress bar, scrollbar, and memo/pane vertical, 0-100
+    double scrollX = 0;             // scroll pane horizontal, 0-100
+    bool horizontal = false;        // scrollbar
+    bool barH = true, barV = true;  // scroll pane bars
+    bool movable = true, sizable = true;
+    int red = 255, green = 255, blue = 255;
+    std::string alignH = "left", alignV = "top";
+    std::string font = "default";
+    uint32_t tab = 0;               // selected tab of a tab panel
+    std::map<std::string, std::string> props;
+    struct GridColumn { std::string title; double width = 0.3; };
+    struct GridCell {
+        std::string text;
+        bool number = false;
+        bool section = false;
+        bool selected = false;
+        int r = 255, g = 255, b = 255, a = 255;
+        int dataRef = LUA_NOREF;
+    };
+    std::vector<GridColumn> columns;
+    std::vector<std::vector<GridCell>> gridRows;
+    int gridMode = 0;
+    bool gridSort = true;
 };
 
 // Ordered by id. Draw order among siblings is z, not id (guiBringToFront).
 std::map<uint32_t, GuiElement> g_elements;
 uint32_t g_nextId = kFirstGuiId;
 uint32_t g_nextZ = 0;
+int g_backZ = 0;
 uint32_t g_focused = 0;
 
 // Desktop CGUI_Impl starts in INPUTMODE_NO_BINDS_ON_EDIT (CGUI_Impl.cpp:76, 343-387).
@@ -198,6 +228,60 @@ std::string Masked(const std::string& text) {
 }
 
 // Text in one line: the draw format cannot carry a line break.
+int TextChars(const std::string& text) {
+    int count = 0;
+    for (size_t i = 0; i < text.size();) {
+        const auto lead = static_cast<unsigned char>(text[i]);
+        size_t step = 1;
+        if ((lead & 0xE0) == 0xC0) step = 2;
+        else if ((lead & 0xF0) == 0xE0) step = 3;
+        else if ((lead & 0xF8) == 0xF0) step = 4;
+        if (i + step > text.size()) step = 1;
+        i += step;
+        ++count;
+    }
+    return count;
+}
+
+int LongestLineChars(const std::string& text) {
+    int best = 0;
+    int line = 0;
+    for (size_t i = 0; i <= text.size();) {
+        if (i == text.size() || text[i] == '\n') {
+            if (line > best) best = line;
+            line = 0;
+            if (i == text.size()) break;
+            ++i;
+            continue;
+        }
+        if (text[i] == '\r') {
+            ++i;
+            continue;
+        }
+        const auto lead = static_cast<unsigned char>(text[i]);
+        size_t step = 1;
+        if ((lead & 0xE0) == 0xC0) step = 2;
+        else if ((lead & 0xF0) == 0xE0) step = 3;
+        else if ((lead & 0xF8) == 0xF0) step = 4;
+        if (i + step > text.size()) step = 1;
+        i += step;
+        ++line;
+    }
+    return best;
+}
+
+bool ParentSegment(const std::string& raw) {
+    size_t start = 0;
+    while (start <= raw.size()) {
+        const size_t slash = raw.find_first_of("/\\", start);
+        const size_t count = slash == std::string::npos ? std::string::npos : slash - start;
+        if (raw.compare(start, count, "..") == 0) return true;
+        if (slash == std::string::npos) return false;
+        start = slash + 1;
+    }
+    return false;
+}
+
 std::string OneLine(const char* text, size_t length) {
     std::string out(text ? text : "", length);
     for (char& ch : out) {
@@ -239,6 +323,8 @@ double Requested(double pixels, double parentSize, bool relative) {
 // Puts the element in the map. z is the sibling order (later creates are in front).
 uint32_t Emplace(GuiElement element) {
     element.owner = ActiveVmOwner();
+    element.netId = ActiveVmOwnerNet();
+    element.generation = ActiveVmOwnerGeneration();
     element.z = ++g_nextZ;
     const uint32_t id = g_nextId++;
     g_elements.emplace(id, std::move(element));
@@ -334,6 +420,8 @@ bool GuiIsElement(uint32_t id) {
     return Find(id) != nullptr;
 }
 
+static void ReleaseGridData(GuiElement& element);
+
 const char* GuiElementType(uint32_t id) {
     const GuiElement* element = Find(id);
     return element ? element->type.c_str() : nullptr;
@@ -351,26 +439,75 @@ bool GuiDestroy(uint32_t id) {
     for (uint32_t gone : doomed) {
         if (g_focused == gone) GuiSetFocused(0);
     }
-    for (uint32_t gone : doomed) g_elements.erase(gone);
+    for (uint32_t gone : doomed) {
+        if (GuiElement* element = Find(gone)) ReleaseGridData(*element);
+        g_elements.erase(gone);
+    }
     return true;
 }
 
-void GuiDropResource(const std::string& owner) {
+uint32_t GuiEnsureResourceRoot(const std::string& owner, uint16_t netId, uint32_t generation) {
+    if (owner.empty()) return 0;
+    for (const auto& [id, element] : g_elements) {
+        if (element.type != "guiroot" || element.owner != owner) continue;
+        if (generation != 0 && element.generation != generation) continue;
+        if (netId != 0 && element.netId != netId) continue;
+        return id;
+    }
+    // Full-screen relative box so a child uses the screen, the same as no parent.
+    // Visible so children stay visible. PickBranch does not treat this box as a hit.
+    GuiElement element;
+    element.type = "guiroot";
+    element.owner = owner;
+    element.relPos = true;
+    element.relSize = true;
+    element.w = 1.0;
+    element.h = 1.0;
+    const uint32_t id = Emplace(std::move(element));
+    if (GuiElement* created = Find(id)) {
+        created->owner = owner;
+        created->netId = netId;
+        created->generation = generation;
+    }
+    return id;
+}
+
+std::string CursorKey(const std::string& owner, uint32_t generation) {
+    if (owner.empty() || generation == 0) return owner;
+    return owner + "#" + std::to_string(generation);
+}
+
+void GuiDropResource(const std::string& owner, uint16_t netId, uint32_t generation) {
     if (owner.empty()) return;
     // CResource's destructor calls ShowCursor(false) (CResource.cpp:220) before it
-    // deletes the resource's GUI elements, so this resource's hold is released and
-    // any other resource that still holds the cursor keeps it showing.
-    ReleaseCursorHold(owner);
+    // deletes the resource's GUI elements. The hold is per start, so another start
+    // of the same name keeps the cursor if it still asked for it.
+    ReleaseCursorHold(CursorKey(owner, generation));
     std::vector<uint32_t> mine;
     for (const auto& [id, element] : g_elements) {
-        if (element.owner == owner) mine.push_back(id);
+        if (element.owner != owner) continue;
+        if (netId != 0 && element.netId != 0 && element.netId != netId) continue;
+        if (generation != 0 && element.generation != 0 && element.generation != generation) continue;
+        mine.push_back(id);
     }
     for (uint32_t id : mine) GuiDestroy(id);
+}
+
+static void ReleaseGridData(GuiElement& element) {
+    if (!g_guiVm) return;
+    for (auto& row : element.gridRows) {
+        for (auto& cell : row) {
+            if (cell.dataRef == LUA_NOREF) continue;
+            luaL_unref(g_guiVm, LUA_REGISTRYINDEX, cell.dataRef);
+            cell.dataRef = LUA_NOREF;
+        }
+    }
 }
 
 void GuiReset() {
     g_cursorHold.clear();
     g_cursorHolds = 0;
+    for (auto& entry : g_elements) ReleaseGridData(entry.second);
     g_elements.clear();
     // Direct clear: session teardown must not fire focus events.
     g_focused = 0;
@@ -408,6 +545,40 @@ static void DrawElement(std::string& out, uint32_t id, const GuiElement& element
         std::string shown = element.masked ? Masked(line) : line;
         if (g_focused == id) shown.push_back('|');
         AppendText(out, box.x, box.y, box.x + box.w, box.y + box.h, textColor, alpha, shown);
+    } else if (element.type == "gui-tabpanel") {
+        AppendRect(out, box, kWindowBackground, alpha);
+        double x = box.x;
+        for (const auto& [childId, child] : g_elements) {
+            if (child.parent != id || child.type != "gui-tab") continue;
+            const std::string title = OneLine(child.text.c_str(), child.text.size());
+            const double w = 12.0 + static_cast<double>(title.size()) * 8.0;
+            AppendRect(out, Box{x, box.y, w, 18.0}, childId == element.tab ? kButtonBackground : kFieldBackground, alpha);
+            AppendText(out, x + 4, box.y, x + w, box.y + 18.0, textColor, alpha, title);
+            x += w;
+        }
+    } else if (element.type == "gui-memo") {
+        AppendRect(out, box, kFieldBackground, alpha);
+        AppendText(out, box.x, box.y, box.x + box.w, box.y + box.h, textColor, alpha, line);
+    } else if (element.type == "gui-progressbar") {
+        AppendRect(out, box, kFieldBackground, alpha);
+        const double fill = box.w * std::clamp(element.scroll, 0.0, 100.0) / 100.0;
+        if (fill > 0.0) AppendRect(out, Box{box.x, box.y, fill, box.h}, kCheckMark, alpha);
+    } else if (element.type == "gui-scrollbar") {
+        AppendRect(out, box, kFieldBackground, alpha);
+        const double t = std::clamp(element.scroll, 0.0, 100.0) / 100.0;
+        if (element.horizontal) {
+            const double w = std::max(8.0, box.w * 0.2);
+            AppendRect(out, Box{box.x + (box.w - w) * t, box.y, w, box.h}, kButtonBackground, alpha);
+        } else {
+            const double h = std::max(8.0, box.h * 0.2);
+            AppendRect(out, Box{box.x, box.y + (box.h - h) * t, box.w, h}, kButtonBackground, alpha);
+        }
+    } else if (element.type == "gui-radiobutton") {
+        Box mark{box.x, box.y, std::min(16.0, std::max(0.0, box.w)), std::min(16.0, std::max(0.0, box.h))};
+        AppendRect(out, mark, kCheckBackground, alpha);
+        if (element.selected && mark.w > 6.0 && mark.h > 6.0)
+            AppendRect(out, Box{mark.x + 4, mark.y + 4, mark.w - 8, mark.h - 8}, kCheckMark, alpha);
+        AppendText(out, box.x + 20, box.y, box.x + box.w, box.y + box.h, textColor, alpha, line);
     } else if (element.type == "gui-checkbox") {
         Box mark{box.x, box.y, std::min(16.0, std::max(0.0, box.w)), std::min(16.0, std::max(0.0, box.h))};
         AppendRect(out, mark, kCheckBackground, alpha);
@@ -415,6 +586,35 @@ static void DrawElement(std::string& out, uint32_t id, const GuiElement& element
             AppendRect(out, Box{mark.x + 3, mark.y + 3, mark.w - 6, mark.h - 6}, kCheckMark, alpha);
         }
         AppendText(out, box.x + 20, box.y, box.x + box.w, box.y + box.h, textColor, alpha, line);
+    } else if (element.type == "gui-gridlist") {
+        AppendRect(out, box, kFieldBackground, alpha);
+        double x = box.x;
+        const double header = 16.0;
+        for (const GuiElement::GridColumn& column : element.columns) {
+            const double w = std::max(8.0, box.w * column.width);
+            AppendRect(out, Box{x, box.y, w, header}, kButtonBackground, alpha);
+            AppendText(out, x + 2, box.y, x + w, box.y + header, textColor, alpha, OneLine(column.title.c_str(), column.title.size()));
+            x += w;
+        }
+        for (size_t row = 0; row < element.gridRows.size() && row < 8; ++row) {
+            x = box.x;
+            const double y = box.y + header + static_cast<double>(row) * 16.0;
+            for (size_t col = 0; col < element.columns.size() && col < element.gridRows[row].size(); ++col) {
+                const double w = std::max(8.0, box.w * element.columns[col].width);
+                const auto& cell = element.gridRows[row][col];
+                if (cell.selected) AppendRect(out, Box{x, y, w, 16.0}, kCheckMark, alpha * 0.45);
+                const uint32_t cellColor = 0xFF000000u | (static_cast<uint32_t>(cell.r) << 16) |
+                    (static_cast<uint32_t>(cell.g) << 8) | static_cast<uint32_t>(cell.b);
+                AppendText(out, x + 2, y, x + w, y + 16.0, cellColor, alpha * (cell.a / 255.0),
+                    OneLine(cell.text.c_str(), cell.text.size()));
+                x += w;
+            }
+        }
+    } else if (element.type == "gui-label") {
+        const uint32_t color = element.enabled
+            ? (0xFF000000u | (static_cast<uint32_t>(element.red) << 16) | (static_cast<uint32_t>(element.green) << 8) | static_cast<uint32_t>(element.blue))
+            : kTextDisabled;
+        AppendText(out, box.x, box.y, box.x + box.w, box.y + box.h, color, alpha, line);
     } else {
         AppendText(out, box.x, box.y, box.x + box.w, box.y + box.h, textColor, alpha, line);
     }
@@ -447,7 +647,11 @@ static void DrawBranch(std::string& out, uint32_t parent) {
     for (uint32_t id : kids) {
         const GuiElement* element = Find(id);
         if (!element || !EffectivelyVisible(*element)) continue;
-        DrawElement(out, id, *element);
+        if (element->type != "gui-tab") DrawElement(out, id, *element);
+        if (element->type == "gui-tab") {
+            const GuiElement* panel = element->parent ? Find(element->parent) : nullptr;
+            if (!panel || panel->type != "gui-tabpanel" || panel->tab != id) continue;
+        }
         DrawBranch(out, id);
     }
 }
@@ -473,7 +677,13 @@ uint32_t PickBranch(uint32_t parent, double x, double y) {
     for (uint32_t id : kids) {
         const GuiElement* element = Find(id);
         if (!element || !EffectivelyVisible(*element) || !EffectivelyEnabled(*element)) continue;
-        if (BoxContains(ScreenBox(id), x, y)) hit = id;
+        // The resource guiroot covers the screen so children can be placed in it.
+        // It is not itself a widget (CClientDummy "guiroot").
+        if (element->type != "guiroot" && BoxContains(ScreenBox(id), x, y)) hit = id;
+        if (element->type == "gui-tab") {
+            const GuiElement* panel = element->parent ? Find(element->parent) : nullptr;
+            if (panel && panel->type == "gui-tabpanel" && panel->tab != id) continue;
+        }
         if (const uint32_t child = PickBranch(id, x, y)) hit = child;
     }
     return hit;
@@ -511,9 +721,13 @@ void GuiSetFocused(uint32_t id) {
 
 bool GuiEditAppend(const char* bytes, size_t length) {
     GuiElement* element = Find(GuiFocusedEdit());
-    if (!element || !bytes || length == 0) return false;
+    if (!element || !bytes || length == 0 || element->readOnly) return false;
+    if (element->maxLength > 0 &&
+        TextChars(element->text) + TextChars(std::string(bytes, length)) > element->maxLength)
+        return false;
     if (element->text.size() + length > 4096) return false;
     element->text.append(bytes, length);
+    element->caret = static_cast<int>(element->text.size());
     return true;
 }
 
@@ -525,6 +739,8 @@ bool GuiEditErase() {
         --end;
     } while (end > 0 && (static_cast<unsigned char>(element->text[end]) & 0xC0) == 0x80);
     element->text.resize(end);
+    const int chars = TextChars(element->text);
+    if (element->caret > chars) element->caret = chars;
     return true;
 }
 
@@ -1282,7 +1498,13 @@ static int GuiSetText(lua_State* L) {
     uint32_t id = 0;
     std::string text;
     if (!args.gui(id, nullptr) || !args.text(text)) return Reject(L, "guiSetText", args, false);
-    if (GuiElement* element = Find(id)) element->text = std::move(text);
+    if (GuiElement* element = Find(id)) {
+        if (element->maxLength > 0 && text.size() > static_cast<size_t>(element->maxLength))
+            text.resize(static_cast<size_t>(element->maxLength));
+        element->text = std::move(text);
+        if (element->caret > static_cast<int>(element->text.size()))
+            element->caret = static_cast<int>(element->text.size());
+    }
     lua_pushboolean(L, 1);
     return 1;
 }
@@ -1394,7 +1616,7 @@ static int ShowCursor(lua_State* L) {
     if (!args.flag(show, false, false) || !args.flag(toggleControls, true, true))
         return Reject(L, "showCursor", args, false);
     (void)toggleControls;
-    SetCursorHold(ActiveVmOwner(), show);
+    SetCursorHold(CursorKey(ActiveVmOwner(), ActiveVmOwnerGeneration()), show);
     lua_pushboolean(L, 1);
     return 1;
 }
@@ -1475,7 +1697,1247 @@ static void InstallDestroyElement(lua_State* L) {
     lua_setglobal(L, "destroyElement");
 }
 
+static bool ClampPercent(double value, double& out) {
+    if (std::isnan(value)) return false;
+    if (value < 0.0) value = 0.0;
+    if (value > 100.0) value = 100.0;
+    out = value;
+    return true;
+}
+
+static int CreateBox(lua_State* L, const char* name, const char* type) {
+    Args args{L};
+    GuiElement element;
+    bool relative = false;
+    uint32_t parent = 0;
+    if (!args.vec2(element.x, element.y) || !args.vec2(element.w, element.h) ||
+        !args.flag(relative, true, false) || !args.parent(parent)) {
+        return Reject(L, name, args, false);
+    }
+    element.type = type;
+    element.relPos = relative;
+    element.relSize = relative;
+    element.parent = parent;
+    PushElement(L, Emplace(std::move(element)));
+    return 1;
+}
+
+// CLuaGUIDefs.cpp 857-887.
+static int GuiCreateProgressBar(lua_State* L) { return CreateBox(L, "guiCreateProgressBar", "gui-progressbar"); }
+// CLuaGUIDefs.cpp 1065-1095.
+static int GuiCreateScrollPane(lua_State* L) { return CreateBox(L, "guiCreateScrollPane", "gui-scrollpane"); }
+// CLuaGUIDefs.cpp 1133-1163.
+static int GuiCreateTabPanel(lua_State* L) { return CreateBox(L, "guiCreateTabPanel", "gui-tabpanel"); }
+
+// CLuaGUIDefs.cpp 997-1029.
+static int GuiCreateMemo(lua_State* L) {
+    Args args{L};
+    GuiElement element;
+    bool relative = false;
+    uint32_t parent = 0;
+    if (!args.vec2(element.x, element.y) || !args.vec2(element.w, element.h) || !args.text(element.text) ||
+        !args.flag(relative, true, false) || !args.parent(parent)) {
+        return Reject(L, "guiCreateMemo", args, false);
+    }
+    element.type = "gui-memo";
+    element.relPos = relative;
+    element.relSize = relative;
+    element.parent = parent;
+    PushElement(L, Emplace(std::move(element)));
+    return 1;
+}
+
+// CLuaGUIDefs.cpp 927-964.
+static int GuiCreateRadioButton(lua_State* L) {
+    Args args{L};
+    GuiElement element;
+    bool relative = false;
+    uint32_t parent = 0;
+    if (!args.vec2(element.x, element.y) || !args.vec2(element.w, element.h) || !args.text(element.text) ||
+        !args.flag(relative, true, false) || !args.parent(parent)) {
+        return Reject(L, "guiCreateRadioButton", args, false);
+    }
+    element.type = "gui-radiobutton";
+    element.relPos = relative;
+    element.relSize = relative;
+    element.parent = parent;
+    PushElement(L, Emplace(std::move(element)));
+    return 1;
+}
+
+// CLuaGUIDefs.cpp 1098-1130. horizontal is required.
+static int GuiCreateScrollBar(lua_State* L) {
+    Args args{L};
+    GuiElement element;
+    bool relative = false;
+    uint32_t parent = 0;
+    if (!args.vec2(element.x, element.y) || !args.vec2(element.w, element.h) || !args.flag(element.horizontal, false, false) ||
+        !args.flag(relative, true, false) || !args.parent(parent)) {
+        return Reject(L, "guiCreateScrollBar", args, false);
+    }
+    element.type = "gui-scrollbar";
+    element.relPos = relative;
+    element.relSize = relative;
+    element.parent = parent;
+    PushElement(L, Emplace(std::move(element)));
+    return 1;
+}
+
+static bool g_diagImage = false;
+
+// CLuaGUIDefs.cpp 770-819. The file is not decoded; the path is stored.
+static int GuiCreateStaticImage(lua_State* L) {
+    Args args{L};
+    GuiElement element;
+    bool relative = false;
+    uint32_t parent = 0;
+    if (!args.vec2(element.x, element.y) || !args.vec2(element.w, element.h) || !args.text(element.text) ||
+        element.text.empty() || ParentSegment(element.text) ||
+        !args.flag(relative, true, false) || !args.parent(parent)) {
+        return Reject(L, "guiCreateStaticImage", args, false);
+    }
+    if (!g_diagImage) {
+        g_diagImage = true;
+        LUA_LOGE("DIAG guiCreateStaticImage: the bitmap is not decoded; the path is stored");
+    }
+    element.type = "gui-staticimage";
+    element.relPos = relative;
+    element.relSize = relative;
+    element.parent = parent;
+    PushElement(L, Emplace(std::move(element)));
+    return 1;
+}
+
+// CLuaGUIDefs.cpp 1231-1256. The parent is a tab panel. The first tab is selected.
+static int GuiCreateTab(lua_State* L) {
+    Args args{L};
+    std::string text;
+    uint32_t parent = 0;
+    if (!args.text(text) || !args.gui(parent, "gui-tabpanel")) return Reject(L, "guiCreateTab", args, false);
+    GuiElement element;
+    element.type = "gui-tab";
+    element.text = std::move(text);
+    element.parent = parent;
+    element.relPos = true;
+    element.relSize = true;
+    element.w = 1.0;
+    element.h = 1.0;
+    const uint32_t id = Emplace(std::move(element));
+    if (GuiElement* panel = Find(parent))
+        if (panel->tab == 0) panel->tab = id;
+    PushElement(L, id);
+    return 1;
+}
+
+// CLuaGUIDefs.cpp 1410-1429. A lower z is behind its siblings.
+static int GuiMoveToBack(lua_State* L) {
+    Args args{L};
+    uint32_t id = 0;
+    if (!args.gui(id, nullptr)) return Reject(L, "guiMoveToBack", args, false);
+    GuiElement* element = Find(id);
+    if (!element) {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+    element->z = --g_backZ;
+    lua_pushboolean(L, 1);
+    return 1;
+}
+
+static int SetCaret(lua_State* L, const char* name, const char* type) {
+    Args args{L};
+    uint32_t id = 0;
+    int index = 0;
+    if (!args.gui(id, type) || !args.integer(index) || index < 0) return Reject(L, name, args, false);
+    GuiElement* element = Find(id);
+    if (!element) {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+    const int limit = TextChars(element->text);
+    element->caret = index > limit ? limit : index;
+    lua_pushboolean(L, 1);
+    return 1;
+}
+
+static int GetCaret(lua_State* L, const char* name, const char* type) {
+    Args args{L};
+    uint32_t id = 0;
+    if (!args.gui(id, type)) return Reject(L, name, args, false);
+    const GuiElement* element = Find(id);
+    lua_pushinteger(L, element ? element->caret : 0);
+    return 1;
+}
+
+// CLuaGUIDefs.cpp 3254-3288 and 3071-3104.
+static int GuiEditSetCaretIndex(lua_State* L) { return SetCaret(L, "guiEditSetCaretIndex", "gui-edit"); }
+static int GuiEditGetCaretIndex(lua_State* L) { return GetCaret(L, "guiEditGetCaretIndex", "gui-edit"); }
+static int GuiMemoSetCaretIndex(lua_State* L) { return SetCaret(L, "guiMemoSetCaretIndex", "gui-memo"); }
+static int GuiMemoGetCaretIndex(lua_State* L) { return GetCaret(L, "guiMemoGetCaretIndex", "gui-memo"); }
+
+static int SetReadOnly(lua_State* L, const char* name, const char* type) {
+    Args args{L};
+    uint32_t id = 0;
+    bool state = false;
+    if (!args.gui(id, type) || !args.flag(state, false, false)) return Reject(L, name, args, false);
+    if (GuiElement* element = Find(id)) element->readOnly = state;
+    lua_pushboolean(L, 1);
+    return 1;
+}
+
+static int IsReadOnly(lua_State* L, const char* name, const char* type) {
+    Args args{L};
+    uint32_t id = 0;
+    if (!args.gui(id, type)) return Reject(L, name, args, false);
+    const GuiElement* element = Find(id);
+    lua_pushboolean(L, element && element->readOnly ? 1 : 0);
+    return 1;
+}
+
+static int GuiEditSetReadOnly(lua_State* L) { return SetReadOnly(L, "guiEditSetReadOnly", "gui-edit"); }
+static int GuiEditIsReadOnly(lua_State* L) { return IsReadOnly(L, "guiEditIsReadOnly", "gui-edit"); }
+static int GuiMemoSetReadOnly(lua_State* L) { return SetReadOnly(L, "guiMemoSetReadOnly", "gui-memo"); }
+static int GuiMemoIsReadOnly(lua_State* L) { return IsReadOnly(L, "guiMemoIsReadOnly", "gui-memo"); }
+
+// CLuaGUIDefs.cpp 3209-3240.
+static int GuiEditSetMaxLength(lua_State* L) {
+    Args args{L};
+    uint32_t id = 0;
+    int length = 0;
+    if (!args.gui(id, "gui-edit") || !args.integer(length) || length < 0) return Reject(L, "guiEditSetMaxLength", args, false);
+    if (GuiElement* element = Find(id)) {
+        element->maxLength = length;
+        if (length > 0 && element->text.size() > static_cast<size_t>(length)) {
+            element->text.resize(static_cast<size_t>(length));
+            if (element->caret > length) element->caret = length;
+        }
+    }
+    lua_pushboolean(L, 1);
+    return 1;
+}
+
+static int GuiEditGetMaxLength(lua_State* L) {
+    Args args{L};
+    uint32_t id = 0;
+    if (!args.gui(id, "gui-edit")) return Reject(L, "guiEditGetMaxLength", args, false);
+    const GuiElement* element = Find(id);
+    lua_pushinteger(L, element ? element->maxLength : 0);
+    return 1;
+}
+
+// CLuaGUIDefs.cpp 1524-1545. The value is 0-100 (CGUIProgressBar::SetProgress divides by 100).
+static int GuiProgressBarSetProgress(lua_State* L) {
+    Args args{L};
+    uint32_t id = 0;
+    double value = 0;
+    if (!args.gui(id, "gui-progressbar") || !args.num(value)) return Reject(L, "guiProgressBarSetProgress", args, false);
+    // Desktop casts to int before dividing by 100 (CStaticFunctionDefinitions.cpp 6213-6226).
+    const int whole = static_cast<int>(value);
+    double clamped = 0;
+    if (!ClampPercent(static_cast<double>(whole), clamped)) return Reject(L, "guiProgressBarSetProgress", args, false);
+    if (GuiElement* element = Find(id)) element->scroll = clamped;
+    lua_pushboolean(L, 1);
+    return 1;
+}
+
+static int GuiProgressBarGetProgress(lua_State* L) {
+    Args args{L};
+    uint32_t id = 0;
+    if (!args.gui(id, "gui-progressbar")) return Reject(L, "guiProgressBarGetProgress", args, false);
+    const GuiElement* element = Find(id);
+    lua_pushnumber(L, element ? element->scroll : 0);
+    return 1;
+}
+
+// CLuaGUIDefs.cpp 1432-1453. Selecting one clears the other radios with the same parent.
+static int GuiRadioButtonSetSelected(lua_State* L) {
+    Args args{L};
+    uint32_t id = 0;
+    bool state = false;
+    if (!args.gui(id, "gui-radiobutton") || !args.flag(state, false, false))
+        return Reject(L, "guiRadioButtonSetSelected", args, false);
+    GuiElement* element = Find(id);
+    if (!element) {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+    element->selected = state;
+    if (state) {
+        for (auto& [otherId, other] : g_elements) {
+            if (otherId != id && other.type == "gui-radiobutton" && other.parent == element->parent)
+                other.selected = false;
+        }
+    }
+    lua_pushboolean(L, 1);
+    return 1;
+}
+
+static int GuiRadioButtonGetSelected(lua_State* L) {
+    Args args{L};
+    uint32_t id = 0;
+    if (!args.gui(id, "gui-radiobutton")) return Reject(L, "guiRadioButtonGetSelected", args, false);
+    const GuiElement* element = Find(id);
+    lua_pushboolean(L, element && element->selected ? 1 : 0);
+    return 1;
+}
+
+// CLuaGUIDefs.cpp 1548-1569.
+static int GuiScrollBarSetScrollPosition(lua_State* L) {
+    Args args{L};
+    uint32_t id = 0;
+    double value = 0;
+    if (!args.gui(id, "gui-scrollbar") || !args.num(value)) return Reject(L, "guiScrollBarSetScrollPosition", args, false);
+    // Desktop casts to int (CStaticFunctionDefinitions.cpp 6231-6244).
+    const int whole = static_cast<int>(value);
+    double clamped = 0;
+    if (!ClampPercent(static_cast<double>(whole), clamped)) return Reject(L, "guiScrollBarSetScrollPosition", args, false);
+    if (GuiElement* element = Find(id)) element->scroll = clamped;
+    lua_pushboolean(L, 1);
+    return 1;
+}
+
+static int GuiScrollBarGetScrollPosition(lua_State* L) {
+    Args args{L};
+    uint32_t id = 0;
+    if (!args.gui(id, "gui-scrollbar")) return Reject(L, "guiScrollBarGetScrollPosition", args, false);
+    const GuiElement* element = Find(id);
+    lua_pushnumber(L, element ? element->scroll : 0);
+    return 1;
+}
+
+static int SetPaneScroll(lua_State* L, const char* name, bool horizontal) {
+    Args args{L};
+    uint32_t id = 0;
+    double value = 0;
+    if (!args.gui(id, "gui-scrollpane") || !args.num(value)) return Reject(L, name, args, false);
+    double clamped = 0;
+    if (!ClampPercent(value, clamped)) return Reject(L, name, args, false);
+    if (GuiElement* element = Find(id)) {
+        if (horizontal) element->scrollX = clamped;
+        else element->scroll = clamped;
+    }
+    lua_pushboolean(L, 1);
+    return 1;
+}
+
+static int GetPaneScroll(lua_State* L, const char* name, bool horizontal) {
+    Args args{L};
+    uint32_t id = 0;
+    if (!args.gui(id, "gui-scrollpane")) return Reject(L, name, args, false);
+    const GuiElement* element = Find(id);
+    lua_pushnumber(L, element ? (horizontal ? element->scrollX : element->scroll) : 0);
+    return 1;
+}
+
+static int GuiScrollPaneSetHorizontalScrollPosition(lua_State* L) {
+    return SetPaneScroll(L, "guiScrollPaneSetHorizontalScrollPosition", true);
+}
+static int GuiScrollPaneGetHorizontalScrollPosition(lua_State* L) {
+    return GetPaneScroll(L, "guiScrollPaneGetHorizontalScrollPosition", true);
+}
+static int GuiScrollPaneSetVerticalScrollPosition(lua_State* L) {
+    return SetPaneScroll(L, "guiScrollPaneSetVerticalScrollPosition", false);
+}
+static int GuiScrollPaneGetVerticalScrollPosition(lua_State* L) {
+    return GetPaneScroll(L, "guiScrollPaneGetVerticalScrollPosition", false);
+}
+
+static int GuiScrollPaneSetScrollBars(lua_State* L) {
+    Args args{L};
+    uint32_t id = 0;
+    bool horizontal = false;
+    bool vertical = false;
+    if (!args.gui(id, "gui-scrollpane") || !args.flag(horizontal, false, false) || !args.flag(vertical, false, false))
+        return Reject(L, "guiScrollPaneSetScrollBars", args, false);
+    if (GuiElement* element = Find(id)) {
+        element->barH = horizontal;
+        element->barV = vertical;
+    }
+    lua_pushboolean(L, 1);
+    return 1;
+}
+
+static int SetMemoScroll(lua_State* L) {
+    Args args{L};
+    uint32_t id = 0;
+    double value = 0;
+    if (!args.gui(id, "gui-memo") || !args.num(value)) return Reject(L, "guiMemoSetVerticalScrollPosition", args, false);
+    double clamped = 0;
+    if (!ClampPercent(value, clamped)) return Reject(L, "guiMemoSetVerticalScrollPosition", args, false);
+    if (GuiElement* element = Find(id)) element->scroll = clamped;
+    lua_pushboolean(L, 1);
+    return 1;
+}
+
+static int GetMemoScroll(lua_State* L) {
+    Args args{L};
+    uint32_t id = 0;
+    if (!args.gui(id, "gui-memo")) return Reject(L, "guiMemoGetVerticalScrollPosition", args, false);
+    const GuiElement* element = Find(id);
+    lua_pushnumber(L, element ? element->scroll : 0);
+    return 1;
+}
+
+static int GuiWindowSetMovable(lua_State* L) {
+    Args args{L};
+    uint32_t id = 0;
+    bool state = false;
+    if (!args.gui(id, "gui-window") || !args.flag(state, false, false)) return Reject(L, "guiWindowSetMovable", args, false);
+    if (GuiElement* element = Find(id)) element->movable = state;
+    lua_pushboolean(L, 1);
+    return 1;
+}
+static int GuiWindowIsMovable(lua_State* L) {
+    Args args{L};
+    uint32_t id = 0;
+    if (!args.gui(id, "gui-window")) return Reject(L, "guiWindowIsMovable", args, false);
+    const GuiElement* element = Find(id);
+    lua_pushboolean(L, element && element->movable ? 1 : 0);
+    return 1;
+}
+static int GuiWindowSetSizable(lua_State* L) {
+    Args args{L};
+    uint32_t id = 0;
+    bool state = false;
+    if (!args.gui(id, "gui-window") || !args.flag(state, false, false)) return Reject(L, "guiWindowSetSizable", args, false);
+    if (GuiElement* element = Find(id)) element->sizable = state;
+    lua_pushboolean(L, 1);
+    return 1;
+}
+static int GuiWindowIsSizable(lua_State* L) {
+    Args args{L};
+    uint32_t id = 0;
+    if (!args.gui(id, "gui-window")) return Reject(L, "guiWindowIsSizable", args, false);
+    const GuiElement* element = Find(id);
+    lua_pushboolean(L, element && element->sizable ? 1 : 0);
+    return 1;
+}
+
+static int ColorByte(int value) {
+    if (value < 0) return 0;
+    if (value > 255) return 255;
+    return value;
+}
+
+// CLuaGUIDefs.cpp 3526-3560.
+static int GuiLabelSetColor(lua_State* L) {
+    Args args{L};
+    uint32_t id = 0;
+    int red = 0, green = 0, blue = 0;
+    if (!args.gui(id, "gui-label") || !args.integer(red) || !args.integer(green) || !args.integer(blue))
+        return Reject(L, "guiLabelSetColor", args, false);
+    if (GuiElement* element = Find(id)) {
+        element->red = ColorByte(red);
+        element->green = ColorByte(green);
+        element->blue = ColorByte(blue);
+    }
+    lua_pushboolean(L, 1);
+    return 1;
+}
+
+static int GuiLabelGetColor(lua_State* L) {
+    Args args{L};
+    uint32_t id = 0;
+    if (!args.gui(id, "gui-label")) return Reject(L, "guiLabelGetColor", args, false);
+    const GuiElement* element = Find(id);
+    lua_pushinteger(L, element ? element->red : 255);
+    lua_pushinteger(L, element ? element->green : 255);
+    lua_pushinteger(L, element ? element->blue : 255);
+    return 3;
+}
+
+static bool AlignName(const std::string& value, const char* a, const char* b, const char* c) {
+    return value == a || value == b || value == c;
+}
+
+static int GuiLabelSetHorizontalAlign(lua_State* L) {
+    Args args{L};
+    uint32_t id = 0;
+    std::string align;
+    bool wordWrap = false;
+    if (!args.gui(id, "gui-label") || !args.text(align) || !AlignName(align, "left", "center", "right") ||
+        !args.flag(wordWrap, true, false))
+        return Reject(L, "guiLabelSetHorizontalAlign", args, false);
+    (void)wordWrap;
+    if (GuiElement* element = Find(id)) element->alignH = align;
+    lua_pushboolean(L, 1);
+    return 1;
+}
+
+static int GuiLabelSetVerticalAlign(lua_State* L) {
+    Args args{L};
+    uint32_t id = 0;
+    std::string align;
+    if (!args.gui(id, "gui-label") || !args.text(align) || !AlignName(align, "top", "center", "bottom"))
+        return Reject(L, "guiLabelSetVerticalAlign", args, false);
+    if (GuiElement* element = Find(id)) element->alignV = align;
+    lua_pushboolean(L, 1);
+    return 1;
+}
+
+static int GuiLabelGetFontHeight(lua_State* L) {
+    Args args{L};
+    uint32_t id = 0;
+    if (!args.gui(id, "gui-label")) return Reject(L, "guiLabelGetFontHeight", args, false);
+    const GuiElement* element = Find(id);
+    lua_pushnumber(L, DxFontScale(element ? element->font.c_str() : "default"));
+    return 1;
+}
+
+static int GuiLabelGetTextExtent(lua_State* L) {
+    Args args{L};
+    uint32_t id = 0;
+    if (!args.gui(id, "gui-label")) return Reject(L, "guiLabelGetTextExtent", args, false);
+    const GuiElement* element = Find(id);
+    // CGUILabel_Impl::GetTextExtent uses the longest line (CGUILabel_Impl.cpp 140-157).
+    // Without the CEGUI font, a Latin character is about half the font height.
+    const double height = DxFontScale(element ? element->font.c_str() : "default");
+    lua_pushnumber(L, element ? static_cast<double>(LongestLineChars(element->text)) * height * 0.5 : 0);
+    return 1;
+}
+
+static int GuiSetFont(lua_State* L) {
+    Args args{L};
+    uint32_t id = 0;
+    std::string font;
+    if (!args.gui(id, nullptr) || !args.text(font)) return Reject(L, "guiSetFont", args, false);
+    if (GuiElement* element = Find(id)) element->font = std::move(font);
+    lua_pushboolean(L, 1);
+    return 1;
+}
+
+static int GuiGetFont(lua_State* L) {
+    Args args{L};
+    uint32_t id = 0;
+    if (!args.gui(id, nullptr)) return Reject(L, "guiGetFont", args, false);
+    const GuiElement* element = Find(id);
+    if (!element) {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+    lua_pushlstring(L, element->font.data(), element->font.size());
+    return 1;
+}
+
+static int GuiGetSelectedTab(lua_State* L) {
+    Args args{L};
+    uint32_t id = 0;
+    if (!args.gui(id, "gui-tabpanel")) return Reject(L, "guiGetSelectedTab", args, false);
+    const GuiElement* panel = Find(id);
+    if (!panel || panel->tab == 0 || !Find(panel->tab)) {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+    PushElement(L, panel->tab);
+    return 1;
+}
+
+static int GuiSetSelectedTab(lua_State* L) {
+    Args args{L};
+    uint32_t panelId = 0;
+    uint32_t tabId = 0;
+    if (!args.gui(panelId, "gui-tabpanel") || !args.gui(tabId, "gui-tab"))
+        return Reject(L, "guiSetSelectedTab", args, false);
+    GuiElement* panel = Find(panelId);
+    GuiElement* tab = Find(tabId);
+    if (!panel || !tab || tab->parent != panelId) {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+    panel->tab = tabId;
+    lua_pushboolean(L, 1);
+    return 1;
+}
+
+static int GuiDeleteTab(lua_State* L) {
+    Args args{L};
+    uint32_t tabId = 0;
+    uint32_t panelId = 0;
+    if (!args.gui(tabId, "gui-tab") || !args.gui(panelId, "gui-tabpanel"))
+        return Reject(L, "guiDeleteTab", args, false);
+    GuiElement* tab = Find(tabId);
+    GuiElement* panel = Find(panelId);
+    if (!tab || !panel || tab->parent != panelId) {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+    GuiDestroy(tabId);
+    panel = Find(panelId);
+    if (panel && panel->tab == tabId) {
+        panel->tab = 0;
+        for (const auto& [id, element] : g_elements) {
+            if (element.parent == panelId && element.type == "gui-tab") {
+                panel->tab = id;
+                break;
+            }
+        }
+    }
+    lua_pushboolean(L, 1);
+    return 1;
+}
+
+static int GuiStaticImageLoadImage(lua_State* L) {
+    Args args{L};
+    uint32_t id = 0;
+    std::string path;
+    if (!args.gui(id, "gui-staticimage") || !args.text(path) || path.empty() || ParentSegment(path))
+        return Reject(L, "guiStaticImageLoadImage", args, false);
+    if (GuiElement* element = Find(id)) element->text = std::move(path);
+    lua_pushboolean(L, 1);
+    return 1;
+}
+
+static int GuiStaticImageGetNativeSize(lua_State* L) {
+    Args args{L};
+    uint32_t id = 0;
+    if (!args.gui(id, "gui-staticimage")) return Reject(L, "guiStaticImageGetNativeSize", args, false);
+    lua_pushboolean(L, 0);
+    return 1;
+}
+
+static int GuiSetProperty(lua_State* L) {
+    Args args{L};
+    uint32_t id = 0;
+    std::string key;
+    std::string value;
+    if (!args.gui(id, nullptr) || !args.text(key) || !args.text(value)) return Reject(L, "guiSetProperty", args, false);
+    GuiElement* element = Find(id);
+    if (!element) {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+    element->props[key] = value;
+    if (key == "AlwaysOnTop") element->alwaysOnTop = value == "True" || value == "true";
+    lua_pushboolean(L, 1);
+    return 1;
+}
+
+static int GuiGetProperty(lua_State* L) {
+    Args args{L};
+    uint32_t id = 0;
+    std::string key;
+    if (!args.gui(id, nullptr) || !args.text(key)) return Reject(L, "guiGetProperty", args, false);
+    const GuiElement* element = Find(id);
+    if (!element) {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+    const auto found = element->props.find(key);
+    if (found == element->props.end()) {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+    lua_pushlstring(L, found->second.data(), found->second.size());
+    return 1;
+}
+
+static int GuiGetProperties(lua_State* L) {
+    Args args{L};
+    uint32_t id = 0;
+    if (!args.gui(id, nullptr)) return Reject(L, "guiGetProperties", args, false);
+    const GuiElement* element = Find(id);
+    lua_newtable(L);
+    if (!element) return 1;
+    for (const auto& [key, value] : element->props) {
+        lua_pushlstring(L, value.data(), value.size());
+        lua_setfield(L, -2, key.c_str());
+    }
+    return 1;
+}
+
+static GuiElement::GridCell* GridCellAt(GuiElement& grid, int row, int column, bool create) {
+    const int index = column - 1;
+    if (row < 0 || index < 0 || index >= static_cast<int>(grid.columns.size())) return nullptr;
+    if (row >= static_cast<int>(grid.gridRows.size())) return nullptr;
+    auto& cells = grid.gridRows[static_cast<size_t>(row)];
+    if (static_cast<int>(cells.size()) < static_cast<int>(grid.columns.size())) cells.resize(grid.columns.size());
+    (void)create;
+    return &cells[static_cast<size_t>(index)];
+}
+
+static void ClearGridSelection(GuiElement& grid) {
+    for (auto& row : grid.gridRows)
+        for (auto& cell : row) cell.selected = false;
+}
+
+static int CountGridSelection(const GuiElement& grid) {
+    int count = 0;
+    for (const auto& row : grid.gridRows)
+        for (const auto& cell : row)
+            if (cell.selected) ++count;
+    return count;
+}
+
+static void ReleaseCell(lua_State* L, GuiElement::GridCell& cell) {
+    if (cell.dataRef != LUA_NOREF) {
+        luaL_unref(L, LUA_REGISTRYINDEX, cell.dataRef);
+        cell.dataRef = LUA_NOREF;
+    }
+}
+
+// CLuaGUIDefs.cpp 1032-1062. CGUIGridList_Impl.cpp 78 hides the horizontal bar.
+// Selection starts at RowSingle (CGUIGridList.h 23, constructor line 79).
+static int GuiCreateGridList(lua_State* L) {
+    const int result = CreateBox(L, "guiCreateGridList", "gui-gridlist");
+    if (result == 1 && lua_istable(L, -1)) {
+        if (GuiElement* grid = Find(ElementIdOf(L, -1))) grid->barH = false;
+    }
+    return result;
+}
+
+// CLuaGUIDefs.cpp 2180-2203. The returned id is 1-based (CGUIGridList_Impl.cpp 178).
+static int GuiGridListAddColumn(lua_State* L) {
+    Args args{L};
+    uint32_t id = 0;
+    std::string title;
+    double width = 0;
+    if (!args.gui(id, "gui-gridlist") || !args.text(title) || !args.num(width))
+        return Reject(L, "guiGridListAddColumn", args, false);
+    GuiElement* grid = Find(id);
+    if (!grid) {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+    grid->columns.push_back(GuiElement::GridColumn{std::move(title), width});
+    for (auto& row : grid->gridRows) row.resize(grid->columns.size());
+    lua_pushinteger(L, static_cast<lua_Integer>(grid->columns.size()));
+    return 1;
+}
+
+static int GuiGridListRemoveColumn(lua_State* L) {
+    Args args{L};
+    uint32_t id = 0;
+    int column = 0;
+    if (!args.gui(id, "gui-gridlist") || !args.integer(column)) return Reject(L, "guiGridListRemoveColumn", args, false);
+    GuiElement* grid = Find(id);
+    const int index = column - 1;
+    if (grid && index >= 0 && index < static_cast<int>(grid->columns.size())) {
+        grid->columns.erase(grid->columns.begin() + index);
+        for (auto& row : grid->gridRows) {
+            if (index < static_cast<int>(row.size())) {
+                ReleaseCell(L, row[static_cast<size_t>(index)]);
+                row.erase(row.begin() + index);
+            }
+        }
+    }
+    lua_pushboolean(L, grid ? 1 : 0);
+    return 1;
+}
+
+static int GuiGridListSetColumnWidth(lua_State* L) {
+    Args args{L};
+    uint32_t id = 0;
+    int column = 0;
+    double width = 0;
+    bool relative = false;
+    if (!args.gui(id, "gui-gridlist") || !args.integer(column) || !args.num(width) || !args.flag(relative, true, false))
+        return Reject(L, "guiGridListSetColumnWidth", args, false);
+    GuiElement* grid = Find(id);
+    const int index = column - 1;
+    // CLuaGUIDefs.cpp 2245-2248 returns true even when the column is missing.
+    if (grid && index >= 0 && index < static_cast<int>(grid->columns.size())) {
+        if (!relative) {
+            const double box = std::max(1.0, ScreenBox(id).w);
+            width = width / box;
+        }
+        grid->columns[static_cast<size_t>(index)].width = width;
+    }
+    lua_pushboolean(L, grid ? 1 : 0);
+    return 1;
+}
+
+static int GuiGridListGetColumnWidth(lua_State* L) {
+    Args args{L};
+    uint32_t id = 0;
+    int column = 0;
+    bool relative = false;
+    if (!args.gui(id, "gui-gridlist") || !args.integer(column) || !args.flag(relative, true, false))
+        return Reject(L, "guiGridListGetColumnWidth", args, false);
+    const GuiElement* grid = Find(id);
+    const int index = column - 1;
+    if (!grid || index < 0 || index >= static_cast<int>(grid->columns.size())) {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+    double width = grid->columns[static_cast<size_t>(index)].width;
+    if (!relative) width *= ScreenBox(id).w;
+    lua_pushnumber(L, width);
+    return 1;
+}
+
+static int GuiGridListSetColumnTitle(lua_State* L) {
+    Args args{L};
+    uint32_t id = 0;
+    int column = 0;
+    std::string title;
+    if (!args.gui(id, "gui-gridlist") || !args.integer(column) || !args.text(title))
+        return Reject(L, "guiGridListSetColumnTitle", args, false);
+    GuiElement* grid = Find(id);
+    const int index = column - 1;
+    if (grid && index >= 0 && index < static_cast<int>(grid->columns.size()))
+        grid->columns[static_cast<size_t>(index)].title = std::move(title);
+    lua_pushboolean(L, grid ? 1 : 0);
+    return 1;
+}
+
+static int GuiGridListGetColumnTitle(lua_State* L) {
+    Args args{L};
+    uint32_t id = 0;
+    int column = 0;
+    if (!args.gui(id, "gui-gridlist") || !args.integer(column)) return Reject(L, "guiGridListGetColumnTitle", args, false);
+    const GuiElement* grid = Find(id);
+    const int index = column - 1;
+    if (!grid || index < 0 || index >= static_cast<int>(grid->columns.size())) {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+    const std::string& title = grid->columns[static_cast<size_t>(index)].title;
+    lua_pushlstring(L, title.data(), title.size());
+    return 1;
+}
+
+static int GuiGridListGetColumnCount(lua_State* L) {
+    Args args{L};
+    uint32_t id = 0;
+    if (!args.gui(id, "gui-gridlist")) return Reject(L, "guiGridListGetColumnCount", args, false);
+    const GuiElement* grid = Find(id);
+    lua_pushinteger(L, grid ? static_cast<lua_Integer>(grid->columns.size()) : 0);
+    return 1;
+}
+
+static int GuiGridListGetRowCount(lua_State* L) {
+    Args args{L};
+    uint32_t id = 0;
+    if (!args.gui(id, "gui-gridlist")) return Reject(L, "guiGridListGetRowCount", args, false);
+    const GuiElement* grid = Find(id);
+    lua_pushinteger(L, grid ? static_cast<lua_Integer>(grid->gridRows.size()) : 0);
+    return 1;
+}
+
+// CLuaGUIDefs.cpp 2363-2386. A value that is not a string or a number is skipped and
+// does not take a column.
+static void FillRowText(lua_State* L, GuiElement& grid, int row, int firstArg) {
+    if (row < 0 || row >= static_cast<int>(grid.gridRows.size())) return;
+    auto& cells = grid.gridRows[static_cast<size_t>(row)];
+    cells.resize(grid.columns.size());
+    int column = 1;
+    for (int arg = firstArg; arg <= lua_gettop(L) && column <= static_cast<int>(grid.columns.size()); ++arg) {
+        const int type = lua_type(L, arg);
+        if (type != LUA_TNUMBER && type != LUA_TSTRING) continue;
+        auto& cell = cells[static_cast<size_t>(column - 1)];
+        size_t length = 0;
+        const char* text = lua_tolstring(L, arg, &length);
+        cell.text.assign(text ? text : "", length);
+        cell.number = type == LUA_TNUMBER;
+        ++column;
+    }
+}
+
+// CLuaGUIDefs.cpp 2344-2403. The row index is 0-based.
+static int GuiGridListAddRow(lua_State* L) {
+    Args args{L};
+    uint32_t id = 0;
+    if (!args.gui(id, "gui-gridlist")) return Reject(L, "guiGridListAddRow", args, false);
+    GuiElement* grid = Find(id);
+    if (!grid) {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+    grid->gridRows.emplace_back();
+    const int row = static_cast<int>(grid->gridRows.size()) - 1;
+    FillRowText(L, *grid, row, 2);
+    lua_pushinteger(L, row);
+    return 1;
+}
+
+static int GuiGridListInsertRowAfter(lua_State* L) {
+    Args args{L};
+    uint32_t id = 0;
+    int after = 0;
+    if (!args.gui(id, "gui-gridlist") || !args.integer(after)) return Reject(L, "guiGridListInsertRowAfter", args, false);
+    GuiElement* grid = Find(id);
+    if (!grid || after < -1 || after >= static_cast<int>(grid->gridRows.size())) {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+    const int row = after + 1;
+    // An empty brace here is an empty initializer list and inserts nothing.
+    grid->gridRows.emplace(grid->gridRows.begin() + row);
+    FillRowText(L, *grid, row, 3);
+    lua_pushinteger(L, row);
+    return 1;
+}
+
+static int GuiGridListRemoveRow(lua_State* L) {
+    Args args{L};
+    uint32_t id = 0;
+    int row = 0;
+    if (!args.gui(id, "gui-gridlist") || !args.integer(row)) return Reject(L, "guiGridListRemoveRow", args, false);
+    GuiElement* grid = Find(id);
+    // CLuaGUIDefs.cpp 2692 returns true. A missing row is left unchanged.
+    if (grid && row >= 0 && row < static_cast<int>(grid->gridRows.size())) {
+        for (auto& cell : grid->gridRows[static_cast<size_t>(row)]) ReleaseCell(L, cell);
+        grid->gridRows.erase(grid->gridRows.begin() + row);
+    }
+    lua_pushboolean(L, grid ? 1 : 0);
+    return 1;
+}
+
+static int GuiGridListClear(lua_State* L) {
+    Args args{L};
+    uint32_t id = 0;
+    if (!args.gui(id, "gui-gridlist")) return Reject(L, "guiGridListClear", args, false);
+    GuiElement* grid = Find(id);
+    if (grid) {
+        for (auto& row : grid->gridRows)
+            for (auto& cell : row) ReleaseCell(L, cell);
+        grid->gridRows.clear();
+    }
+    lua_pushboolean(L, grid ? 1 : 0);
+    return 1;
+}
+
+static int GuiGridListSetItemText(lua_State* L) {
+    Args args{L};
+    uint32_t id = 0;
+    int row = 0, column = 0;
+    std::string text;
+    bool section = false, number = false;
+    if (!args.gui(id, "gui-gridlist") || !args.integer(row) || !args.integer(column) || !args.text(text) ||
+        !args.flag(section, false, false) || !args.flag(number, false, false))
+        return Reject(L, "guiGridListSetItemText", args, false);
+    GuiElement* grid = Find(id);
+    // CLuaGUIDefs.cpp 2853-2856 returns true; a missing cell is left unchanged.
+    if (GuiElement::GridCell* cell = grid ? GridCellAt(*grid, row, column, true) : nullptr) {
+        cell->text = std::move(text);
+        cell->section = section;
+        cell->number = number;
+    }
+    lua_pushboolean(L, grid ? 1 : 0);
+    return 1;
+}
+
+static int GuiGridListGetItemText(lua_State* L) {
+    Args args{L};
+    uint32_t id = 0;
+    int row = 0, column = 0;
+    if (!args.gui(id, "gui-gridlist") || !args.integer(row) || !args.integer(column))
+        return Reject(L, "guiGridListGetItemText", args, false);
+    GuiElement* grid = Find(id);
+    GuiElement::GridCell* cell = grid ? GridCellAt(*grid, row, column, false) : nullptr;
+    const char* text = cell ? cell->text.c_str() : "";
+    lua_pushstring(L, text);
+    return 1;
+}
+
+static int GuiGridListSetItemData(lua_State* L) {
+    Args args{L};
+    uint32_t id = 0;
+    int row = 0, column = 0;
+    if (!args.gui(id, "gui-gridlist") || !args.integer(row) || !args.integer(column) || lua_isnone(L, args.index))
+        return Reject(L, "guiGridListSetItemData", args, false);
+    GuiElement* grid = Find(id);
+    if (GuiElement::GridCell* cell = grid ? GridCellAt(*grid, row, column, true) : nullptr) {
+        ReleaseCell(L, *cell);
+        lua_pushvalue(L, 4);
+        cell->dataRef = luaL_ref(L, LUA_REGISTRYINDEX);
+    }
+    lua_pushboolean(L, grid ? 1 : 0);
+    return 1;
+}
+
+static int GuiGridListGetItemData(lua_State* L) {
+    Args args{L};
+    uint32_t id = 0;
+    int row = 0, column = 0;
+    if (!args.gui(id, "gui-gridlist") || !args.integer(row) || !args.integer(column))
+        return Reject(L, "guiGridListGetItemData", args, false);
+    GuiElement* grid = Find(id);
+    GuiElement::GridCell* cell = grid ? GridCellAt(*grid, row, column, false) : nullptr;
+    if (!cell || cell->dataRef == LUA_NOREF) {
+        lua_pushnil(L);
+        return 1;
+    }
+    lua_rawgeti(L, LUA_REGISTRYINDEX, cell->dataRef);
+    return 1;
+}
+
+static int GuiGridListSetItemColor(lua_State* L) {
+    Args args{L};
+    uint32_t id = 0;
+    int row = 0, column = 0, red = 0, green = 0, blue = 0, alpha = 255;
+    if (!args.gui(id, "gui-gridlist") || !args.integer(row) || !args.integer(column) || !args.integer(red) ||
+        !args.integer(green) || !args.integer(blue))
+        return Reject(L, "guiGridListSetItemColor", args, false);
+    if (lua_type(L, args.index) != LUA_TNONE && lua_type(L, args.index) != LUA_TNIL && !args.integer(alpha))
+        return Reject(L, "guiGridListSetItemColor", args, false);
+    GuiElement* grid = Find(id);
+    if (GuiElement::GridCell* cell = grid ? GridCellAt(*grid, row, column, true) : nullptr) {
+        cell->r = ColorByte(red);
+        cell->g = ColorByte(green);
+        cell->b = ColorByte(blue);
+        cell->a = ColorByte(alpha);
+    }
+    lua_pushboolean(L, grid ? 1 : 0);
+    return 1;
+}
+
+static int GuiGridListGetItemColor(lua_State* L) {
+    Args args{L};
+    uint32_t id = 0;
+    int row = 0, column = 0;
+    if (!args.gui(id, "gui-gridlist") || !args.integer(row) || !args.integer(column))
+        return Reject(L, "guiGridListGetItemColor", args, false);
+    GuiElement* grid = Find(id);
+    GuiElement::GridCell* cell = grid ? GridCellAt(*grid, row, column, false) : nullptr;
+    if (!cell) {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+    lua_pushinteger(L, cell->r);
+    lua_pushinteger(L, cell->g);
+    lua_pushinteger(L, cell->b);
+    lua_pushinteger(L, cell->a);
+    return 4;
+}
+
+// CGUIGridList.h 23-32. Single modes replace the previous selection inside
+// CEGUI setItemSelectState, which SetSelectedItem calls after the optional clear.
+static bool SingleGridMode(int mode) {
+    return mode == 0 || mode == 2 || mode == 4 || mode == 6 || mode == 8;
+}
+
+static void MarkGridSelection(GuiElement& grid, int row, int column) {
+    if (!GridCellAt(grid, row, column, false)) return;
+    const int mode = grid.gridMode;
+    if (mode == 0 || mode == 1 || mode == 8 || mode == 9) {
+        for (auto& cell : grid.gridRows[static_cast<size_t>(row)]) cell.selected = true;
+        return;
+    }
+    if (mode == 6 || mode == 7) {
+        const int index = column - 1;
+        for (auto& cells : grid.gridRows) {
+            if (static_cast<int>(cells.size()) < static_cast<int>(grid.columns.size())) cells.resize(grid.columns.size());
+            if (index >= 0 && index < static_cast<int>(cells.size())) cells[static_cast<size_t>(index)].selected = true;
+        }
+        return;
+    }
+    grid.gridRows[static_cast<size_t>(row)][static_cast<size_t>(column - 1)].selected = true;
+}
+
+static int GuiGridListSetSelectedItem(lua_State* L) {
+    Args args{L};
+    uint32_t id = 0;
+    int row = 0, column = 0;
+    bool reset = true;
+    if (!args.gui(id, "gui-gridlist") || !args.integer(row) || !args.integer(column) || !args.flag(reset, true, true))
+        return Reject(L, "guiGridListSetSelectedItem", args, false);
+    GuiElement* grid = Find(id);
+    if (!grid) {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+    // CGUIGridList_Impl.cpp 761-764 clears when bReset is true. A single mode
+    // also replaces the previous selection.
+    if (reset || SingleGridMode(grid->gridMode)) ClearGridSelection(*grid);
+    if (row >= 0) MarkGridSelection(*grid, row, column);
+    lua_pushboolean(L, 1);
+    return 1;
+}
+
+static int GuiGridListGetSelectedItem(lua_State* L) {
+    Args args{L};
+    uint32_t id = 0;
+    if (!args.gui(id, "gui-gridlist")) return Reject(L, "guiGridListGetSelectedItem", args, false);
+    const GuiElement* grid = Find(id);
+    int row = -1, column = 0;
+    if (grid) {
+        for (int r = 0; r < static_cast<int>(grid->gridRows.size()) && row < 0; ++r) {
+            for (int c = 0; c < static_cast<int>(grid->gridRows[static_cast<size_t>(r)].size()); ++c) {
+                if (!grid->gridRows[static_cast<size_t>(r)][static_cast<size_t>(c)].selected) continue;
+                row = r;
+                column = c + 1;
+                break;
+            }
+        }
+    }
+    lua_pushinteger(L, row);
+    lua_pushinteger(L, column);
+    return 2;
+}
+
+static int GuiGridListGetSelectedCount(lua_State* L) {
+    Args args{L};
+    uint32_t id = 0;
+    if (!args.gui(id, "gui-gridlist")) return Reject(L, "guiGridListGetSelectedCount", args, false);
+    const GuiElement* grid = Find(id);
+    lua_pushinteger(L, grid ? CountGridSelection(*grid) : 0);
+    return 1;
+}
+
+static int GuiGridListGetSelectedItems(lua_State* L) {
+    Args args{L};
+    uint32_t id = 0;
+    if (!args.gui(id, "gui-gridlist")) return Reject(L, "guiGridListGetSelectedItems", args, false);
+    const GuiElement* grid = Find(id);
+    lua_newtable(L);
+    if (!grid) return 1;
+    int index = 0;
+    for (int r = 0; r < static_cast<int>(grid->gridRows.size()); ++r) {
+        for (int c = 0; c < static_cast<int>(grid->gridRows[static_cast<size_t>(r)].size()); ++c) {
+            if (!grid->gridRows[static_cast<size_t>(r)][static_cast<size_t>(c)].selected) continue;
+            lua_pushinteger(L, ++index);
+            lua_newtable(L);
+            lua_pushinteger(L, c);
+            lua_setfield(L, -2, "column");
+            lua_pushinteger(L, r);
+            lua_setfield(L, -2, "row");
+            lua_settable(L, -3);
+        }
+    }
+    return 1;
+}
+
+static int GuiGridListSetSelectionMode(lua_State* L) {
+    Args args{L};
+    uint32_t id = 0;
+    int mode = 0;
+    if (!args.gui(id, "gui-gridlist") || !args.integer(mode)) return Reject(L, "guiGridListSetSelectionMode", args, false);
+    if (GuiElement* grid = Find(id)) grid->gridMode = mode;
+    lua_pushboolean(L, 1);
+    return 1;
+}
+
+static int GuiGridListGetSelectionMode(lua_State* L) {
+    Args args{L};
+    uint32_t id = 0;
+    if (!args.gui(id, "gui-gridlist")) return Reject(L, "guiGridListGetSelectionMode", args, true);
+    const GuiElement* grid = Find(id);
+    lua_pushinteger(L, grid ? grid->gridMode : 0);
+    return 1;
+}
+
+static int GuiGridListSetSortingEnabled(lua_State* L) {
+    Args args{L};
+    uint32_t id = 0;
+    bool enabled = false;
+    if (!args.gui(id, "gui-gridlist") || !args.flag(enabled, false, false))
+        return Reject(L, "guiGridListSetSortingEnabled", args, false);
+    // The flag is stored. Rows stay in insertion order: CEGUI's sort would change the
+    // index addRow returned (CGUIGridList_Impl::Sort, 780-797), and that reorder is not hooked.
+    if (GuiElement* grid = Find(id)) grid->gridSort = enabled;
+    lua_pushboolean(L, 1);
+    return 1;
+}
+
+static int GuiGridListIsSortingEnabled(lua_State* L) {
+    Args args{L};
+    uint32_t id = 0;
+    if (!args.gui(id, "gui-gridlist")) return Reject(L, "guiGridListIsSortingEnabled", args, true);
+    const GuiElement* grid = Find(id);
+    lua_pushboolean(L, grid && grid->gridSort ? 1 : 0);
+    return 1;
+}
+
+static int GuiGridListSetScrollBars(lua_State* L) {
+    Args args{L};
+    uint32_t id = 0;
+    bool horizontal = false, vertical = false;
+    if (!args.gui(id, "gui-gridlist") || !args.flag(horizontal, false, false) || !args.flag(vertical, false, false))
+        return Reject(L, "guiGridListSetScrollBars", args, false);
+    if (GuiElement* grid = Find(id)) {
+        grid->barH = horizontal;
+        grid->barV = vertical;
+    }
+    lua_pushboolean(L, 1);
+    return 1;
+}
+
+static int GuiGridListAutoSizeColumn(lua_State* L) {
+    Args args{L};
+    uint32_t id = 0;
+    int column = 0;
+    if (!args.gui(id, "gui-gridlist") || !args.integer(column)) return Reject(L, "guiGridListAutoSizeColumn", args, false);
+    GuiElement* grid = Find(id);
+    const int index = column - 1;
+    if (!grid || index < 0 || index >= static_cast<int>(grid->columns.size())) {
+        lua_pushboolean(L, grid ? 1 : 0);
+        return 1;
+    }
+    int chars = TextChars(grid->columns[static_cast<size_t>(index)].title);
+    for (const auto& row : grid->gridRows) {
+        if (index < static_cast<int>(row.size())) chars = std::max(chars, TextChars(row[static_cast<size_t>(index)].text));
+    }
+    const double box = std::max(1.0, ScreenBox(id).w);
+    grid->columns[static_cast<size_t>(index)].width = std::min(1.0, (8.0 * chars + 12.0) / box);
+    lua_pushboolean(L, 1);
+    return 1;
+}
+
+static int GridScroll(lua_State* L, const char* name, bool set, bool horizontal) {
+    Args args{L};
+    uint32_t id = 0;
+    double value = 0;
+    if (!args.gui(id, "gui-gridlist") || (set && !args.num(value))) return Reject(L, name, args, false);
+    GuiElement* grid = Find(id);
+    if (!grid) {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+    double& slot = horizontal ? grid->scrollX : grid->scroll;
+    if (!set) {
+        lua_pushnumber(L, slot);
+        return 1;
+    }
+    double clamped = 0;
+    if (!ClampPercent(value, clamped)) return Reject(L, name, args, false);
+    slot = clamped;
+    lua_pushboolean(L, 1);
+    return 1;
+}
+
+static int GuiGridListSetHorizontalScrollPosition(lua_State* L) {
+    return GridScroll(L, "guiGridListSetHorizontalScrollPosition", true, true);
+}
+static int GuiGridListGetHorizontalScrollPosition(lua_State* L) {
+    return GridScroll(L, "guiGridListGetHorizontalScrollPosition", false, true);
+}
+static int GuiGridListSetVerticalScrollPosition(lua_State* L) {
+    return GridScroll(L, "guiGridListSetVerticalScrollPosition", true, false);
+}
+static int GuiGridListGetVerticalScrollPosition(lua_State* L) {
+    return GridScroll(L, "guiGridListGetVerticalScrollPosition", false, false);
+}
+
+static bool g_diagFont = false;
+
+// CLuaGUIDefs.cpp 4009-4055. FileExists and CreateGuiFont are not hooked, so every path
+// takes the missing-file result. A `..` segment is still rejected.
+static int GuiCreateFont(lua_State* L) {
+    Args args{L};
+    std::string path;
+    int size = 9;
+    if (!args.text(path) || path.empty() || ParentSegment(path)) return Reject(L, "guiCreateFont", args, false);
+    if (lua_type(L, args.index) != LUA_TNONE && lua_type(L, args.index) != LUA_TNIL && !args.integer(size))
+        return Reject(L, "guiCreateFont", args, false);
+    (void)size;
+    if (!g_diagFont) {
+        g_diagFont = true;
+        LUA_LOGE("DIAG guiCreateFont: CreateGuiFont is not hooked, so the call returns false");
+    }
+    lua_pushboolean(L, 0);
+    return 1;
+}
+
+// CLuaGUIDefs.cpp 4058-4063 and CLuaFunctionParseHelpers.cpp 573. GetCursorType is not
+// hooked, so the result stays CURSORTYPE_DEFAULT ("arrow").
+static int GuiGetCursorType(lua_State* L) {
+    lua_pushstring(L, "arrow");
+    return 1;
+}
+
 static void RegisterGuiExtensions(lua_State* L) {
+    g_guiVm = L;
     const struct { const char* name; lua_CFunction fn; } binds[] = {
         {"dxGetPixelColor", DxGetPixelColor},
         {"dxGetPixelsFormat", DxGetPixelsFormat},
@@ -1502,6 +2964,93 @@ static void RegisterGuiExtensions(lua_State* L) {
         {"guiCreateCheckBox", GuiCreateCheckBox},
         {"guiCreateComboBox", GuiCreateComboBox},
         {"guiCreateEdit", GuiCreateEdit},
+        {"guiCreateFont", GuiCreateFont},
+        {"guiCreateGridList", GuiCreateGridList},
+        {"guiCreateMemo", GuiCreateMemo},
+        {"guiCreateProgressBar", GuiCreateProgressBar},
+        {"guiCreateRadioButton", GuiCreateRadioButton},
+        {"guiCreateScrollBar", GuiCreateScrollBar},
+        {"guiCreateScrollPane", GuiCreateScrollPane},
+        {"guiCreateStaticImage", GuiCreateStaticImage},
+        {"guiCreateTab", GuiCreateTab},
+        {"guiCreateTabPanel", GuiCreateTabPanel},
+        {"guiDeleteTab", GuiDeleteTab},
+        {"guiEditGetCaretIndex", GuiEditGetCaretIndex},
+        {"guiEditGetMaxLength", GuiEditGetMaxLength},
+        {"guiEditIsReadOnly", GuiEditIsReadOnly},
+        {"guiEditSetCaretIndex", GuiEditSetCaretIndex},
+        {"guiEditSetMaxLength", GuiEditSetMaxLength},
+        {"guiEditSetReadOnly", GuiEditSetReadOnly},
+        {"guiGetCursorType", GuiGetCursorType},
+        {"guiGetFont", GuiGetFont},
+        {"guiGridListAddColumn", GuiGridListAddColumn},
+        {"guiGridListAddRow", GuiGridListAddRow},
+        {"guiGridListAutoSizeColumn", GuiGridListAutoSizeColumn},
+        {"guiGridListClear", GuiGridListClear},
+        {"guiGridListGetColumnCount", GuiGridListGetColumnCount},
+        {"guiGridListGetColumnTitle", GuiGridListGetColumnTitle},
+        {"guiGridListGetColumnWidth", GuiGridListGetColumnWidth},
+        {"guiGridListGetHorizontalScrollPosition", GuiGridListGetHorizontalScrollPosition},
+        {"guiGridListGetItemColor", GuiGridListGetItemColor},
+        {"guiGridListGetItemData", GuiGridListGetItemData},
+        {"guiGridListGetItemText", GuiGridListGetItemText},
+        {"guiGridListGetRowCount", GuiGridListGetRowCount},
+        {"guiGridListGetSelectedCount", GuiGridListGetSelectedCount},
+        {"guiGridListGetSelectedItem", GuiGridListGetSelectedItem},
+        {"guiGridListGetSelectedItems", GuiGridListGetSelectedItems},
+        {"guiGridListGetSelectionMode", GuiGridListGetSelectionMode},
+        {"guiGridListGetVerticalScrollPosition", GuiGridListGetVerticalScrollPosition},
+        {"guiGridListInsertRowAfter", GuiGridListInsertRowAfter},
+        {"guiGridListIsSortingEnabled", GuiGridListIsSortingEnabled},
+        {"guiGridListRemoveColumn", GuiGridListRemoveColumn},
+        {"guiGridListRemoveRow", GuiGridListRemoveRow},
+        {"guiGridListSetColumnTitle", GuiGridListSetColumnTitle},
+        {"guiGridListSetColumnWidth", GuiGridListSetColumnWidth},
+        {"guiGridListSetHorizontalScrollPosition", GuiGridListSetHorizontalScrollPosition},
+        {"guiGridListSetItemColor", GuiGridListSetItemColor},
+        {"guiGridListSetItemData", GuiGridListSetItemData},
+        {"guiGridListSetItemText", GuiGridListSetItemText},
+        {"guiGridListSetScrollBars", GuiGridListSetScrollBars},
+        {"guiGridListSetSelectedItem", GuiGridListSetSelectedItem},
+        {"guiGridListSetSelectionMode", GuiGridListSetSelectionMode},
+        {"guiGridListSetSortingEnabled", GuiGridListSetSortingEnabled},
+        {"guiGridListSetVerticalScrollPosition", GuiGridListSetVerticalScrollPosition},
+        {"guiGetProperties", GuiGetProperties},
+        {"guiGetProperty", GuiGetProperty},
+        {"guiGetSelectedTab", GuiGetSelectedTab},
+        {"guiLabelGetColor", GuiLabelGetColor},
+        {"guiLabelGetFontHeight", GuiLabelGetFontHeight},
+        {"guiLabelGetTextExtent", GuiLabelGetTextExtent},
+        {"guiLabelSetColor", GuiLabelSetColor},
+        {"guiLabelSetHorizontalAlign", GuiLabelSetHorizontalAlign},
+        {"guiLabelSetVerticalAlign", GuiLabelSetVerticalAlign},
+        {"guiMemoGetCaretIndex", GuiMemoGetCaretIndex},
+        {"guiMemoGetVerticalScrollPosition", GetMemoScroll},
+        {"guiMemoIsReadOnly", GuiMemoIsReadOnly},
+        {"guiMemoSetCaretIndex", GuiMemoSetCaretIndex},
+        {"guiMemoSetReadOnly", GuiMemoSetReadOnly},
+        {"guiMemoSetVerticalScrollPosition", SetMemoScroll},
+        {"guiMoveToBack", GuiMoveToBack},
+        {"guiProgressBarGetProgress", GuiProgressBarGetProgress},
+        {"guiProgressBarSetProgress", GuiProgressBarSetProgress},
+        {"guiRadioButtonGetSelected", GuiRadioButtonGetSelected},
+        {"guiRadioButtonSetSelected", GuiRadioButtonSetSelected},
+        {"guiScrollBarGetScrollPosition", GuiScrollBarGetScrollPosition},
+        {"guiScrollBarSetScrollPosition", GuiScrollBarSetScrollPosition},
+        {"guiScrollPaneGetHorizontalScrollPosition", GuiScrollPaneGetHorizontalScrollPosition},
+        {"guiScrollPaneGetVerticalScrollPosition", GuiScrollPaneGetVerticalScrollPosition},
+        {"guiScrollPaneSetHorizontalScrollPosition", GuiScrollPaneSetHorizontalScrollPosition},
+        {"guiScrollPaneSetScrollBars", GuiScrollPaneSetScrollBars},
+        {"guiScrollPaneSetVerticalScrollPosition", GuiScrollPaneSetVerticalScrollPosition},
+        {"guiSetFont", GuiSetFont},
+        {"guiSetProperty", GuiSetProperty},
+        {"guiSetSelectedTab", GuiSetSelectedTab},
+        {"guiStaticImageGetNativeSize", GuiStaticImageGetNativeSize},
+        {"guiStaticImageLoadImage", GuiStaticImageLoadImage},
+        {"guiWindowIsMovable", GuiWindowIsMovable},
+        {"guiWindowIsSizable", GuiWindowIsSizable},
+        {"guiWindowSetMovable", GuiWindowSetMovable},
+        {"guiWindowSetSizable", GuiWindowSetSizable},
     };
     for (const auto& bind : binds) {
         lua_pushcfunction(L, bind.fn);

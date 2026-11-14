@@ -16,6 +16,9 @@ namespace WorldRPG::ServerWorld {
 // Reconnect: forgets every element, its custom data and the resource root of the old session. Radar blips of the
 // old session are cleared on the next Tick (game thread). Call before the new session's first packet.
 void ResetSession();
+// Drops a resource-root placeholder (kind 0) stored by OnResourceStart. A real
+// player, ped, vehicle, marker or blip is left alone.
+void ForgetPlaceholder(uint32_t id);
 
 void SetLocalPlayer(uint32_t id);
 uint32_t LocalPlayer();

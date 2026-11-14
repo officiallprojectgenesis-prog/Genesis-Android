@@ -141,6 +141,20 @@ int ReadProperty(lua_State* L, bool original) {
         return 1;
     }
     if (!original) {
+        // A flag read uses the flags word, including a setWeaponProperty override of that word.
+        // Desktop IsFlagSet (CStaticFunctionDefinitions::SetWeaponPropertyFlag 2657-2676).
+        const int bit = FlagBit(property);
+        if (bit != 0) {
+            const WStat* stat = FindStat(id, skill);
+            if (!stat) {
+                lua_pushboolean(L, 0);
+                return 1;
+            }
+            int flags = stat->flags;
+            if (Override* word = FindOverride(id, skill, "flags")) flags = static_cast<int>(word->a);
+            lua_pushboolean(L, (flags & bit) != 0);
+            return 1;
+        }
         if (Override* item = FindOverride(id, skill, property)) {
             if (item->triple) {
                 lua_pushnumber(L, item->a);
@@ -183,8 +197,34 @@ int l_setWeaponProperty(lua_State* L) {
         return 1;
     }
     const bool fire = std::strcmp(property, "fire_offset") == 0;
-    const bool flag = FlagBit(property) != 0;
-    if (!fire && !flag) {
+    const int flag = FlagBit(property);
+    if (flag != 0) {
+        // SetWeaponPropertyFlag (CStaticFunctionDefinitions.cpp 2657-2676): set or clear the bit.
+        // The same value already stored returns false.
+        if (!lua_isboolean(L, 4)) {
+            lua_pushboolean(L, 0);
+            return 1;
+        }
+        int flags = stat->flags;
+        if (Override* word = FindOverride(id, skill, "flags")) flags = static_cast<int>(word->a);
+        const bool enable = lua_toboolean(L, 4) != 0;
+        if (enable == ((flags & flag) != 0)) {
+            lua_pushboolean(L, 0);
+            return 1;
+        }
+        if (enable) flags |= flag;
+        else flags &= ~flag;
+        Override next{id, skill, "flags", static_cast<double>(flags), 0, 0, false};
+        if (Override* word = FindOverride(id, skill, "flags")) *word = next;
+        else g_overrides.push_back(next);
+        if (!g_diagWeapon) {
+            g_diagWeapon = true;
+            LUA_LOGE("DIAG setWeaponProperty: CWeaponStat is not written; the value is stored");
+        }
+        lua_pushboolean(L, 1);
+        return 1;
+    }
+    if (!fire) {
         if (!PushProperty(L, *stat, property)) {
             lua_pushboolean(L, 0);
             return 1;

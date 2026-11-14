@@ -21,9 +21,9 @@ The [full architectural plan](PLANO_PORT_NEON_ANDROID.md) details audits, depend
 | **P3. World & Entities Sync** | P2 | Peds, vehicles, and objects visible across both clients. Streaming, ownership, movement, health, and respawn tested. | In Progress (server peds created on S25 after 0x60D64D ped group patch; pool vehicles & unoccupied sync sender (56) built; driver puresync send & vehicle in/out (58) verified live; driver sync (33) relayed; SYNC_SETTINGS weapon list parsed; bullet sync send (98) built; remote seats & driver motion built; jacking/enter-exit animations pending) |
 | **P3.1 Disconnect Recovery** | P1B.2, P3 | When the server drops the session, show a dialog with **Retry** and **Quit** (same flow as the MTA desktop client). Retry runs a fresh join (`PLAYER_JOIN` → `MOD_NAME` → `PLAYER_JOINDATA` → `SERVER_JOIN_COMPLETE`) and spawns the character in the world as on a first connection: remote peds, vehicles and the local player are rebuilt, nothing is kept from the old session. Quit returns to the server browser. Also handles `ForceReconnect` (server RPC). | Implemented and verified on the S25: `/disconnect` shows the dialog and Retry rejoins with a fresh spawn |
 | **P3.2 Chat Layout** | P2 | The chat does not match the MTA desktop client: lines are spaced too far apart and the layout differs. Match the desktop chat box (line height, padding, font, colour codes, and the line limit) so both clients show the same chat. Verify with a screenshot of the desktop and the phone side by side. | Implemented (line step = font height, one background box); side-by-side desktop screenshot pending |
-| **P4. Lua, DX, GUI & Browser** | P2, P3 | RenderWare 2D DX draw calls, custom UI interactions, CEGUI/WebView bindings. | In Progress (Desktop Tahoma 15px text scaling matched in MtaDxView; GUI element model with window, button, edit, static text, setVisible, destroyElement; showCursor touch routing to onClientClick; mobile HUD component toggles via CWidgetPlayerInfo::Draw NOP patching. Open: CEGUI complex widgets like memo/gridlist/tabpanel, CEF webview browser) |
+| **P4. Lua, DX, GUI & Browser** | P2, P3 | RenderWare 2D DX draw calls, custom UI interactions, CEGUI/WebView bindings. | In Progress (Desktop Tahoma 15px text scaling matched in MtaDxView; GUI element model with window, button, edit, memo, grid list, tabs, scroll pane, static text, setVisible, destroyElement; showCursor touch routing to onClientClick; mobile HUD component toggles via CWidgetPlayerInfo::Draw NOP patching. Open: DX shaders, `guiCreateFont` (CreateGuiFont is not hooked), CEF webview browser) |
 | **P4.1 Wardrobe preview** | P4 | Registration clothes preview matches the desktop client. Port order and desktop line ranges: [ROADMAP_WARDROBE_PREVIEW.md](ROADMAP_WARDROBE_PREVIEW.md). | In progress. The eight preview calls are bound. The login cinematic (`setCameraMatrix` from `onClientPreRender`) is confirmed on the S25. Opening music uses `playSound`, `stopSound` and `setSoundVolume`. The clothes preview itself has not been recorded on a device. |
-| **P5. Neon Parity Matrix** | P3, P4 | Complete API matrix, events, and elements matching MTA Neon desktop capabilities. | In Progress (Derived from source via tools/parity_matrix.py -> docs/PARITY_MATRIX.md. 2026-11-14: Lua functions 482 implemented / 150 stub / 949 missing of 1581 (30.5%); camera 47/47; client events 10/144 (6.9%); inbound packets 24/62; outbound 9/31; element types 13/17) |
+| **P5. Neon Parity Matrix** | P3, P4 | Complete API matrix, events, and elements matching MTA Neon desktop capabilities. | In Progress (Derived from source via tools/parity_matrix.py -> docs/PARITY_MATRIX.md. 2026-11-14: Lua functions 578 implemented / 150 stub / 853 missing of 1581 (36.6%); GUI 136/199 (68.3%); camera 47/47; client events 10/144 (6.9%); inbound packets 24/62; outbound 9/31; element types 13/17) |
 | **P6. Release Distribution** | P5 | Reproducible release builds, multi-device hardware validation, automated updates. | Pending |
 
 P1A (Engine/Platform) and P1B (Network Transport) are independent parallel tracks. The approval of the port requires a fully native Android ARM64 session connecting to a live server.
@@ -120,7 +120,7 @@ Derived directly from `mta_neon_source` vs `app/src/main/cpp/` via `tools/parity
 
 | Category | Desktop Total | Android Implemented | Android Stubs | Remaining / Missing | Priority |
 |---|---|---|---|---|---|
-| **Lua Core Functions** | 1,581 | 482 (30.5%) | 150 (9.5%) | 949 (60.0%) | High |
+| **Lua Core Functions** | 1,581 | 578 (36.6%) | 150 (9.5%) | 853 (54.0%) | High |
 | **Client Events** | 144 | 10 (6.9%) | 0 | 134 (93.1%) | High |
 | **Inbound Packets (S->C)** | 62 | 24 (38.7%) | 0 | 38 (61.3%) | Medium |
 | **Outbound Packets (C->S)** | 31 | 9 (29.0%) | 0 | 22 (71.0%) | Medium |
@@ -129,8 +129,8 @@ Derived directly from `mta_neon_source` vs `app/src/main/cpp/` via `tools/parity
 
 ### Critical Missing Subsystems:
 1. **Audio / Voice System**:
-   - `playSound`, `stopSound`, `setSoundVolume` and `getSoundVolume` play the login http tracks through Android `MediaPlayer`. That is 4 of 57 `CLuaAudioDefs` (7.0%). `playSound3D` and `playSoundFrontEnd` are still stubs.
-   - Desktop 3D positioning (`setSoundPosition`) and voice (`PACKET_ID_VOICE_DATA`) are still missing. Opus is compiled; there is no voice output path.
+   - Audio Lua is 19 of 57 `CLuaAudioDefs` (33.3%), including the login `MediaPlayer` calls and `playSoundFrontEnd`. `playSound3D` is still a stub. 37 calls are missing.
+   - Voice (`PACKET_ID_VOICE_DATA`) is still missing. Opus is compiled; there is no voice output path.
 2. **Ped & Player Animation / Tasks**:
    - Vehicle enter/exit animations and jacking states (`CTaskComplexEnterCarAsDriver`, `CTaskComplexEnterCarAsPassenger`).
    - Melee combat animation states (`CTaskSimpleFight`).

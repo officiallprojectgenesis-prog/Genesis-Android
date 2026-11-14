@@ -49,15 +49,15 @@ A complete line-by-line conversion catalog comparing all 1,581 desktop MTA clien
 | **Peds & Players (CLuaPedDefs, CLuaPlayerDefs)** | [PEDS_AND_PLAYERS.md](docs/lua-functions/PEDS_AND_PLAYERS.md) | 206 | 24 | 80 | 102 | 11.7% |
 | **World, Objects & Environment** | [WORLD_AND_OBJECTS.md](docs/lua-functions/WORLD_AND_OBJECTS.md) | 227 | 124 | 11 | 92 | 54.6% |
 | **Element Tree & Data (CLuaElementDefs)** | [ELEMENTS.md](docs/lua-functions/ELEMENTS.md) | 81 | 50 | 8 | 23 | 61.7% |
-| **GUI & 2D/3D Drawing (DX & CEGUI)** | [GUI_AND_DX.md](docs/lua-functions/GUI_AND_DX.md) | 199 | 49 | 5 | 145 | 24.6% |
+| **GUI & 2D/3D Drawing (DX & CEGUI)** | [GUI_AND_DX.md](docs/lua-functions/GUI_AND_DX.md) | 199 | 136 | 5 | 58 | 68.3% |
 | **Engine & Model Replacement (DFF, TXD, COL)** | [ENGINE_AND_MODELS.md](docs/lua-functions/ENGINE_AND_MODELS.md) | 125 | 1 | 15 | 109 | 0.8% |
 | **Audio & Voice System (CLuaAudioDefs)** | [AUDIO_AND_VOICE.md](docs/lua-functions/AUDIO_AND_VOICE.md) | 57 | 19 | 1 | 37 | 33.3% |
 | **Camera & Viewport (CLuaCameraDefs)** | [CAMERA.md](docs/lua-functions/CAMERA.md) | 47 | 47 | 0 | 0 | 100.0% |
 | **Weapons & Projectiles (CLuaWeaponDefs, CLuaProjectileDefs)** | [WEAPONS_AND_COMBAT.md](docs/lua-functions/WEAPONS_AND_COMBAT.md) | 31 | 8 | 0 | 23 | 25.8% |
-| **Core System, Networking & Utilities** | [CORE_AND_UTILITY.md](docs/lua-functions/CORE_AND_UTILITY.md) | 195 | 150 | 5 | 40 | 76.9% |
+| **Core System, Networking & Utilities** | [CORE_AND_UTILITY.md](docs/lua-functions/CORE_AND_UTILITY.md) | 195 | 159 | 5 | 31 | 81.5% |
 | **Markers, Blips, ColShapes & Spatial** | [MARKERS_AND_SPATIAL.md](docs/lua-functions/MARKERS_AND_SPATIAL.md) | 145 | 0 | 3 | 142 | 0.0% |
 | **Web Browser & Compatibility (CEF / Discord)** | [BROWSER_AND_COMPATIBILITY.md](docs/lua-functions/BROWSER_AND_COMPATIBILITY.md) | 103 | 4 | 0 | 99 | 3.9% |
-| **TOTAL** | **All Categories** | **1581** | **482** | **150** | **949** | **30.5%** |
+| **TOTAL** | **All Categories** | **1581** | **578** | **150** | **853** | **36.6%** |
 
 *Full machine-generated parity matrix: [`docs/PARITY_MATRIX.md`](docs/PARITY_MATRIX.md)*
 

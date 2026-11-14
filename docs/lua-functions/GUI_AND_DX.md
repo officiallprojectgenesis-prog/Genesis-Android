@@ -5,11 +5,11 @@
 ## Parity Status
 
 - **Total Functions:** 199
-- **Implemented:** 49 (24.6%)
+- **Implemented:** 136 (68.3%)
 - **Stubs:** 5
-- **Missing:** 145
+- **Missing:** 58
 
-> **Technical Requirement:** Desktop uses CEGUI and Direct3D9. Mobile uses `MtaDxView.java` (Android Canvas) + `LuaGuiApi.cpp`. Missing shaders (HLSL -> GLSL ES) and complex CEGUI widgets (gridlist, tabpanel, scrollpane).
+> **Technical Requirement:** Desktop uses CEGUI and Direct3D9. Mobile uses `MtaDxView.java` (Android Canvas) + `LuaGuiApi.cpp`. Windows, edits, memos, tabs, scroll panes and grid lists are stored and drawn into the DX frame. Grid sorting does not reorder rows. `guiCreateFont` returns false because CreateGuiFont is not hooked. Shaders (HLSL -> GLSL ES) and the browser are still missing.
 
 ## Function List
 
@@ -84,115 +84,115 @@
 | `guiCreateCheckBox` | **Implemented** | `CLuaGUIDefs.cpp:67` | `GUICreateCheckBox` | Operational on Android. (GuiCreateCheckBox) |
 | `guiCreateComboBox` | **Implemented** | `CLuaGUIDefs.cpp:70` | `GUICreateComboBox` | Operational on Android. (GuiCreateComboBox) |
 | `guiCreateEdit` | **Implemented** | `CLuaGUIDefs.cpp:59` | `GUICreateEdit` | Operational on Android. (GuiCreateEdit) |
-| `guiCreateFont` | Missing | `CLuaGUIDefs.cpp:71` | `GUICreateFont` | Needs Android widget state and input handler in LuaGuiApi. |
-| `guiCreateGridList` | Missing | `CLuaGUIDefs.cpp:61` | `GUICreateGridList` | Needs native Android ListView / RecyclerView or custom CEGUI widget port. |
+| `guiCreateFont` | **Implemented** | `CLuaGUIDefs.cpp:71` | `GUICreateFont` | Operational on Android. (GuiCreateFont) |
+| `guiCreateGridList` | **Implemented** | `CLuaGUIDefs.cpp:61` | `GUICreateGridList` | Operational on Android. (GuiCreateGridList) |
 | `guiCreateLabel` | **Implemented** | `CLuaGUIDefs.cpp:57` | `GUICreateLabel` | Operational on Android. (GuiCreateLabel) |
-| `guiCreateMemo` | Missing | `CLuaGUIDefs.cpp:60` | `GUICreateMemo` | Needs Android widget state and input handler in LuaGuiApi. |
-| `guiCreateProgressBar` | Missing | `CLuaGUIDefs.cpp:66` | `GUICreateProgressBar` | Needs Android widget state and input handler in LuaGuiApi. |
-| `guiCreateRadioButton` | Missing | `CLuaGUIDefs.cpp:68` | `GUICreateRadioButton` | Needs Android widget state and input handler in LuaGuiApi. |
-| `guiCreateScrollBar` | Missing | `CLuaGUIDefs.cpp:63` | `GUICreateScrollBar` | Needs Android widget state and input handler in LuaGuiApi. |
-| `guiCreateScrollPane` | Missing | `CLuaGUIDefs.cpp:62` | `GUICreateScrollPane` | Needs Android widget state and input handler in LuaGuiApi. |
-| `guiCreateStaticImage` | Missing | `CLuaGUIDefs.cpp:69` | `GUICreateStaticImage` | Needs Android widget state and input handler in LuaGuiApi. |
-| `guiCreateTab` | Missing | `CLuaGUIDefs.cpp:65` | `GUICreateTab` | Needs Android widget state and input handler in LuaGuiApi. |
-| `guiCreateTabPanel` | Missing | `CLuaGUIDefs.cpp:64` | `GUICreateTabPanel` | Needs Android widget state and input handler in LuaGuiApi. |
+| `guiCreateMemo` | **Implemented** | `CLuaGUIDefs.cpp:60` | `GUICreateMemo` | Operational on Android. (GuiCreateMemo) |
+| `guiCreateProgressBar` | **Implemented** | `CLuaGUIDefs.cpp:66` | `GUICreateProgressBar` | Operational on Android. (GuiCreateProgressBar) |
+| `guiCreateRadioButton` | **Implemented** | `CLuaGUIDefs.cpp:68` | `GUICreateRadioButton` | Operational on Android. (GuiCreateRadioButton) |
+| `guiCreateScrollBar` | **Implemented** | `CLuaGUIDefs.cpp:63` | `GUICreateScrollBar` | Operational on Android. (GuiCreateScrollBar) |
+| `guiCreateScrollPane` | **Implemented** | `CLuaGUIDefs.cpp:62` | `GUICreateScrollPane` | Operational on Android. (GuiCreateScrollPane) |
+| `guiCreateStaticImage` | **Implemented** | `CLuaGUIDefs.cpp:69` | `GUICreateStaticImage` | Operational on Android. (GuiCreateStaticImage) |
+| `guiCreateTab` | **Implemented** | `CLuaGUIDefs.cpp:65` | `GUICreateTab` | Operational on Android. (GuiCreateTab) |
+| `guiCreateTabPanel` | **Implemented** | `CLuaGUIDefs.cpp:64` | `GUICreateTabPanel` | Operational on Android. (GuiCreateTabPanel) |
 | `guiCreateWindow` | **Implemented** | `CLuaGUIDefs.cpp:56` | `GUICreateWindow` | Operational on Android. (GuiCreateWindow) |
-| `guiDeleteTab` | Missing | `CLuaGUIDefs.cpp:77` | `GUIDeleteTab` | Needs Android widget state and input handler in LuaGuiApi. |
-| `guiEditGetCaretIndex` | Missing | `CLuaGUIDefs.cpp:158` | `GUIEditGetCaretIndex` | Needs Android widget state and input handler in LuaGuiApi. |
-| `guiEditGetMaxLength` | Missing | `CLuaGUIDefs.cpp:162` | `GUIEditGetMaxLength` | Needs Android widget state and input handler in LuaGuiApi. |
+| `guiDeleteTab` | **Implemented** | `CLuaGUIDefs.cpp:77` | `GUIDeleteTab` | Operational on Android. (GuiDeleteTab) |
+| `guiEditGetCaretIndex` | **Implemented** | `CLuaGUIDefs.cpp:158` | `GUIEditGetCaretIndex` | Operational on Android. (GuiEditGetCaretIndex) |
+| `guiEditGetMaxLength` | **Implemented** | `CLuaGUIDefs.cpp:162` | `GUIEditGetMaxLength` | Operational on Android. (GuiEditGetMaxLength) |
 | `guiEditIsMasked` | **Implemented** | `CLuaGUIDefs.cpp:160` | `GUIEditIsMasked` | Operational on Android. (GuiEditIsMasked) |
-| `guiEditIsReadOnly` | Missing | `CLuaGUIDefs.cpp:164` | `GUIEditIsReadOnly` | Needs Android widget state and input handler in LuaGuiApi. |
-| `guiEditSetCaretIndex` | Missing | `CLuaGUIDefs.cpp:157` | `GUIEditSetCaretIndex` | Needs Android widget state and input handler in LuaGuiApi. |
+| `guiEditIsReadOnly` | **Implemented** | `CLuaGUIDefs.cpp:164` | `GUIEditIsReadOnly` | Operational on Android. (GuiEditIsReadOnly) |
+| `guiEditSetCaretIndex` | **Implemented** | `CLuaGUIDefs.cpp:157` | `GUIEditSetCaretIndex` | Operational on Android. (GuiEditSetCaretIndex) |
 | `guiEditSetMasked` | **Implemented** | `CLuaGUIDefs.cpp:159` | `GUIEditSetMasked` | Operational on Android. (GuiEditSetMasked) |
-| `guiEditSetMaxLength` | Missing | `CLuaGUIDefs.cpp:161` | `GUIEditSetMaxLength` | Needs Android widget state and input handler in LuaGuiApi. |
-| `guiEditSetReadOnly` | Missing | `CLuaGUIDefs.cpp:163` | `GUIEditSetReadOnly` | Needs Android widget state and input handler in LuaGuiApi. |
+| `guiEditSetMaxLength` | **Implemented** | `CLuaGUIDefs.cpp:161` | `GUIEditSetMaxLength` | Operational on Android. (GuiEditSetMaxLength) |
+| `guiEditSetReadOnly` | **Implemented** | `CLuaGUIDefs.cpp:163` | `GUIEditSetReadOnly` | Operational on Android. (GuiEditSetReadOnly) |
 | `guiFocus` | **Implemented** | `CLuaGUIDefs.cpp:133` | `GUIFocus` | Operational on Android. (GuiFocus) |
 | `guiGetAlpha` | **Implemented** | `CLuaGUIDefs.cpp:141` | `GUIGetAlpha` | Operational on Android. (GuiGetAlpha) |
-| `guiGetCursorType` | Missing | `CLuaGUIDefs.cpp:147` | `GUIGetCursorType` | Needs Android widget state and input handler in LuaGuiApi. |
+| `guiGetCursorType` | **Implemented** | `CLuaGUIDefs.cpp:147` | `GUIGetCursorType` | Operational on Android. (GuiGetCursorType) |
 | `guiGetEnabled` | **Implemented** | `CLuaGUIDefs.cpp:138` | `GUIGetEnabled` | Operational on Android. (GuiGetEnabled) |
-| `guiGetFont` | Missing | `CLuaGUIDefs.cpp:143` | `GUIGetFont` | Needs Android widget state and input handler in LuaGuiApi. |
+| `guiGetFont` | **Implemented** | `CLuaGUIDefs.cpp:143` | `GUIGetFont` | Operational on Android. (GuiGetFont) |
 | `guiGetInputEnabled` | **Implemented** | `CLuaGUIDefs.cpp:40` | `GUIGetInputEnabled` | Operational on Android. (GuiGetInputEnabled) |
 | `guiGetInputMode` | **Implemented** | `CLuaGUIDefs.cpp:42` | `GUIGetInputMode` | Operational on Android. (GuiGetInputMode) |
 | `guiGetPosition` | **Implemented** | `CLuaGUIDefs.cpp:145` | `GUIGetPosition` | Operational on Android. (GuiGetPosition) |
-| `guiGetProperties` | Missing | `CLuaGUIDefs.cpp:140` | `GUIGetProperties` | Needs Android widget state and input handler in LuaGuiApi. |
-| `guiGetProperty` | Missing | `CLuaGUIDefs.cpp:139` | `GUIGetProperty` | Needs Android widget state and input handler in LuaGuiApi. |
+| `guiGetProperties` | **Implemented** | `CLuaGUIDefs.cpp:140` | `GUIGetProperties` | Operational on Android. (GuiGetProperties) |
+| `guiGetProperty` | **Implemented** | `CLuaGUIDefs.cpp:139` | `GUIGetProperty` | Operational on Android. (GuiGetProperty) |
 | `guiGetScreenSize` | **Implemented** | `CLuaGUIDefs.cpp:155` | `GUIGetScreenSize` | Operational on Android. (l_guiGetScreenSize) |
-| `guiGetSelectedTab` | Missing | `CLuaGUIDefs.cpp:75` | `GUIGetSelectedTab` | Needs Android widget state and input handler in LuaGuiApi. |
+| `guiGetSelectedTab` | **Implemented** | `CLuaGUIDefs.cpp:75` | `GUIGetSelectedTab` | Operational on Android. (GuiGetSelectedTab) |
 | `guiGetSize` | **Implemented** | `CLuaGUIDefs.cpp:144` | `GUIGetSize` | Operational on Android. (GuiGetSize) |
 | `guiGetText` | **Implemented** | `CLuaGUIDefs.cpp:142` | `GUIGetText` | Operational on Android. (GuiGetText) |
 | `guiGetVisible` | **Implemented** | `CLuaGUIDefs.cpp:146` | `GUIGetVisible` | Operational on Android. (GuiGetVisible) |
-| `guiGridListAddColumn` | Missing | `CLuaGUIDefs.cpp:81` | `GUIGridListAddColumn` | Needs native Android ListView / RecyclerView or custom CEGUI widget port. |
-| `guiGridListAddRow` | Missing | `CLuaGUIDefs.cpp:90` | `GUIGridListAddRow` | Needs native Android ListView / RecyclerView or custom CEGUI widget port. |
-| `guiGridListAutoSizeColumn` | Missing | `CLuaGUIDefs.cpp:93` | `GUIGridListAutoSizeColumn` | Needs native Android ListView / RecyclerView or custom CEGUI widget port. |
-| `guiGridListClear` | Missing | `CLuaGUIDefs.cpp:94` | `GUIGridListClear` | Needs native Android ListView / RecyclerView or custom CEGUI widget port. |
-| `guiGridListGetColumnCount` | Missing | `CLuaGUIDefs.cpp:89` | `GUIGridListGetColumnCount` | Needs native Android ListView / RecyclerView or custom CEGUI widget port. |
-| `guiGridListGetColumnTitle` | Missing | `CLuaGUIDefs.cpp:86` | `GUIGridListGetColumnTitle` | Needs native Android ListView / RecyclerView or custom CEGUI widget port. |
-| `guiGridListGetColumnWidth` | Missing | `CLuaGUIDefs.cpp:84` | `GUIGridListGetColumnWidth` | Needs native Android ListView / RecyclerView or custom CEGUI widget port. |
-| `guiGridListGetHorizontalScrollPosition` | Missing | `CLuaGUIDefs.cpp:108` | `GUIGridListGetHorizontalScrollPosition` | Needs native Android ListView / RecyclerView or custom CEGUI widget port. |
-| `guiGridListGetItemColor` | Missing | `CLuaGUIDefs.cpp:100` | `GUIGridListGetItemColor` | Needs native Android ListView / RecyclerView or custom CEGUI widget port. |
-| `guiGridListGetItemData` | Missing | `CLuaGUIDefs.cpp:98` | `GUIGridListGetItemData` | Needs native Android ListView / RecyclerView or custom CEGUI widget port. |
-| `guiGridListGetItemText` | Missing | `CLuaGUIDefs.cpp:96` | `GUIGridListGetItemText` | Needs native Android ListView / RecyclerView or custom CEGUI widget port. |
-| `guiGridListGetRowCount` | Missing | `CLuaGUIDefs.cpp:88` | `GUIGridListGetRowCount` | Needs native Android ListView / RecyclerView or custom CEGUI widget port. |
-| `guiGridListGetSelectedCount` | Missing | `CLuaGUIDefs.cpp:105` | `GUIGridListGetSelectedCount` | Needs native Android ListView / RecyclerView or custom CEGUI widget port. |
-| `guiGridListGetSelectedItem` | Missing | `CLuaGUIDefs.cpp:103` | `GUIGridListGetSelectedItem` | Needs native Android ListView / RecyclerView or custom CEGUI widget port. |
-| `guiGridListGetSelectedItems` | Missing | `CLuaGUIDefs.cpp:104` | `GUIGridListGetSelectedItems` | Needs native Android ListView / RecyclerView or custom CEGUI widget port. |
-| `guiGridListGetSelectionMode` | Missing | `CLuaGUIDefs.cpp:102` | `GUIGridListGetSelectionMode` | Needs native Android ListView / RecyclerView or custom CEGUI widget port. |
-| `guiGridListGetVerticalScrollPosition` | Missing | `CLuaGUIDefs.cpp:110` | `GUIGridListGetVerticalScrollPosition` | Needs native Android ListView / RecyclerView or custom CEGUI widget port. |
-| `guiGridListInsertRowAfter` | Missing | `CLuaGUIDefs.cpp:91` | `GUIGridListInsertRowAfter` | Needs native Android ListView / RecyclerView or custom CEGUI widget port. |
-| `guiGridListIsSortingEnabled` | Missing | `CLuaGUIDefs.cpp:80` | `GUIGridListIsSortingEnabled` | Needs native Android ListView / RecyclerView or custom CEGUI widget port. |
-| `guiGridListRemoveColumn` | Missing | `CLuaGUIDefs.cpp:82` | `GUIGridListRemoveColumn` | Needs native Android ListView / RecyclerView or custom CEGUI widget port. |
-| `guiGridListRemoveRow` | Missing | `CLuaGUIDefs.cpp:92` | `GUIGridListRemoveRow` | Needs native Android ListView / RecyclerView or custom CEGUI widget port. |
-| `guiGridListSetColumnTitle` | Missing | `CLuaGUIDefs.cpp:85` | `GUIGridListSetColumnTitle` | Needs native Android ListView / RecyclerView or custom CEGUI widget port. |
-| `guiGridListSetColumnWidth` | Missing | `CLuaGUIDefs.cpp:83` | `GUIGridListSetColumnWidth` | Needs native Android ListView / RecyclerView or custom CEGUI widget port. |
-| `guiGridListSetHorizontalScrollPosition` | Missing | `CLuaGUIDefs.cpp:107` | `GUIGridListSetHorizontalScrollPosition` | Needs native Android ListView / RecyclerView or custom CEGUI widget port. |
-| `guiGridListSetItemColor` | Missing | `CLuaGUIDefs.cpp:99` | `GUIGridListSetItemColor` | Needs native Android ListView / RecyclerView or custom CEGUI widget port. |
-| `guiGridListSetItemData` | Missing | `CLuaGUIDefs.cpp:97` | `GUIGridListSetItemData` | Needs native Android ListView / RecyclerView or custom CEGUI widget port. |
-| `guiGridListSetItemText` | Missing | `CLuaGUIDefs.cpp:95` | `GUIGridListSetItemText` | Needs native Android ListView / RecyclerView or custom CEGUI widget port. |
-| `guiGridListSetScrollBars` | Missing | `CLuaGUIDefs.cpp:87` | `GUIGridListSetScrollBars` | Needs native Android ListView / RecyclerView or custom CEGUI widget port. |
-| `guiGridListSetSelectedItem` | Missing | `CLuaGUIDefs.cpp:106` | `GUIGridListSetSelectedItem` | Needs native Android ListView / RecyclerView or custom CEGUI widget port. |
-| `guiGridListSetSelectionMode` | Missing | `CLuaGUIDefs.cpp:101` | `GUIGridListSetSelectionMode` | Needs native Android ListView / RecyclerView or custom CEGUI widget port. |
-| `guiGridListSetSortingEnabled` | Missing | `CLuaGUIDefs.cpp:79` | `GUIGridListSetSortingEnabled` | Needs native Android ListView / RecyclerView or custom CEGUI widget port. |
-| `guiGridListSetVerticalScrollPosition` | Missing | `CLuaGUIDefs.cpp:109` | `GUIGridListSetVerticalScrollPosition` | Needs native Android ListView / RecyclerView or custom CEGUI widget port. |
-| `guiLabelGetColor` | Missing | `CLuaGUIDefs.cpp:174` | `GUILabelGetColor` | Needs Android widget state and input handler in LuaGuiApi. |
-| `guiLabelGetFontHeight` | Missing | `CLuaGUIDefs.cpp:179` | `GUILabelGetFontHeight` | Needs Android widget state and input handler in LuaGuiApi. |
-| `guiLabelGetTextExtent` | Missing | `CLuaGUIDefs.cpp:178` | `GUILabelGetTextExtent` | Needs Android widget state and input handler in LuaGuiApi. |
-| `guiLabelSetColor` | Missing | `CLuaGUIDefs.cpp:173` | `GUILabelSetColor` | Needs Android widget state and input handler in LuaGuiApi. |
-| `guiLabelSetHorizontalAlign` | Missing | `CLuaGUIDefs.cpp:176` | `GUILabelSetHorizontalAlign` | Needs Android widget state and input handler in LuaGuiApi. |
-| `guiLabelSetVerticalAlign` | Missing | `CLuaGUIDefs.cpp:175` | `GUILabelSetVerticalAlign` | Needs Android widget state and input handler in LuaGuiApi. |
-| `guiMemoGetCaretIndex` | Missing | `CLuaGUIDefs.cpp:167` | `GUIMemoGetCaretIndex` | Needs Android widget state and input handler in LuaGuiApi. |
-| `guiMemoGetVerticalScrollPosition` | Missing | `CLuaGUIDefs.cpp:171` | `GUIMemoGetVerticalScrollPosition` | Needs Android widget state and input handler in LuaGuiApi. |
-| `guiMemoIsReadOnly` | Missing | `CLuaGUIDefs.cpp:169` | `GUIMemoIsReadOnly` | Needs Android widget state and input handler in LuaGuiApi. |
-| `guiMemoSetCaretIndex` | Missing | `CLuaGUIDefs.cpp:166` | `GUIMemoSetCaretIndex` | Needs Android widget state and input handler in LuaGuiApi. |
-| `guiMemoSetReadOnly` | Missing | `CLuaGUIDefs.cpp:168` | `GUIMemoSetReadOnly` | Needs Android widget state and input handler in LuaGuiApi. |
-| `guiMemoSetVerticalScrollPosition` | Missing | `CLuaGUIDefs.cpp:170` | `GUIMemoSetVerticalScrollPosition` | Needs Android widget state and input handler in LuaGuiApi. |
-| `guiMoveToBack` | Missing | `CLuaGUIDefs.cpp:131` | `GUIMoveToBack` | Needs Android widget state and input handler in LuaGuiApi. |
-| `guiProgressBarGetProgress` | Missing | `CLuaGUIDefs.cpp:153` | `GUIProgressBarGetProgress` | Needs Android widget state and input handler in LuaGuiApi. |
-| `guiProgressBarSetProgress` | Missing | `CLuaGUIDefs.cpp:152` | `GUIProgressBarSetProgress` | Needs Android widget state and input handler in LuaGuiApi. |
-| `guiRadioButtonGetSelected` | Missing | `CLuaGUIDefs.cpp:150` | `GUIRadioButtonGetSelected` | Needs Android widget state and input handler in LuaGuiApi. |
-| `guiRadioButtonSetSelected` | Missing | `CLuaGUIDefs.cpp:136` | `GUIRadioButtonSetSelected` | Needs Android widget state and input handler in LuaGuiApi. |
-| `guiScrollBarGetScrollPosition` | Missing | `CLuaGUIDefs.cpp:119` | `GUIScrollBarGetScrollPosition` | Needs Android widget state and input handler in LuaGuiApi. |
-| `guiScrollBarSetScrollPosition` | Missing | `CLuaGUIDefs.cpp:118` | `GUIScrollBarSetScrollPosition` | Needs Android widget state and input handler in LuaGuiApi. |
-| `guiScrollPaneGetHorizontalScrollPosition` | Missing | `CLuaGUIDefs.cpp:114` | `GUIScrollPaneGetHorizontalScrollPosition` | Needs Android widget state and input handler in LuaGuiApi. |
-| `guiScrollPaneGetVerticalScrollPosition` | Missing | `CLuaGUIDefs.cpp:116` | `GUIScrollPaneGetVerticalScrollPosition` | Needs Android widget state and input handler in LuaGuiApi. |
-| `guiScrollPaneSetHorizontalScrollPosition` | Missing | `CLuaGUIDefs.cpp:113` | `GUIScrollPaneSetHorizontalScrollPosition` | Needs Android widget state and input handler in LuaGuiApi. |
-| `guiScrollPaneSetScrollBars` | Missing | `CLuaGUIDefs.cpp:112` | `GUIScrollPaneSetScrollBars` | Needs Android widget state and input handler in LuaGuiApi. |
-| `guiScrollPaneSetVerticalScrollPosition` | Missing | `CLuaGUIDefs.cpp:115` | `GUIScrollPaneSetVerticalScrollPosition` | Needs Android widget state and input handler in LuaGuiApi. |
+| `guiGridListAddColumn` | **Implemented** | `CLuaGUIDefs.cpp:81` | `GUIGridListAddColumn` | Operational on Android. (GuiGridListAddColumn) |
+| `guiGridListAddRow` | **Implemented** | `CLuaGUIDefs.cpp:90` | `GUIGridListAddRow` | Operational on Android. (GuiGridListAddRow) |
+| `guiGridListAutoSizeColumn` | **Implemented** | `CLuaGUIDefs.cpp:93` | `GUIGridListAutoSizeColumn` | Operational on Android. (GuiGridListAutoSizeColumn) |
+| `guiGridListClear` | **Implemented** | `CLuaGUIDefs.cpp:94` | `GUIGridListClear` | Operational on Android. (GuiGridListClear) |
+| `guiGridListGetColumnCount` | **Implemented** | `CLuaGUIDefs.cpp:89` | `GUIGridListGetColumnCount` | Operational on Android. (GuiGridListGetColumnCount) |
+| `guiGridListGetColumnTitle` | **Implemented** | `CLuaGUIDefs.cpp:86` | `GUIGridListGetColumnTitle` | Operational on Android. (GuiGridListGetColumnTitle) |
+| `guiGridListGetColumnWidth` | **Implemented** | `CLuaGUIDefs.cpp:84` | `GUIGridListGetColumnWidth` | Operational on Android. (GuiGridListGetColumnWidth) |
+| `guiGridListGetHorizontalScrollPosition` | **Implemented** | `CLuaGUIDefs.cpp:108` | `GUIGridListGetHorizontalScrollPosition` | Operational on Android. (GuiGridListGetHorizontalScrollPosition) |
+| `guiGridListGetItemColor` | **Implemented** | `CLuaGUIDefs.cpp:100` | `GUIGridListGetItemColor` | Operational on Android. (GuiGridListGetItemColor) |
+| `guiGridListGetItemData` | **Implemented** | `CLuaGUIDefs.cpp:98` | `GUIGridListGetItemData` | Operational on Android. (GuiGridListGetItemData) |
+| `guiGridListGetItemText` | **Implemented** | `CLuaGUIDefs.cpp:96` | `GUIGridListGetItemText` | Operational on Android. (GuiGridListGetItemText) |
+| `guiGridListGetRowCount` | **Implemented** | `CLuaGUIDefs.cpp:88` | `GUIGridListGetRowCount` | Operational on Android. (GuiGridListGetRowCount) |
+| `guiGridListGetSelectedCount` | **Implemented** | `CLuaGUIDefs.cpp:105` | `GUIGridListGetSelectedCount` | Operational on Android. (GuiGridListGetSelectedCount) |
+| `guiGridListGetSelectedItem` | **Implemented** | `CLuaGUIDefs.cpp:103` | `GUIGridListGetSelectedItem` | Operational on Android. (GuiGridListGetSelectedItem) |
+| `guiGridListGetSelectedItems` | **Implemented** | `CLuaGUIDefs.cpp:104` | `GUIGridListGetSelectedItems` | Operational on Android. (GuiGridListGetSelectedItems) |
+| `guiGridListGetSelectionMode` | **Implemented** | `CLuaGUIDefs.cpp:102` | `GUIGridListGetSelectionMode` | Operational on Android. (GuiGridListGetSelectionMode) |
+| `guiGridListGetVerticalScrollPosition` | **Implemented** | `CLuaGUIDefs.cpp:110` | `GUIGridListGetVerticalScrollPosition` | Operational on Android. (GuiGridListGetVerticalScrollPosition) |
+| `guiGridListInsertRowAfter` | **Implemented** | `CLuaGUIDefs.cpp:91` | `GUIGridListInsertRowAfter` | Operational on Android. (GuiGridListInsertRowAfter) |
+| `guiGridListIsSortingEnabled` | **Implemented** | `CLuaGUIDefs.cpp:80` | `GUIGridListIsSortingEnabled` | Operational on Android. (GuiGridListIsSortingEnabled) |
+| `guiGridListRemoveColumn` | **Implemented** | `CLuaGUIDefs.cpp:82` | `GUIGridListRemoveColumn` | Operational on Android. (GuiGridListRemoveColumn) |
+| `guiGridListRemoveRow` | **Implemented** | `CLuaGUIDefs.cpp:92` | `GUIGridListRemoveRow` | Operational on Android. (GuiGridListRemoveRow) |
+| `guiGridListSetColumnTitle` | **Implemented** | `CLuaGUIDefs.cpp:85` | `GUIGridListSetColumnTitle` | Operational on Android. (GuiGridListSetColumnTitle) |
+| `guiGridListSetColumnWidth` | **Implemented** | `CLuaGUIDefs.cpp:83` | `GUIGridListSetColumnWidth` | Operational on Android. (GuiGridListSetColumnWidth) |
+| `guiGridListSetHorizontalScrollPosition` | **Implemented** | `CLuaGUIDefs.cpp:107` | `GUIGridListSetHorizontalScrollPosition` | Operational on Android. (GuiGridListSetHorizontalScrollPosition) |
+| `guiGridListSetItemColor` | **Implemented** | `CLuaGUIDefs.cpp:99` | `GUIGridListSetItemColor` | Operational on Android. (GuiGridListSetItemColor) |
+| `guiGridListSetItemData` | **Implemented** | `CLuaGUIDefs.cpp:97` | `GUIGridListSetItemData` | Operational on Android. (GuiGridListSetItemData) |
+| `guiGridListSetItemText` | **Implemented** | `CLuaGUIDefs.cpp:95` | `GUIGridListSetItemText` | Operational on Android. (GuiGridListSetItemText) |
+| `guiGridListSetScrollBars` | **Implemented** | `CLuaGUIDefs.cpp:87` | `GUIGridListSetScrollBars` | Operational on Android. (GuiGridListSetScrollBars) |
+| `guiGridListSetSelectedItem` | **Implemented** | `CLuaGUIDefs.cpp:106` | `GUIGridListSetSelectedItem` | Operational on Android. (GuiGridListSetSelectedItem) |
+| `guiGridListSetSelectionMode` | **Implemented** | `CLuaGUIDefs.cpp:101` | `GUIGridListSetSelectionMode` | Operational on Android. (GuiGridListSetSelectionMode) |
+| `guiGridListSetSortingEnabled` | **Implemented** | `CLuaGUIDefs.cpp:79` | `GUIGridListSetSortingEnabled` | Operational on Android. (GuiGridListSetSortingEnabled) |
+| `guiGridListSetVerticalScrollPosition` | **Implemented** | `CLuaGUIDefs.cpp:109` | `GUIGridListSetVerticalScrollPosition` | Operational on Android. (GuiGridListSetVerticalScrollPosition) |
+| `guiLabelGetColor` | **Implemented** | `CLuaGUIDefs.cpp:174` | `GUILabelGetColor` | Operational on Android. (GuiLabelGetColor) |
+| `guiLabelGetFontHeight` | **Implemented** | `CLuaGUIDefs.cpp:179` | `GUILabelGetFontHeight` | Operational on Android. (GuiLabelGetFontHeight) |
+| `guiLabelGetTextExtent` | **Implemented** | `CLuaGUIDefs.cpp:178` | `GUILabelGetTextExtent` | Operational on Android. (GuiLabelGetTextExtent) |
+| `guiLabelSetColor` | **Implemented** | `CLuaGUIDefs.cpp:173` | `GUILabelSetColor` | Operational on Android. (GuiLabelSetColor) |
+| `guiLabelSetHorizontalAlign` | **Implemented** | `CLuaGUIDefs.cpp:176` | `GUILabelSetHorizontalAlign` | Operational on Android. (GuiLabelSetHorizontalAlign) |
+| `guiLabelSetVerticalAlign` | **Implemented** | `CLuaGUIDefs.cpp:175` | `GUILabelSetVerticalAlign` | Operational on Android. (GuiLabelSetVerticalAlign) |
+| `guiMemoGetCaretIndex` | **Implemented** | `CLuaGUIDefs.cpp:167` | `GUIMemoGetCaretIndex` | Operational on Android. (GuiMemoGetCaretIndex) |
+| `guiMemoGetVerticalScrollPosition` | **Implemented** | `CLuaGUIDefs.cpp:171` | `GUIMemoGetVerticalScrollPosition` | Operational on Android. (GetMemoScroll) |
+| `guiMemoIsReadOnly` | **Implemented** | `CLuaGUIDefs.cpp:169` | `GUIMemoIsReadOnly` | Operational on Android. (GuiMemoIsReadOnly) |
+| `guiMemoSetCaretIndex` | **Implemented** | `CLuaGUIDefs.cpp:166` | `GUIMemoSetCaretIndex` | Operational on Android. (GuiMemoSetCaretIndex) |
+| `guiMemoSetReadOnly` | **Implemented** | `CLuaGUIDefs.cpp:168` | `GUIMemoSetReadOnly` | Operational on Android. (GuiMemoSetReadOnly) |
+| `guiMemoSetVerticalScrollPosition` | **Implemented** | `CLuaGUIDefs.cpp:170` | `GUIMemoSetVerticalScrollPosition` | Operational on Android. (SetMemoScroll) |
+| `guiMoveToBack` | **Implemented** | `CLuaGUIDefs.cpp:131` | `GUIMoveToBack` | Operational on Android. (GuiMoveToBack) |
+| `guiProgressBarGetProgress` | **Implemented** | `CLuaGUIDefs.cpp:153` | `GUIProgressBarGetProgress` | Operational on Android. (GuiProgressBarGetProgress) |
+| `guiProgressBarSetProgress` | **Implemented** | `CLuaGUIDefs.cpp:152` | `GUIProgressBarSetProgress` | Operational on Android. (GuiProgressBarSetProgress) |
+| `guiRadioButtonGetSelected` | **Implemented** | `CLuaGUIDefs.cpp:150` | `GUIRadioButtonGetSelected` | Operational on Android. (GuiRadioButtonGetSelected) |
+| `guiRadioButtonSetSelected` | **Implemented** | `CLuaGUIDefs.cpp:136` | `GUIRadioButtonSetSelected` | Operational on Android. (GuiRadioButtonSetSelected) |
+| `guiScrollBarGetScrollPosition` | **Implemented** | `CLuaGUIDefs.cpp:119` | `GUIScrollBarGetScrollPosition` | Operational on Android. (GuiScrollBarGetScrollPosition) |
+| `guiScrollBarSetScrollPosition` | **Implemented** | `CLuaGUIDefs.cpp:118` | `GUIScrollBarSetScrollPosition` | Operational on Android. (GuiScrollBarSetScrollPosition) |
+| `guiScrollPaneGetHorizontalScrollPosition` | **Implemented** | `CLuaGUIDefs.cpp:114` | `GUIScrollPaneGetHorizontalScrollPosition` | Operational on Android. (GuiScrollPaneGetHorizontalScrollPosition) |
+| `guiScrollPaneGetVerticalScrollPosition` | **Implemented** | `CLuaGUIDefs.cpp:116` | `GUIScrollPaneGetVerticalScrollPosition` | Operational on Android. (GuiScrollPaneGetVerticalScrollPosition) |
+| `guiScrollPaneSetHorizontalScrollPosition` | **Implemented** | `CLuaGUIDefs.cpp:113` | `GUIScrollPaneSetHorizontalScrollPosition` | Operational on Android. (GuiScrollPaneSetHorizontalScrollPosition) |
+| `guiScrollPaneSetScrollBars` | **Implemented** | `CLuaGUIDefs.cpp:112` | `GUIScrollPaneSetScrollBars` | Operational on Android. (GuiScrollPaneSetScrollBars) |
+| `guiScrollPaneSetVerticalScrollPosition` | **Implemented** | `CLuaGUIDefs.cpp:115` | `GUIScrollPaneSetVerticalScrollPosition` | Operational on Android. (GuiScrollPaneSetVerticalScrollPosition) |
 | `guiSetAlpha` | **Implemented** | `CLuaGUIDefs.cpp:123` | `GUISetAlpha` | Operational on Android. (GuiSetAlpha) |
 | `guiSetEnabled` | **Implemented** | `CLuaGUIDefs.cpp:121` | `GUISetEnabled` | Operational on Android. (GuiSetEnabled) |
-| `guiSetFont` | Missing | `CLuaGUIDefs.cpp:125` | `GUISetFont` | Needs Android widget state and input handler in LuaGuiApi. |
+| `guiSetFont` | **Implemented** | `CLuaGUIDefs.cpp:125` | `GUISetFont` | Operational on Android. (GuiSetFont) |
 | `guiSetInputEnabled` | **Implemented** | `CLuaGUIDefs.cpp:41` | `GUISetInputEnabled` | Operational on Android. (GuiSetInputEnabled) |
 | `guiSetInputMode` | **Implemented** | `CLuaGUIDefs.cpp:43` | `GUISetInputMode` | Operational on Android. (GuiSetInputMode) |
 | `guiSetPosition` | **Implemented** | `CLuaGUIDefs.cpp:127` | `GUISetPosition` | Operational on Android. (GuiSetPosition) |
-| `guiSetProperty` | Missing | `CLuaGUIDefs.cpp:122` | `GUISetProperty` | Needs Android widget state and input handler in LuaGuiApi. |
-| `guiSetSelectedTab` | Missing | `CLuaGUIDefs.cpp:76` | `GUISetSelectedTab` | Needs Android widget state and input handler in LuaGuiApi. |
+| `guiSetProperty` | **Implemented** | `CLuaGUIDefs.cpp:122` | `GUISetProperty` | Operational on Android. (GuiSetProperty) |
+| `guiSetSelectedTab` | **Implemented** | `CLuaGUIDefs.cpp:76` | `GUISetSelectedTab` | Operational on Android. (GuiSetSelectedTab) |
 | `guiSetSize` | **Implemented** | `CLuaGUIDefs.cpp:126` | `GUISetSize` | Operational on Android. (GuiSetSize) |
 | `guiSetText` | **Implemented** | `CLuaGUIDefs.cpp:124` | `GUISetText` | Operational on Android. (GuiSetText) |
 | `guiSetVisible` | **Implemented** | `CLuaGUIDefs.cpp:128` | `GUISetVisible` | Operational on Android. (GuiSetVisible) |
-| `guiStaticImageGetNativeSize` | Missing | `CLuaGUIDefs.cpp:74` | `GUIStaticImageGetNativeSize` | Needs Android widget state and input handler in LuaGuiApi. |
-| `guiStaticImageLoadImage` | Missing | `CLuaGUIDefs.cpp:73` | `GUIStaticImageLoadImage` | Needs Android widget state and input handler in LuaGuiApi. |
-| `guiWindowIsMovable` | Missing | `CLuaGUIDefs.cpp:183` | `GUIWindowIsMovable` | Needs Android widget state and input handler in LuaGuiApi. |
-| `guiWindowIsSizable` | Missing | `CLuaGUIDefs.cpp:184` | `GUIWindowIsSizable` | Needs Android widget state and input handler in LuaGuiApi. |
-| `guiWindowSetMovable` | Missing | `CLuaGUIDefs.cpp:181` | `GUIWindowSetMovable` | Needs Android widget state and input handler in LuaGuiApi. |
-| `guiWindowSetSizable` | Missing | `CLuaGUIDefs.cpp:182` | `GUIWindowSetSizable` | Needs Android widget state and input handler in LuaGuiApi. |
+| `guiStaticImageGetNativeSize` | **Implemented** | `CLuaGUIDefs.cpp:74` | `GUIStaticImageGetNativeSize` | Operational on Android. (GuiStaticImageGetNativeSize) |
+| `guiStaticImageLoadImage` | **Implemented** | `CLuaGUIDefs.cpp:73` | `GUIStaticImageLoadImage` | Operational on Android. (GuiStaticImageLoadImage) |
+| `guiWindowIsMovable` | **Implemented** | `CLuaGUIDefs.cpp:183` | `GUIWindowIsMovable` | Operational on Android. (GuiWindowIsMovable) |
+| `guiWindowIsSizable` | **Implemented** | `CLuaGUIDefs.cpp:184` | `GUIWindowIsSizable` | Operational on Android. (GuiWindowIsSizable) |
+| `guiWindowSetMovable` | **Implemented** | `CLuaGUIDefs.cpp:181` | `GUIWindowSetMovable` | Operational on Android. (GuiWindowSetMovable) |
+| `guiWindowSetSizable` | **Implemented** | `CLuaGUIDefs.cpp:182` | `GUIWindowSetSizable` | Operational on Android. (GuiWindowSetSizable) |
 | `isChatBoxInputActive` | *Stub* | `CLuaGUIDefs.cpp:45` | `GUIIsChatBoxInputActive` | Currently stubbed: `l_false: lua_pushboolean(L, 0)`. Needs native engine wiring. |
 | `isConsoleActive` | *Stub* | `CLuaGUIDefs.cpp:46` | `GUIIsConsoleActive` | Currently stubbed: `DefaultValue(kFalse)`. Needs native engine wiring. |
 | `isDebugViewActive` | Missing | `CLuaGUIDefs.cpp:47` | `GUIIsDebugViewActive` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |

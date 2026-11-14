@@ -155,7 +155,7 @@ uint32_t EnsureRoot() {
 }
 
 // CResource.cpp 887-894: resource element under root, dynamic map named "dynamic" under that.
-uint32_t EnsureMap(uint32_t resourceId, const std::string& resourceName) {
+uint32_t EnsureMap(uint32_t resourceId, const std::string& resourceName, uint32_t dynamicId) {
     const uint32_t root = EnsureRoot();
     if (!resourceId || !root) return 0;
     if (!Find(resourceId)) {
@@ -165,9 +165,11 @@ uint32_t EnsureMap(uint32_t resourceId, const std::string& resourceName) {
         resource.name = resourceName;
         resource.ownsType = true;
         resource.serverElement = true;
+        resource.canDestroy = false;
         g_nodes.emplace(resourceId, std::move(resource));
         Link(resourceId, root);
     }
+    if (dynamicId && Find(dynamicId)) return dynamicId;
     Node* resource = Find(resourceId);
     if (!resource) return 0;
     const std::vector<uint32_t> kids = resource->children;
@@ -175,14 +177,15 @@ uint32_t EnsureMap(uint32_t resourceId, const std::string& resourceName) {
         Node* node = Find(child);
         if (node && node->serverElement && node->type == "map" && node->name == "dynamic") return child;
     }
-    const uint32_t id = AllocId();
-    if (!id) return 0;
+    const uint32_t id = dynamicId ? dynamicId : AllocId();
+    if (!id || Find(id)) return id && Find(id) ? id : 0;
     Node map;
     map.id = id;
     map.type = "map";
     map.name = "dynamic";
     map.ownsType = true;
     map.serverElement = true;
+    map.canDestroy = false;
     g_nodes.emplace(id, std::move(map));
     Link(id, resourceId);
     return id;
@@ -634,8 +637,8 @@ int CreateElement(lua_State* L) {
         return 1;
     }
     const std::string& owner = ActiveVmOwner();
-    const uint32_t resourceId = owner.empty() ? 0 : ResourceLoader::RootElementOf(owner);
-    if (owner.empty() || resourceId == 0) {
+    ResourceLoader::ResourceView caller;
+    if (owner.empty() || !ResourceLoader::CopyCallerResource(ActiveVmOwnerNet(), ActiveVmOwnerGeneration(), owner, caller) || caller.root == 0) {
         PushFail(L);
         return 1;
     }
@@ -646,7 +649,7 @@ int CreateElement(lua_State* L) {
     }
     std::string elementId;
     if (lua_type(L, 2) == LUA_TSTRING) ReadStringAt(L, 2, elementId);
-    const uint32_t map = EnsureMap(resourceId, owner);
+    const uint32_t map = EnsureMap(caller.root, caller.name, caller.dynamic);
     const uint32_t id = map ? AllocId() : 0;
     if (!map || !id) {
         LUA_LOGE("createElement; unable to create more elements");
@@ -852,6 +855,89 @@ void Bind(lua_State* L, const char* name, lua_CFunction fn) {
 }
 
 }  // namespace
+
+uint32_t ClientRootElement() { return g_root; }
+
+void EnsureResourceNode(uint32_t resourceRoot, const std::string& name) {
+    if (!resourceRoot || Find(resourceRoot)) return;
+    Node resource;
+    resource.id = resourceRoot;
+    resource.type = "resource";
+    resource.name = name;
+    resource.ownsType = true;
+    resource.serverElement = true;
+    resource.canDestroy = false;
+    g_nodes.emplace(resourceRoot, std::move(resource));
+    Link(resourceRoot, EnsureRoot());
+}
+
+void EnsureDynamicNode(uint32_t resourceRoot, uint32_t dynamicRoot) {
+    if (!resourceRoot || !dynamicRoot || Find(dynamicRoot)) return;
+    EnsureResourceNode(resourceRoot, "");
+    Node map;
+    map.id = dynamicRoot;
+    map.type = "map";
+    map.name = "dynamic";
+    map.ownsType = true;
+    map.serverElement = true;
+    map.canDestroy = false;
+    g_nodes.emplace(dynamicRoot, std::move(map));
+    Link(dynamicRoot, resourceRoot);
+}
+
+void DestroyClientChildren(uint32_t id) {
+    // CResource::DeleteClientChildren (CResource.cpp 1700-1704): local elements under
+    // the resource go away with it. Server elements stay.
+    Node* node = Find(id);
+    if (!node) return;
+    const std::vector<uint32_t> kids = node->children;
+    for (uint32_t child : kids) {
+        DestroyClientChildren(child);
+        DestroyNode(child);
+    }
+}
+
+void ReleaseResourceElements(uint32_t resourceRoot, uint32_t dynamicRoot) {
+    if (dynamicRoot) DestroyClientChildren(dynamicRoot);
+    if (resourceRoot) DestroyClientChildren(resourceRoot);
+    auto drop = [](uint32_t id, const char* type) {
+        Node* node = Find(id);
+        if (!node || node->type != type) return;
+        const std::vector<uint32_t> kids = node->children;
+        for (uint32_t child : kids) Link(child, 0);
+        Link(id, 0);
+        g_nodes.erase(id);
+    };
+    if (dynamicRoot) {
+        drop(dynamicRoot, "map");
+        ServerWorld::ForgetPlaceholder(dynamicRoot);
+    }
+    if (resourceRoot) {
+        drop(resourceRoot, "resource");
+        ServerWorld::ForgetPlaceholder(resourceRoot);
+    }
+}
+
+void CollectEventChain(uint32_t base, std::vector<uint32_t>& out) {
+    // CClientEntity::CallParentEvent (CClientEntity.cpp 811-823): the element, then its parent.
+    out.clear();
+    uint32_t current = base;
+    for (int guard = 0; current && guard < 64; ++guard) {
+        out.push_back(current);
+        Node* node = Find(current);
+        bool propagate = true;
+        if (node) propagate = node->callPropagation;
+        else if (const auto flag = g_callProp.find(current); flag != g_callProp.end()) propagate = flag->second;
+        if (!propagate) return;
+        const uint32_t parent = node ? node->parent : 0;
+        if (parent) {
+            current = parent;
+            continue;
+        }
+        if (g_root && g_root != current) out.push_back(g_root);
+        return;
+    }
+}
 
 void InstallElementBindings(lua_State* L) {
     ResetCatalog();

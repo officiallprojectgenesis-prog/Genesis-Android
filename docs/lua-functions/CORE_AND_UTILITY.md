@@ -5,9 +5,9 @@ Timers, event handling, network latent transfers, file I/O, XML parsing, JSON se
 ## Parity Status
 
 - **Total Functions:** 195
-- **Implemented:** 150 (76.9%)
+- **Implemented:** 159 (81.5%)
 - **Stubs:** 5
-- **Missing:** 40
+- **Missing:** 31
 
 > **Technical Requirement:** Pure CPU/platform logic. Mostly ported or needs standard library wrappers (e.g. tinyxml2, sha256, zlib).
 
@@ -101,16 +101,16 @@ Timers, event handling, network latent transfers, file I/O, XML parsing, JSON se
 | `getRemoteRequestInfo` | **Implemented** | `CLuaNetworkDefs.cpp:28` | `GetRemoteRequestInfo` | Operational on Android. (LuaGetRemoteRequestInfo) |
 | `getRemoteRequests` | **Implemented** | `CLuaNetworkDefs.cpp:27` | `GetRemoteRequests` | Operational on Android. (LuaGetRemoteRequests) |
 | `getResourceConfig` | Missing | `CLuaResourceDefs.cpp:22` | `GetResourceConfig` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `getResourceDynamicElementRoot` | Missing | `CLuaResourceDefs.cpp:27` | `GetResourceDynamicElementRoot` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `getResourceExportedFunctions` | Missing | `CLuaResourceDefs.cpp:28` | `GetResourceExportedFunctions` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `getResourceFromName` | Missing | `CLuaResourceDefs.cpp:24` | `GetResourceFromName` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `getResourceGUIElement` | Missing | `CLuaResourceDefs.cpp:26` | `GetResourceGUIElement` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `getResourceName` | Missing | `CLuaResourceDefs.cpp:23` | `ArgumentParserWarn<false, GetResourceName>` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `getResourceRootElement` | Missing | `CLuaResourceDefs.cpp:25` | `GetResourceRootElement` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `getResourceState` | Missing | `CLuaResourceDefs.cpp:30` | `GetResourceState` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `getResources` | Missing | `CLuaResourceDefs.cpp:29` | `ArgumentParser<GetResources>` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
+| `getResourceDynamicElementRoot` | **Implemented** | `CLuaResourceDefs.cpp:27` | `GetResourceDynamicElementRoot` | Operational on Android. (l_getResourceDynamicElementRoot) |
+| `getResourceExportedFunctions` | **Implemented** | `CLuaResourceDefs.cpp:28` | `GetResourceExportedFunctions` | Operational on Android. (l_getResourceExportedFunctions) |
+| `getResourceFromName` | **Implemented** | `CLuaResourceDefs.cpp:24` | `GetResourceFromName` | Operational on Android. (l_getResourceFromName) |
+| `getResourceGUIElement` | **Implemented** | `CLuaResourceDefs.cpp:26` | `GetResourceGUIElement` | Operational on Android. (l_getResourceGUIElement) |
+| `getResourceName` | **Implemented** | `CLuaResourceDefs.cpp:23` | `ArgumentParserWarn<false, GetResourceName>` | Operational on Android. (l_getResourceName) |
+| `getResourceRootElement` | **Implemented** | `CLuaResourceDefs.cpp:25` | `GetResourceRootElement` | Operational on Android. (l_getResourceRootElement) |
+| `getResourceState` | **Implemented** | `CLuaResourceDefs.cpp:30` | `GetResourceState` | Operational on Android. (l_getResourceState) |
+| `getResources` | **Implemented** | `CLuaResourceDefs.cpp:29` | `ArgumentParser<GetResources>` | Operational on Android. (l_getResources) |
 | `getServerIp` | **Implemented** | `CLuaNetworkDefs.cpp:30` | `ArgumentParser<GetServerIp>` | Operational on Android. (LuaGetServerIp) |
-| `getThisResource` | Missing | `CLuaResourceDefs.cpp:21` | `GetThisResource` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
+| `getThisResource` | **Implemented** | `CLuaResourceDefs.cpp:21` | `GetThisResource` | Operational on Android. (l_getThisResource) |
 | `getTickCount` | **Implemented** | `CLuaUtilDefs.cpp:46` | `GetTickCount_` | Operational on Android. (l_getTickCount) |
 | `getTimerDetails` | **Implemented** | `CLuaTimerDefs.cpp:25` | `GetTimerDetails` | Operational on Android. (l_getTimerDetails) |
 | `getTimers` | **Implemented** | `CLuaTimerDefs.cpp:23` | `GetTimers` | Operational on Android. (l_getTimers) |

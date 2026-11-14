@@ -751,6 +751,15 @@ void OnResourceStart(const Net::ResourceStartInfo& info) {
     Remember(info.dynamicEntityId, visual);
 }
 
+void ForgetPlaceholder(uint32_t id) {
+    if (id == 0 || id == 0xFFFFFFFFu) return;
+    std::lock_guard<std::mutex> lock(g_lock);
+    auto found = g_visuals.find(id);
+    if (found == g_visuals.end() || found->second.kind != 0) return;
+    g_visuals.erase(found);
+    if (g_resourceRoot == id) g_resourceRoot = 0;
+}
+
 void Tick(float playerX, float playerY, float playerZ) {
 #ifdef __ANDROID__
     ResolveBlips();

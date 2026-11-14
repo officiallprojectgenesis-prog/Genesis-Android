@@ -116,7 +116,23 @@ bool SoundElementAlive(uint32_t id);
 // Screen size scripts see (guiGetScreenSize), and the resource whose code is running.
 void ActiveVmScreenSize(int& width, int& height);
 const std::string& ActiveVmOwner();
+// Net id of the resource whose code is running, or 0 outside a resource.
+uint16_t ActiveVmOwnerNet();
+uint32_t ActiveVmOwnerGeneration();
 bool ActiveVmChatHooked();
+// Client root id, or 0 before the element bindings are installed.
+uint32_t ClientRootElement();
+// The element an event is triggered on, then each parent while call propagation
+// is enabled. An element that is not in the tree still reaches the root.
+// CClientEntity::CallParentEvent (CClientEntity.cpp 811-823).
+void CollectEventChain(uint32_t base, std::vector<uint32_t>& out);
+// Resource element under the client root. The dynamic map is a separate call so a
+// root read does not invent the map before the resource is running.
+void EnsureResourceNode(uint32_t resourceRoot, const std::string& name);
+void EnsureDynamicNode(uint32_t resourceRoot, uint32_t dynamicRoot);
+// Drops the nodes this client added for that resource. Server placeholders of kind 0
+// are forgotten too, so isElement is false after the stop.
+void ReleaseResourceElements(uint32_t resourceRoot, uint32_t dynamicRoot);
 bool ActiveVmOnServerEvent(const uint8_t* body, size_t length, size_t bits);
 // RESOURCE_STOP (83): removes the resource and stops its scripts (desktop Packet_ResourceStop).
 void ActiveVmOnResourceStop(const uint8_t* body, size_t length, size_t bits);

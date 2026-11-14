@@ -51,7 +51,7 @@ CATEGORIES = OrderedDict([
         "file": "GUI_AND_DX.md",
         "description": "2D screen drawing, fonts, text, rectangles, lines, textures, render targets, GUI windows, buttons, edits, labels, gridlists, and 3D line drawing.",
         "groups": ["CLuaGUIDefs", "CLuaDrawingDefs", "CLuaVectorGraphicDefs", "CLua2DFXDefs"],
-        "subsystem_notes": "Desktop uses CEGUI and Direct3D9. Mobile uses `MtaDxView.java` (Android Canvas) + `LuaGuiApi.cpp`. Missing shaders (HLSL -> GLSL ES) and complex CEGUI widgets (gridlist, tabpanel, scrollpane)."
+        "subsystem_notes": "Desktop uses CEGUI and Direct3D9. Mobile uses `MtaDxView.java` (Android Canvas) + `LuaGuiApi.cpp`. Windows, edits, memos, tabs, scroll panes and grid lists are stored and drawn into the DX frame. Grid sorting does not reorder rows. `guiCreateFont` returns false because CreateGuiFont is not hooked. Shaders (HLSL -> GLSL ES) and the browser are still missing."
     }),
     ("ENGINE_AND_MODELS", {
         "title": "Engine & Model Replacement (DFF, TXD, COL)",

@@ -162,6 +162,17 @@ float Wrap360(float degrees) {
     return degrees;
 }
 
+// Vehicle roll and pitch are degrees on the spawn record (ServerWorld.h ActorSpawn).
+void VehicleTilt(uint32_t id, float& rx, float& ry) {
+    rx = 0.f;
+    ry = 0.f;
+    ServerWorld::ActorSpawn visual;
+    if (ServerWorld::CopyVisual(id, visual) && visual.kind == 2) {
+        rx = visual.rotX;
+        ry = visual.rotY;
+    }
+}
+
 bool HeadingOf(uint32_t id, float& degrees) {
     int model = 0;
     float radians = 0.f;
@@ -215,8 +226,10 @@ int l_getElementRotation(lua_State* L) {
         lua_pushboolean(L, 0);
         return 1;
     }
-    lua_pushnumber(L, 0);
-    lua_pushnumber(L, 0);
+    float rx = 0.f, ry = 0.f;
+    VehicleTilt(id, rx, ry);
+    lua_pushnumber(L, rx);
+    lua_pushnumber(L, ry);
     lua_pushnumber(L, z);
     return 3;
 }
@@ -233,13 +246,20 @@ int l_getElementMatrix(lua_State* L) {
     if (id == ServerWorld::LocalPlayer()) Game::CopyPose(x, y, z, poseHeading);
     else ServerWorld::ElementPose(id, x, y, z);
     (void)poseHeading;
-    const float radians = degrees * (3.14159265f / 180.f);
-    const float c = std::cos(radians);
-    const float s = std::sin(radians);
+    float rx = 0.f, ry = 0.f;
+    VehicleTilt(id, rx, ry);
+    // CMatrix::SetRotation (Shared/sdk/CMatrix.h 253-278). Angles are radians, and X/Y are negated.
+    const float toRad = 3.14159265f / 180.f;
+    const float fCosX = std::cos(-rx * toRad);
+    const float fCosY = std::cos(-ry * toRad);
+    const float fCosZ = std::cos(degrees * toRad);
+    const float fSinX = std::sin(-rx * toRad);
+    const float fSinY = std::sin(-ry * toRad);
+    const float fSinZ = std::sin(degrees * toRad);
     const float rows[4][4] = {
-        {c, s, 0.f, 0.f},
-        {-s, c, 0.f, 0.f},
-        {0.f, 0.f, 1.f, 0.f},
+        {fCosY * fCosZ, fCosY * fSinZ, fSinY, 0.f},
+        {fSinX * fSinY * fCosZ - fCosX * fSinZ, fSinX * fSinY * fSinZ + fCosX * fCosZ, -fSinX * fCosY, 0.f},
+        {-(fCosX * fSinY * fCosZ + fSinX * fSinZ), fCosZ * fSinX - fCosX * fSinY * fSinZ, fCosX * fCosY, 0.f},
         {x, y, z, 1.f},
     };
     lua_newtable(L);

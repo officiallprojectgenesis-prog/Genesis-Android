@@ -34,10 +34,23 @@ fs::path Root() {
 #endif
 }
 
+bool HasParentSegment(const std::string& raw) {
+    size_t start = 0;
+    while (start <= raw.size()) {
+        const size_t slash = raw.find_first_of("/\\", start);
+        const size_t count = slash == std::string::npos ? std::string::npos : slash - start;
+        if (raw.compare(start, count, "..") == 0) return true;
+        if (slash == std::string::npos) return false;
+        start = slash + 1;
+    }
+    return false;
+}
+
 bool Resolve(const char* text, fs::path& out) {
     if (!text || text[0] == '\0' || text[0] == '/' || text[0] == '\\') return false;
     const std::string raw(text);
-    if (raw.find("..") != std::string::npos) return false;
+    // A name such as "a..b" is a file name. Only a ".." path segment leaves the sandbox.
+    if (HasParentSegment(raw)) return false;
     std::error_code error;
     fs::create_directories(Root(), error);
     const fs::path full = fs::weakly_canonical(Root() / raw, error);

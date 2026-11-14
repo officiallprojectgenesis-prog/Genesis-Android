@@ -12,15 +12,15 @@ Each document lists every single function, its current Android implementation st
 | **Peds & Players (CLuaPedDefs, CLuaPlayerDefs)** | [PEDS_AND_PLAYERS.md](PEDS_AND_PLAYERS.md) | 206 | 24 | 80 | 102 | 11.7% |
 | **World, Objects & Environment** | [WORLD_AND_OBJECTS.md](WORLD_AND_OBJECTS.md) | 227 | 124 | 11 | 92 | 54.6% |
 | **Element Tree & Data (CLuaElementDefs)** | [ELEMENTS.md](ELEMENTS.md) | 81 | 50 | 8 | 23 | 61.7% |
-| **GUI & 2D/3D Drawing (DX & CEGUI)** | [GUI_AND_DX.md](GUI_AND_DX.md) | 199 | 49 | 5 | 145 | 24.6% |
+| **GUI & 2D/3D Drawing (DX & CEGUI)** | [GUI_AND_DX.md](GUI_AND_DX.md) | 199 | 136 | 5 | 58 | 68.3% |
 | **Engine & Model Replacement (DFF, TXD, COL)** | [ENGINE_AND_MODELS.md](ENGINE_AND_MODELS.md) | 125 | 1 | 15 | 109 | 0.8% |
 | **Audio & Voice System (CLuaAudioDefs)** | [AUDIO_AND_VOICE.md](AUDIO_AND_VOICE.md) | 57 | 19 | 1 | 37 | 33.3% |
 | **Camera & Viewport (CLuaCameraDefs)** | [CAMERA.md](CAMERA.md) | 47 | 47 | 0 | 0 | 100.0% |
 | **Weapons & Projectiles (CLuaWeaponDefs, CLuaProjectileDefs)** | [WEAPONS_AND_COMBAT.md](WEAPONS_AND_COMBAT.md) | 31 | 8 | 0 | 23 | 25.8% |
-| **Core System, Networking & Utilities** | [CORE_AND_UTILITY.md](CORE_AND_UTILITY.md) | 195 | 150 | 5 | 40 | 76.9% |
+| **Core System, Networking & Utilities** | [CORE_AND_UTILITY.md](CORE_AND_UTILITY.md) | 195 | 159 | 5 | 31 | 81.5% |
 | **Markers, Blips, ColShapes & Spatial** | [MARKERS_AND_SPATIAL.md](MARKERS_AND_SPATIAL.md) | 145 | 0 | 3 | 142 | 0.0% |
 | **Web Browser & Compatibility (CEF / Discord)** | [BROWSER_AND_COMPATIBILITY.md](BROWSER_AND_COMPATIBILITY.md) | 103 | 4 | 0 | 99 | 3.9% |
-| **TOTAL** | **All Categories** | **1581** | **482** | **150** | **949** | **30.5%** |
+| **TOTAL** | **All Categories** | **1581** | **578** | **150** | **853** | **36.6%** |
 
 ## Implementation Priority Tiers
 
