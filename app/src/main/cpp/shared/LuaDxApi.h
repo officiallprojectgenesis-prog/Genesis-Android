@@ -36,7 +36,8 @@ bool DxTextureFile(uint32_t id, std::string& file);
 void DxDropResource(const std::string& owner, uint16_t netId, uint32_t generation);
 
 // The font argument of a text call at this scale: a dx-font element, a standard font name, or
-// the default font. pixels is the text size; file is empty for a standard font.
+// the default font. pixels is the text size; file is empty for a standard font,
+// otherwise an opaque @font:<instance>:<path> source understood by the overlay.
 struct DxFont {
     double pixels = 15;
     std::string file;

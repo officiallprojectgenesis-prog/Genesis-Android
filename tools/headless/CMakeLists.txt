@@ -136,6 +136,27 @@ if(Java_FOUND)
         COMMAND "${Java_JAVA_EXECUTABLE}" -cp "${CMAKE_CURRENT_BINARY_DIR}/dx-text-java"
             com.worldrpg.neonlauncher.game.DxTextLayoutTest
         VERBATIM)
+    add_custom_target(neon_dx_state_tests
+        COMMAND "${CMAKE_COMMAND}" -E make_directory "${CMAKE_CURRENT_BINARY_DIR}/dx-state-java"
+        COMMAND "${Java_JAVAC_EXECUTABLE}" -d "${CMAKE_CURRENT_BINARY_DIR}/dx-state-java"
+            "${NATIVE_DIR}/../java/com/worldrpg/neonlauncher/game/DxFrameQueue.java"
+            "${NATIVE_DIR}/../java/com/worldrpg/neonlauncher/game/DxFontCache.java"
+            "${HEADLESS_DIR}/java/DxRenderStateTest.java"
+        COMMAND "${Java_JAVA_EXECUTABLE}" -cp "${CMAKE_CURRENT_BINARY_DIR}/dx-state-java"
+            com.worldrpg.neonlauncher.game.DxRenderStateTest
+        VERBATIM)
+    set(NEON_DX_ANDROID_JAR "" CACHE FILEPATH "Android SDK android.jar for DX view regression tests")
+    if(NEON_DX_ANDROID_JAR)
+        find_package(Python3 COMPONENTS Interpreter QUIET)
+        if(Python3_Interpreter_FOUND)
+            add_custom_target(neon_dx_view_tests
+                COMMAND "${Python3_EXECUTABLE}" "${HEADLESS_DIR}/run_dx_view_tests.py"
+                    --android-jar "${NEON_DX_ANDROID_JAR}"
+                    --build-dir "${CMAKE_CURRENT_BINARY_DIR}/dx-view-java"
+                    --javac "${Java_JAVAC_EXECUTABLE}" --java "${Java_JAVA_EXECUTABLE}"
+                VERBATIM)
+        endif()
+    endif()
 endif()
 # Usage requirements only (Lua and zlib headers): the objects are linked by the executables below.
 target_link_libraries(neon_core PRIVATE lua53 ZLIB::ZLIB)

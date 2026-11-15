@@ -17,7 +17,7 @@
 |---|---|---|---|---|
 | `addModel2DFX` | Missing | `CLua2DFXDefs.cpp:568` | `AddModel2DFX` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
 | `dxConvertPixels` | **Implemented** | `CLuaDrawingDefs.cpp:60` | `DxConvertPixels` | Operational on Android. (DxConvertPixels) |
-| `dxCreateFont` | **Implemented** | `CLuaDrawingDefs.cpp:43` | `DxCreateFont` | Operational on Android. (DxCreateFont) |
+| `dxCreateFont` | **Implemented** | `CLuaDrawingDefs.cpp:43` | `DxCreateFont` | Custom fonts use a native instance identity in both the Typeface cache and measured-width cache; recreating a font at the same path reloads it. Java Typeface cache has an LRU bound. Host lifecycle checks pass; Android compiles; glyph metrics still need device validation. |
 | `dxCreateRenderTarget` | **Implemented** | `CLuaDrawingDefs.cpp:46` | `DxCreateRenderTarget` | Operational on Android. (DxCreateRenderTarget) |
 | `dxCreateScreenSource` | **Implemented** | `CLuaDrawingDefs.cpp:47` | `DxCreateScreenSource` | Operational on Android. (DxCreateScreenSource) |
 | `dxCreateShader` | Missing | `CLuaDrawingDefs.cpp:45` | `DxCreateShader` | Needs GLSL ES 3.0 shader pipeline (translating desktop D3DX9 HLSL). |
@@ -35,7 +35,7 @@
 | `dxDrawPrimitive` | **Implemented** | `CLuaDrawingDefs.cpp:34` | `DxDrawPrimitive` | 2D Canvas bridge honors postGUI on screen and retains render-target order; queued calls capture blend mode. Primitive lines interpolate endpoint colors. Nonfinite/out-of-float-range input is rejected. Host-tested; Android compiles; device rendering not verified. |
 | `dxDrawPrimitive3D` | Missing | `CLuaDrawingDefs.cpp:35` | `DxDrawPrimitive3D` | Needs Android Canvas / OpenGL ES draw line routing. |
 | `dxDrawRectangle` | **Implemented** | `CLuaDrawingDefs.cpp:30` | `DxDrawRectangle` | Canvas 2D calls return true/false, honor postGUI and capture blend state. Render-target draws keep their original order. Existing texture elements work outside a resource owner; file paths still require one. Finite numeric arguments required. Host-tested; not device-verified. |
-| `dxDrawText` | **Implemented** | `CLuaDrawingDefs.cpp:29` | `DxDrawText` | Canvas text honors alignment, clip/wordBreak, two numeric scales, subpixel position, rotation/pivot and positive custom line height for color-coded text. Escaped payload preserves line breaks and backslashes. Color-coded text ignores clip/wordBreak as the desktop path does. Font/blend state stays with postGUI text; no artificial three-line cap. Canvas font metrics/wrapping are not identical to Direct3D. Nonpositive scales draw nothing; layout width is capped at 32768 pixels. Host/C++ and pure Java checks pass; Android compiles; not device-verified. |
+| `dxDrawText` | **Implemented** | `CLuaDrawingDefs.cpp:29` | `DxDrawText` | Canvas text honors alignment, clip/wordBreak, two numeric scales, subpixel position, rotation/pivot and positive custom line height for color-coded text. Coded block height counts every logical line and each baseline advances by lineHeight, including the final line's occupied height. Escaped payload preserves line breaks and backslashes. Color-coded text ignores clip/wordBreak as desktop does. Font/blend state stays with queued text. Canvas metrics/wrapping differ from Direct3D; nonpositive scales draw nothing; layout width is capped at 32768 pixels. Host/Java regression checks pass; not device-verified. |
 | `dxDrawWiredSphere` | Missing | `CLuaDrawingDefs.cpp:38` | `ArgumentParser<DxDrawWiredSphere>` | Needs Android Canvas / OpenGL ES draw line routing. |
 | `dxGetBlendMode` | **Implemented** | `CLuaDrawingDefs.cpp:64` | `DxGetBlendMode` | Operational on Android. (DxGetBlendMode) |
 | `dxGetFontHeight` | **Implemented** | `CLuaDrawingDefs.cpp:42` | `DxGetFontHeight` | Operational on Android. (DxGetFontHeight) |
@@ -44,8 +44,8 @@
 | `dxGetPixelsFormat` | **Implemented** | `CLuaDrawingDefs.cpp:59` | `DxGetPixelsFormat` | Operational on Android. (DxGetPixelsFormat) |
 | `dxGetPixelsSize` | **Implemented** | `CLuaDrawingDefs.cpp:58` | `DxGetPixelsSize` | Operational on Android. (DxGetPixelsSize) |
 | `dxGetStatus` | **Implemented** | `CLuaDrawingDefs.cpp:54` | `DxGetStatus` | Operational on Android. (DxGetStatus) |
-| `dxGetTextSize` | **Implemented** | `CLuaDrawingDefs.cpp:41` | `ArgumentParser<DxGetTextSize>` | Operational on Android. (DxGetTextSize) |
-| `dxGetTextWidth` | **Implemented** | `CLuaDrawingDefs.cpp:40` | `DxGetTextWidth` | Operational on Android. (DxGetTextWidth) |
+| `dxGetTextSize` | **Implemented** | `CLuaDrawingDefs.cpp:41` | `ArgumentParser<DxGetTextSize>` | Custom fonts use a native instance identity in both the Typeface cache and measured-width cache; recreating a font at the same path reloads it. Java Typeface cache has an LRU bound. Host lifecycle checks pass; Android compiles; glyph metrics still need device validation. |
+| `dxGetTextWidth` | **Implemented** | `CLuaDrawingDefs.cpp:40` | `DxGetTextWidth` | Custom fonts use a native instance identity in both the Typeface cache and measured-width cache; recreating a font at the same path reloads it. Java Typeface cache has an LRU bound. Host lifecycle checks pass; Android compiles; glyph metrics still need device validation. |
 | `dxGetTexturePixels` | **Implemented** | `CLuaDrawingDefs.cpp:56` | `DxGetTexturePixels` | Operational on Android. (DxGetTexturePixels) |
 | `dxIsAspectRatioAdjustmentEnabled` | **Implemented** | `CLuaDrawingDefs.cpp:66` | `DxIsAspectRatioAdjustmentEnabled` | Operational on Android. (DxIsAspectRatioAdjustmentEnabled) |
 | `dxSetAspectRatioAdjustmentEnabled` | **Implemented** | `CLuaDrawingDefs.cpp:65` | `DxSetAspectRatioAdjustmentEnabled` | Operational on Android. (DxSetAspectRatioAdjustmentEnabled) |

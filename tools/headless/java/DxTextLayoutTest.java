@@ -28,6 +28,13 @@ public final class DxTextLayoutTest {
         check(DxTextLayout.decode("literal\\q").equals("literal\\q"));
         check(DxTextLayout.decode("end\\").equals("end\\"));
         check(DxTextLayout.decode("").isEmpty());
+        // The last logical line occupies lineHeight, even for one short glyph.
+        check(DxTextLayout.blockHeight("x",100,15) == 100);
+        check(DxTextLayout.blockHeight("x\ny",100,30) == 200);
+        check(DxTextLayout.blockHeight("x\n",100,30) == 200);
+        check(DxTextLayout.blockHeight("x",0,15) == 15);
+        check(DxTextLayout.offset(200,DxTextLayout.blockHeight("x",100,15),2) == 100);
+        check(DxTextLayout.offset(200,DxTextLayout.blockHeight("x",100,15),1) == 50);
         System.out.println("DxTextLayoutTest: " + checks + " checks, 0 failures");
     }
 }

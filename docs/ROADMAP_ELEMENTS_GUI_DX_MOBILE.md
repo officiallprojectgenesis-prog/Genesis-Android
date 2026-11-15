@@ -3,6 +3,15 @@
 Revisão em 2026-11-15 na branch `staging`. Os lotes usam a árvore de trabalho
 completa, que já continha alterações locais de DX, SVG e motor.
 
+## Progresso das funções Lua
+
+**Geral: 651 de 1.581 funções com implementação no catálogo — 41,2%.**
+Elementos: **54/81 — 66,7%**. GUI/DX: **175/199 — 87,9%**.
+
+Este lote corrigiu **5 de 5 problemas da revisão** em funções já registradas.
+A cobertura de funções permanece igual. A classificação conta handlers com
+corpo não constante; não comprova paridade completa nem validação no aparelho.
+
 ## Implementado neste lote
 
 | Área | Alteração | Limite atual |
@@ -37,8 +46,13 @@ CEGUI exposta como `unsigned int`; um valor Lua negativo segue essa conversão.
   digitação/backspace de emoji, texto somente leitura, limite zero, camadas DX,
   blend capturado, fonte personalizada, render targets, memo/Enter/CRLF,
   retornos booleanos, geometria inválida e opções de layout de texto.
-- `neon_dx_text_tests`: **18 verificações Java, zero falhas**, sem depender de
-  runtime Android. Confere alinhamento, limites de largura e decodificação do texto.
+- `neon_dx_text_tests`: **24 verificações Java, zero falhas** — texto e altura
+  total de linha personalizada.
+- `neon_dx_state_tests`: **20 verificações Java, zero falhas** — ordem da fila,
+  destruição de targets, orçamento e cache de fontes.
+- `neon_dx_view_tests`: **12 verificações Java, zero falhas** — executam o
+  renderer real com doubles Android para os cinco problemas da revisão.
+  Esses testes não verificam glifos ou GPU reais.
 - Biblioteca Android ARM64: compilou e linkou com o NDK.
 - Classes Java do jogo: compilaram, incluindo o gradiente de linhas.
 - `git diff --check`: sem erros de whitespace.
@@ -46,6 +60,16 @@ CEGUI exposta como `unsigned int`; um valor Lua negativo segue essa conversão.
 Não houve teste visual no aparelho nem geração de APK novo neste lote.
 A compilação nativa usa as alterações anteriores do motor presentes na árvore
 de trabalho; a limitação do checkout isolado está em [REVIEW_LUA_MOBILE.md](REVIEW_LUA_MOBILE.md).
+
+## Correções da revisão — 5/5 concluídas
+
+| Problema | Estado | Evidência |
+|---|---|---|
+| Target destruído era recriado por quadro adiado | Corrigido | Remoção é executada depois dos desenhos anteriores e sobrevive a quadros substituídos. |
+| Blend era perdido ao adiar render targets | Corrigido | Cada trecho preserva blend/fonte; a tela seguinte restaura o estado inicial. |
+| `add` fazia soma saturada de cores | Corrigido | Composição source-over para a fonte premultiplicada; vermelho opaco sobre azul permanece vermelho. |
+| Recriar fonte mantinha arquivo/medidas antigos | Corrigido | Identidade por criação em ambos os caches, com limite LRU no Java. |
+| `lineHeight` não contava a última linha | Corrigido | Altura do bloco e avanço explícito de linhas seguem o desktop. |
 
 ## Próximas pendências
 
@@ -76,11 +100,21 @@ mesma fila. O renderer Android usa `StaticLayout`, com largura máxima de 32768
 pixels. Escalas não positivas não desenham. Os testes Java verificam a geometria
 e o payload; não verificam os glifos ou a composição no aparelho.
 
-| Categoria | Handlers não constantes | Stubs | Ausentes |
-|---|---:|---:|---:|
-| Elementos | 54 | 8 | 19 |
-| GUI/DX | 175 | 0 | 24 |
-| Todas as categorias | 651 | 136 | 794 |
+| Categoria | Implementadas/total no catálogo | Cobertura | Stubs | Ausentes |
+|---|---:|---:|---:|---:|
+| Veículos | 9/165 | **5,5%** | 19 | 137 |
+| Peds e jogadores | 27/206 | **13,1%** | 77 | 102 |
+| Mundo e objetos | 124/227 | **54,6%** | 11 | 92 |
+| Elementos | 54/81 | **66,7%** | 8 | 19 |
+| GUI e DX | 175/199 | **87,9%** | 0 | 24 |
+| Motor e modelos | 1/125 | **0,8%** | 15 | 109 |
+| Áudio e voz | 21/57 | **36,8%** | 1 | 35 |
+| Câmera | 47/47 | **100,0%** | 0 | 0 |
+| Armas e projéteis | 20/31 | **64,5%** | 0 | 11 |
+| Sistema e utilitários | 169/195 | **86,7%** | 2 | 24 |
+| Markers, blips e colshapes | 0/145 | **0,0%** | 3 | 142 |
+| Browser e compatibilidade | 4/103 | **3,9%** | 0 | 99 |
+| **TOTAL** | **651/1581** | **41,2%** | **136** | **794** |
 
 Os números incluem as alterações locais anteriores. “Implemented” no catálogo
 significa apenas que há uma função C com corpo não constante; não significa

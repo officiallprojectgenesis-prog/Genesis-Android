@@ -15,6 +15,15 @@ final class DxTextLayout {
         return Math.max(1, (int) Math.ceil(pixels));
     }
 
+    // CGraphics.cpp:1310-1333 includes lineHeight for the last coded line too.
+    // StaticLayout's spacingAdd changes only the distance between baselines.
+    static float blockHeight(CharSequence text, float lineHeight, float naturalHeight) {
+        if (!(lineHeight > 0f)) return naturalHeight;
+        int lines = 1;
+        for (int i = 0; i < text.length(); i++) if (text.charAt(i) == '\n') lines++;
+        return lines * lineHeight;
+    }
+
     // A frame remains one command per line, including when Lua text contains
     // line breaks or backslashes. Unknown escapes remain literal.
     static String decode(String encoded) {

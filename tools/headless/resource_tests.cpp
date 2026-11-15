@@ -1761,9 +1761,13 @@ void CheckDxImage(WorldRPG::Script::LuaVMStub& vm) {
         CHECK(Has(frame, "I 40.0 41.0 64.0 32.0 0.0 0.0 -1.0 -1.0 4294967295 0.0 0.0 0.0 rt:"));
     }
     CHECK(Has(frame, "I 50.0 51.0 16.0 16.0 0.0 0.0 -1.0 -1.0 4294967295 0.0 0.0 0.0 tx:"));
-    CHECK(Has(frame, "F 17.0 1 /tmp/neon-dx-cache/radarres/radar/font.ttf\nX 0.000 0.000 50.000 20.000 2.0000 2.0000 4294967295 0 0 0 0 0 0 0.000 25.000 10.000 0.000 styled\nF\n"));
+    lua_State* fontState = WorldRPG::Script::ActiveVmState();
+    lua_getglobal(fontState,"font"); lua_getfield(fontState,-1,"id");
+    const auto fontId = static_cast<uint32_t>(lua_tointeger(fontState,-1)); lua_pop(fontState,2);
+    const std::string fontSelection = "F 17.0 1 @font:" + std::to_string(fontId) + ":/tmp/neon-dx-cache/radarres/radar/font.ttf\n";
+    CHECK(Has(frame, (fontSelection + "X 0.000 0.000 50.000 20.000 2.0000 2.0000 4294967295 0 0 0 0 0 0 0.000 25.000 10.000 0.000 styled\nF\n").c_str()));
     const size_t fontGui = frame.find("font-layer-gui");
-    const size_t fontPost = frame.find("F 17.0 1 /tmp/neon-dx-cache/radarres/radar/font.ttf\nX 0.000 0.000 50.000 20.000 2.0000 2.0000 4294967295 0 0 0 0 0 0 0.000 25.000 10.000 0.000 styled-post\nF\n");
+    const size_t fontPost = frame.find(fontSelection + "X 0.000 0.000 50.000 20.000 2.0000 2.0000 4294967295 0 0 0 0 0 0 0.000 25.000 10.000 0.000 styled-post\nF\n");
     CHECK(fontGui != std::string::npos && fontPost != std::string::npos && fontGui < fontPost);
     CHECK(Has(frame, "M 4 3 0.0 0.0 4294967295 0.0000 0.0000 10.0 0.0 4294901760 1.0000 0.0000 0.0 10.0 4294967295 0.0000 1.0000 "
                      "/tmp/neon-dx-cache/radarres/radar/tex.png\n"));

@@ -21,7 +21,7 @@ import java.util.HashMap;
 
 /** Draws the rectangles, text, and images produced by client resource scripts. */
 public final class MtaDxView extends View {
-    private String frame = "";
+    private final DxFrameQueue frames = new DxFrameQueue(200000);
     // Desktop dxDrawRectangle is a sharp pixel quad. Anti-alias insets the edge
     // by a fraction of a pixel, so borders look pulled inside the box.
     private final Paint fill = new Paint();
@@ -39,26 +39,20 @@ public final class MtaDxView extends View {
         MEASURE.setTypeface(Typeface.DEFAULT_BOLD);
     }
 
-    // dxCreateFont files, keyed by path and weight. A file that does not load is kept as the
-    // default font so it is not read again every frame.
-    private static final HashMap<String, Typeface> FONTS = new HashMap<>();
+    // A recreated native font gets a new source identity even at the same path.
+    // Old queued text can retain its own Typeface; unused versions leave this bounded cache.
+    private static final DxFontCache<Typeface> FONTS = new DxFontCache<>(64, (path, bold) -> {
+        try {
+            Typeface loaded = Typeface.createFromFile(path);
+            return bold ? Typeface.create(loaded, Typeface.BOLD) : loaded;
+        } catch (RuntimeException error) {
+            return Typeface.DEFAULT_BOLD;
+        }
+    });
 
     private static Typeface typefaceFor(String fontFile, boolean bold) {
         if (fontFile == null || fontFile.isEmpty()) return Typeface.DEFAULT_BOLD;
-        String key = (bold ? "b:" : "n:") + fontFile;
-        synchronized (FONTS) {
-            Typeface cached = FONTS.get(key);
-            if (cached != null) return cached;
-            Typeface loaded;
-            try {
-                loaded = Typeface.createFromFile(fontFile);
-                if (bold) loaded = Typeface.create(loaded, Typeface.BOLD);
-            } catch (RuntimeException error) {
-                loaded = Typeface.DEFAULT_BOLD;
-            }
-            FONTS.put(key, loaded);
-            return loaded;
-        }
+        return FONTS.get(fontFile, bold);
     }
 
     /**
@@ -119,48 +113,21 @@ public final class MtaDxView extends View {
         return true;
     }
 
-    // Render-target sections of frames that were replaced before they were drawn. The view
-    // draws only the newest frame, but a script may fill a render target once and never again,
-    // so those sections are kept and run at the next draw.
-    private final StringBuilder carried = new StringBuilder();
-    private boolean frameDrawn = true;
-    private static final int MAX_CARRIED = 200000;
-
-    // The lines from each "G id ..." up to the bare "G" that ends it.
-    private static void collectTargetSections(String commands, StringBuilder out) {
-        boolean inside = false;
-        for (String line : commands.split("\n")) {
-            if (line.startsWith("G ")) inside = true;
-            if (inside) out.append(line).append('\n');
-            if (line.equals("G")) inside = false;
-        }
-        if (inside) out.append("G\n");
-    }
-
     public void setFrame(String commands) {
         String next = commands == null ? "" : commands;
-        if (!frameDrawn && frame.contains("G ") && carried.length() < MAX_CARRIED) collectTargetSections(frame, carried);
-        // "D id" frees script bitmaps. It is handled here, not in onDraw, so it is never skipped.
-        if (next.contains("D ")) {
-            for (String line : next.split("\n")) {
-                if (line.startsWith("D ")) freeTarget(line.substring(2).trim());
-            }
-        }
-        frameDrawn = false;
-        frame = next;
+        frames.offer(next);
         // A first line "C" means the cursor is showing (LuaVMStub::pumpDx).
-        cursorShown = frame.startsWith("C\n") || frame.equals("C");
-        setVisibility(frame.isEmpty() ? GONE : VISIBLE);
+        cursorShown = next.startsWith("C\n") || next.equals("C");
+        setVisibility(frames.hasCommands() ? VISIBLE : GONE);
         invalidate();
     }
 
     @Override
     protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
-        frameDrawn = true;
-        if (frame.isEmpty() && carried.length() == 0) return;
-        String[] lines = (carried.length() == 0 ? frame : carried + frame).split("\n");
-        carried.setLength(0);
+        String commands = frames.take();
+        if (commands.isEmpty()) return;
+        String[] lines = commands.split("\n");
         // Every frame starts in "blend"; a "B" line at the top carries a mode set in an earlier frame.
         setBlendMode(0);
         selectFont("");
@@ -188,20 +155,20 @@ public final class MtaDxView extends View {
             else if (line.startsWith("P ")) drawPrimitive(canvas, line.substring(2));
             else if (line.startsWith("B ")) setBlendMode((int) l(line.substring(2).trim()));
             else if (line.startsWith("M ")) drawMaterialPrimitive(canvas, line.substring(2));
+            else if (line.startsWith("D ")) freeTarget(line.substring(2).trim());
             else if (line.startsWith("F")) selectFont(line.length() > 2 ? line.substring(2) : "");
             else if (line.startsWith("G")) return selectTarget(screen, line.length() > 2 ? line.substring(2) : "");
         }
         return canvas;
     }
 
-    // dxSetBlendMode: 0 blend, 1 add, 2 modulate_add, 3 overwrite (desktop EBlendModeType).
-    // modulate_add is for images with premultiplied alpha; Canvas already blends that way,
-    // so it draws as blend.
-    private static final PorterDuffXfermode XFER_ADD = new PorterDuffXfermode(PorterDuff.Mode.ADD);
+    // CGraphics.cpp:437-527 uses ONE/INVSRCALPHA for add (premultiplied source).
+    // Canvas bitmaps/paint are already premultiplied: SRC_OVER has that equation.
+    // PorterDuff.ADD would retain the entire destination, even for opaque source.
     private static final PorterDuffXfermode XFER_OVERWRITE = new PorterDuffXfermode(PorterDuff.Mode.SRC);
 
     private void setBlendMode(int mode) {
-        PorterDuffXfermode xfer = mode == 1 ? XFER_ADD : mode == 3 ? XFER_OVERWRITE : null;
+        PorterDuffXfermode xfer = mode == 3 ? XFER_OVERWRITE : null;
         fill.setXfermode(xfer);
         image.setXfermode(xfer);
         text.setXfermode(xfer);
@@ -678,17 +645,40 @@ public final class MtaDxView extends View {
         StaticLayout.Builder builder = StaticLayout.Builder.obtain(shown, 0, shown.length(), text, width)
                 .setIncludePad(false).setAlignment(alignment);
         float lineHeight = f(p[16]);
-        if (coded && lineHeight > 0f) builder.setLineSpacing(lineHeight - text.getFontSpacing(), 1f);
         StaticLayout layout = builder.build();
+        boolean customLines = coded && lineHeight > 0f;
+        float blockHeight = customLines ? DxTextLayout.blockHeight(shown, lineHeight, layout.getHeight()) : layout.getHeight();
+        if (!Float.isFinite(blockHeight)) return;
         float dx = x + DxTextLayout.offset(right - x, width * stretch, alignX);
-        float dy = y + DxTextLayout.offset(bottom - y, layout.getHeight(), alignY);
+        float dy = y + DxTextLayout.offset(bottom - y, blockHeight, alignY);
         canvas.save();
         try {
             canvas.rotate(f(p[13]), f(p[14]), f(p[15]));
             if (!coded && "1".equals(p[10])) canvas.clipRect(x, y, right, bottom);
             canvas.translate(dx, dy);
             canvas.scale(stretch, 1f);
-            layout.draw(canvas);
+            if (customLines) {
+                // Explicit line advances preserve the desktop block height and
+                // baseline positions even when lineHeight is smaller than a glyph.
+                String plain = shown.toString();
+                int start = 0, row = 0;
+                for (;;) {
+                    int end = plain.indexOf('\n', start);
+                    if (end < 0) end = plain.length();
+                    StaticLayout single = StaticLayout.Builder.obtain(shown, start, end, text, width)
+                            .setIncludePad(false).setAlignment(alignment).build();
+                    canvas.save();
+                    try {
+                        canvas.translate(0f, row * lineHeight);
+                        single.draw(canvas);
+                    } finally {
+                        canvas.restore();
+                    }
+                    if (end == plain.length()) break;
+                    start = end + 1;
+                    row++;
+                }
+            } else layout.draw(canvas);
         } finally {
             canvas.restore();
         }

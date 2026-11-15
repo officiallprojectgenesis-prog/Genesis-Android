@@ -41,15 +41,43 @@ retornos inválidos e posicionamento de texto maior que a caixa. Canvas ainda
 tem métricas próprias; escala não positiva não desenha e a largura do layout
 é limitada a 32768 pixels.
 
+## Correções da revisão posterior
+
+Os cinco problemas reportados depois dos commits `8acae8f` e `f872736` foram
+corrigidos neste lote:
+
+1. **Destruição e quadros substituídos:** `DxFrameQueue` retém desenhos de
+   targets e comandos de remoção na ordem original. Remoções nunca são
+   descartadas pelo orçamento de desenho, e comandos pendentes mantêm a view
+   visível mesmo quando o quadro mais novo está vazio.
+2. **Estado de desenho:** trechos adiados capturam blend e fonte na entrada.
+   O quadro de tela seguinte restaura o estado inicial antes de seus comandos.
+3. **Composição add:** Canvas usa source-over premultiplicado em vez de soma
+   saturada, seguindo `CGraphics.cpp:437-527`; overwrite continua com SRC.
+4. **Fontes e medidas:** a identidade nativa da criação faz parte da origem de
+   fonte e da chave de medidas. Recriar no mesmo caminho recarrega o conteúdo.
+   O cache Java tem limite LRU, e texto antigo em fila mantém sua própria versão.
+5. **Altura de linha:** texto colorido com altura positiva usa bloco de
+   `número de linhas × lineHeight` e avanços explícitos, incluindo a última
+   linha, como `CGraphics.cpp:1310-1333`.
+
+As regressões de view compilam os métodos reais contra o SDK e depois os
+executam com doubles Android. Elas conferem a fila, bitmap ownership,
+composição opaca, recarga de fontes e posição das linhas; não substituem
+a validação de GPU, rasterização de fontes ou SVG em um aparelho.
+
 ## Validação realizada
 
 - `neon_resource_tests`: **257 verificações, zero falhas**.
-- `neon_dx_text_tests`: **18 verificações Java, zero falhas**, sem runtime Android.
+- `neon_dx_text_tests`: **24 verificações Java, zero falhas**.
+- `neon_dx_state_tests`: **20 verificações Java, zero falhas**.
+- `neon_dx_view_tests`: **12 verificações Java, zero falhas**, com doubles Android.
 - `WorldRPGNeon` ARM64: compilou e linkou com o NDK.
 - Classes Java de jogo: compilaram; somente avisos de APIs obsoletas e
   bootstrap class path para Java 8.
 - Catálogo de Lua regenerado: 651 handlers não constantes, 136 stubs e
-  794 ausentes. O segundo lote corrige comportamento de bindings existentes.
+  794 ausentes. Este lote corrige comportamento de bindings existentes: **5/5 problemas resolvidos**,
+  sem alteração da cobertura geral de funções (**41,2%**).
 - `git diff --check`: sem erros.
 
 Não houve teste no aparelho nem geração de APK novo. A compilação nativa usa

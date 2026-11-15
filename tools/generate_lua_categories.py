@@ -139,6 +139,8 @@ def format_status(status):
         return "Missing"
 
 def guess_conversion_notes(name, group, status, detail):
+    if status == "implemented" and name in {"dxCreateFont", "dxGetTextWidth", "dxGetTextSize"}:
+        return "Custom fonts use a native instance identity in both the Typeface cache and measured-width cache; recreating a font at the same path reloads it. Java Typeface cache has an LRU bound. Host lifecycle checks pass; Android compiles; glyph metrics still need device validation."
     if status == "stub" and name in {"attachElements", "detachElements"}:
         return "Returns false until native physical attachment and its lifecycle/events are ported. Server attachment queries are metadata-only; these calls do not mutate that snapshot."
     if status == "implemented" and name in {"isElementAttached", "getElementAttachedTo", "getAttachedElements", "getElementAttachedOffsets"}:
@@ -148,7 +150,7 @@ def guess_conversion_notes(name, group, status, detail):
     if status == "implemented" and name in {"guiCreateMemo", "guiMemoSetCaretIndex", "guiMemoGetCaretIndex", "guiMemoSetReadOnly", "guiMemoIsReadOnly"}:
         return "Memo accepts Unicode text, backspace and Enter without onClientGUIAccepted; emits onClientGUIChanged, participates in focus and requests multiline Android input. Terminal newline/caret follow CEGUI. Selection, wrapping and automatic caret scrolling remain pending. Host-tested; Android compiles; not device-verified."
     if status == "implemented" and name == "dxDrawText":
-        return "Canvas text honors alignment, clip/wordBreak, two numeric scales, subpixel position, rotation/pivot and positive custom line height for color-coded text. Escaped payload preserves line breaks and backslashes. Color-coded text ignores clip/wordBreak as the desktop path does. Font/blend state stays with postGUI text; no artificial three-line cap. Canvas font metrics/wrapping are not identical to Direct3D. Nonpositive scales draw nothing; layout width is capped at 32768 pixels. Host/C++ and pure Java checks pass; Android compiles; not device-verified."
+        return "Canvas text honors alignment, clip/wordBreak, two numeric scales, subpixel position, rotation/pivot and positive custom line height for color-coded text. Coded block height counts every logical line and each baseline advances by lineHeight, including the final line's occupied height. Escaped payload preserves line breaks and backslashes. Color-coded text ignores clip/wordBreak as desktop does. Font/blend state stays with queued text. Canvas metrics/wrapping differ from Direct3D; nonpositive scales draw nothing; layout width is capped at 32768 pixels. Host/Java regression checks pass; not device-verified."
     if status == "implemented" and name in {"dxDrawRectangle", "dxDrawImage", "dxDrawImageSection"}:
         return "Canvas 2D calls return true/false, honor postGUI and capture blend state. Render-target draws keep their original order. Existing texture elements work outside a resource owner; file paths still require one. Finite numeric arguments required. Host-tested; not device-verified."
     if status == "implemented" and name in {"dxDrawLine", "dxDrawCircle", "dxDrawPrimitive", "dxDrawMaterialPrimitive"}:

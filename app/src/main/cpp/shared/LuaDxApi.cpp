@@ -1307,7 +1307,9 @@ DxFont DxResolveFont(lua_State* L, int index, double scale) {
     if (lua_istable(L, index)) {
         if (const Font* font = FindFont(ElementIdOf(L, index))) {
             out.pixels = font->height * scale;
-            out.file = font->file;
+            // Version the Java Typeface cache and native width cache by font
+            // instance. Resource reloads may replace a file at the same path.
+            out.file = "@font:" + std::to_string(font->id) + ":" + font->file;
             out.bold = font->bold;
             return out;
         }

@@ -102,7 +102,7 @@ float MeasureText(const std::string& utf8, float pixelSize, const std::string& f
     float width = -1.f;
     jstring jtext = env->NewString(reinterpret_cast<const jchar*>(wide.data()), static_cast<jsize>(wide.size()));
     if (jtext) {
-        // The font file is a cache path made of printable ASCII (LuaVMStub DxImageFile).
+        // The versioned font source and cache path are printable ASCII; the overlay resolves them.
         jstring jfont = fontFile.empty() ? nullptr : env->NewStringUTF(fontFile.c_str());
         width = env->CallFloatMethod(g_gameActivityRef, g_measureTextMethod, jtext, static_cast<jfloat>(pixelSize), jfont,
                                      static_cast<jboolean>(bold ? JNI_TRUE : JNI_FALSE));
