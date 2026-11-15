@@ -1,34 +1,34 @@
 # Audio & Voice System (CLuaAudioDefs)
 
-2D audio playback, 3D spatial sounds, internet radio streams, sound effects, volume/pitch/pan, sound tags, and Opus voice chat.
+2D audio playback, 3D spatial sounds, internet radio streams, sound effects, volume/pitch/pan, sound tags, and desktop Speex voice chat.
 
 ## Parity Status
 
 - **Total Functions:** 57
-- **Implemented:** 19 (33.3%)
+- **Implemented:** 21 (36.8%)
 - **Stubs:** 1
-- **Missing:** 37
+- **Missing:** 35
 
-> **Technical Requirement:** Desktop uses BASS library. Mobile has Opus 1.4 compiled; requires OpenSL ES / AudioTrack output mixer, URL streaming, and 3D listener attenuation math.
+> **Technical Requirement:** Desktop uses BASS for sound and Speex for voice. Mobile plays 2D sounds with MediaPlayer and supports explicit Speex/Opus codecs; the stock desktop handshake maps to Speex. Voice capture/playback and packet integration remain pending; 3D sound needs listener attenuation.
 
 ## Function List
 
 | Lua Function | Status | Desktop Source Ref | Desktop Handler | Conversion Requirement / Implementation Notes |
 |---|---|---|---|---|
 | `getRadioChannel` | Missing | `CLuaAudioDefs.cpp:227` | `GetRadioChannel` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `getRadioChannelName` | Missing | `CLuaAudioDefs.cpp:228` | `GetRadioChannelName` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
+| `getRadioChannelName` | **Implemented** | `CLuaAudioDefs.cpp:228` | `GetRadioChannelName` | Desktop station-name lookup (IDs 0..12); does not tune the GTA radio. Host-tested. |
 | `getSFXStatus` | Missing | `CLuaAudioDefs.cpp:180` | `GetSFXStatus` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
 | `getSoundBPM` | Missing | `CLuaAudioDefs.cpp:210` | `GetSoundBPM` | Needs AudioTrack / OpenSL ES audio playback mixer. |
 | `getSoundBufferLength` | Missing | `CLuaAudioDefs.cpp:196` | `GetSoundBufferLength` | Needs AudioTrack / OpenSL ES audio playback mixer. |
 | `getSoundEffectParameters` | Missing | `CLuaAudioDefs.cpp:221` | `GetSoundEffectParameters` | Needs AudioTrack / OpenSL ES audio playback mixer. |
 | `getSoundEffects` | Missing | `CLuaAudioDefs.cpp:219` | `GetSoundEffects` | Needs AudioTrack / OpenSL ES audio playback mixer. |
 | `getSoundFFTData` | Missing | `CLuaAudioDefs.cpp:207` | `GetSoundFFTData` | Needs AudioTrack / OpenSL ES audio playback mixer. |
-| `getSoundLength` | Missing | `CLuaAudioDefs.cpp:195` | `GetSoundLength` | Needs AudioTrack / OpenSL ES audio playback mixer. |
+| `getSoundLength` | **Implemented** | `CLuaAudioDefs.cpp:195` | `GetSoundLength` | 2D MediaPlayer duration in seconds, reported asynchronously; 0 while unknown. Player voice overload is not ported. Host-tested bridge; not device-verified. |
 | `getSoundLevelData` | Missing | `CLuaAudioDefs.cpp:209` | `GetSoundLevelData` | Needs AudioTrack / OpenSL ES audio playback mixer. |
 | `getSoundMaxDistance` | **Implemented** | `CLuaAudioDefs.cpp:216` | `GetSoundMaxDistance` | Operational on Android. (l_getSoundMaxDistance) |
 | `getSoundMetaTags` | Missing | `CLuaAudioDefs.cpp:217` | `GetSoundMetaTags` | Needs AudioTrack / OpenSL ES audio playback mixer. |
 | `getSoundMinDistance` | **Implemented** | `CLuaAudioDefs.cpp:214` | `GetSoundMinDistance` | Operational on Android. (l_getSoundMinDistance) |
-| `getSoundPan` | **Implemented** | `CLuaAudioDefs.cpp:223` | `GetSoundPan` | Operational on Android. (l_getSoundPan) |
+| `getSoundPan` | **Implemented** | `CLuaAudioDefs.cpp:223` | `GetSoundPan` | 2D sound pan is applied to MediaPlayer left/right gains. Player voice overload is not ported. Android compiles; not device-verified. |
 | `getSoundPosition` | **Implemented** | `CLuaAudioDefs.cpp:194` | `GetSoundPosition` | Operational on Android. (l_getSoundPosition) |
 | `getSoundProperties` | Missing | `CLuaAudioDefs.cpp:206` | `GetSoundProperties` | Needs AudioTrack / OpenSL ES audio playback mixer. |
 | `getSoundSpeed` | **Implemented** | `CLuaAudioDefs.cpp:204` | `GetSoundSpeed` | Operational on Android. (l_getSoundSpeed) |
@@ -62,7 +62,7 @@
 | `setSoundLooped` | **Implemented** | `CLuaAudioDefs.cpp:197` | `ArgumentParser<SetSoundLooped>` | Operational on Android. (l_setSoundLooped) |
 | `setSoundMaxDistance` | **Implemented** | `CLuaAudioDefs.cpp:215` | `SetSoundMaxDistance` | Operational on Android. (l_setSoundMaxDistance) |
 | `setSoundMinDistance` | **Implemented** | `CLuaAudioDefs.cpp:213` | `SetSoundMinDistance` | Operational on Android. (l_setSoundMinDistance) |
-| `setSoundPan` | **Implemented** | `CLuaAudioDefs.cpp:222` | `SetSoundPan` | Operational on Android. (l_setSoundPan) |
+| `setSoundPan` | **Implemented** | `CLuaAudioDefs.cpp:222` | `SetSoundPan` | 2D sound pan is applied to MediaPlayer left/right gains. Player voice overload is not ported. Android compiles; not device-verified. |
 | `setSoundPanningEnabled` | Missing | `CLuaAudioDefs.cpp:211` | `SetSoundPanEnabled` | Needs AudioTrack / OpenSL ES audio playback mixer. |
 | `setSoundPaused` | **Implemented** | `CLuaAudioDefs.cpp:199` | `SetSoundPaused` | Operational on Android. (l_setSoundPaused) |
 | `setSoundPosition` | **Implemented** | `CLuaAudioDefs.cpp:193` | `SetSoundPosition` | Operational on Android. (l_setSoundPosition) |

@@ -51,6 +51,9 @@ set(NATIVE_SOURCES
     "${NATIVE_DIR}/shared/LuaStoredElementApi.cpp"
     "${NATIVE_DIR}/shared/LuaClothesApi.cpp"
     "${NATIVE_DIR}/shared/LuaWeaponApi.cpp"
+    "${NATIVE_DIR}/shared/LuaProjectileApi.cpp"
+    "${NATIVE_DIR}/gtasa/GameTasks.cpp"
+    "${NATIVE_DIR}/gtasa/ProjectileEngine.cpp"
     "${NATIVE_DIR}/shared/LuaResourceApi.cpp"
     "${NATIVE_DIR}/shared/LuaMtaWindowApi.cpp"
     "${NATIVE_DIR}/shared/LuaEventRegistry.cpp"
@@ -138,3 +141,15 @@ foreach(headless_target neon_headless neon_resource_tests)
         ${CMAKE_DL_LIBS}
     )
 endforeach()
+
+# Codec compatibility checks use the production wrapper and vendored Speex.
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(HOST_OPUS REQUIRED IMPORTED_TARGET opus)
+add_subdirectory("${NATIVE_DIR}/speex" "${CMAKE_CURRENT_BINARY_DIR}/speex")
+add_executable(neon_voice_tests voice_tests.cpp "${NATIVE_DIR}/shared/VoiceCodecStub.cpp")
+target_include_directories(neon_voice_tests PRIVATE "${NATIVE_DIR}/shared")
+target_link_libraries(neon_voice_tests PRIVATE neon_speex PkgConfig::HOST_OPUS)
+add_executable(neon_projectile_tests projectile_tests.cpp
+    "${NATIVE_DIR}/gtasa/GameTasks.cpp" "${NATIVE_DIR}/gtasa/ProjectileEngine.cpp")
+target_include_directories(neon_projectile_tests PRIVATE "${NATIVE_DIR}")
+target_link_libraries(neon_projectile_tests PRIVATE Threads::Threads)

@@ -230,6 +230,18 @@ void Remember(uint32_t id, const Visual& visual) {
     if (visual.model >= 0) stored.model = visual.model;
 }
 
+// CClientWeapon.cpp:22-23 registers entity references that are nulled on deletion.
+// Keep snapshots from pointing at a new element that later reuses the same id.
+void ForgetWeaponReferences(uint32_t id) {
+    for (auto& [weaponId, visual] : g_visuals) {
+        if (!visual.weapon || (visual.weapon->owner != id && visual.weapon->target != id)) continue;
+        auto next = std::make_shared<WeaponSpawn>(*visual.weapon);
+        if (next->owner == id) next->owner = 0xFFFFFFFFu;
+        if (next->target == id) next->target = 0xFFFFFFFFu;
+        visual.weapon = std::move(next);
+    }
+}
+
 } // namespace
 
 void ResetSession() {
@@ -367,6 +379,14 @@ bool CopyPedSpawn(uint32_t id, Entity::PedSpawn& out) {
     return true;
 }
 
+bool CopyWeaponSpawn(uint32_t id, Entity::WeaponSpawn& out) {
+    std::lock_guard<std::mutex> lock(g_lock);
+    auto found = g_visuals.find(id);
+    if (found == g_visuals.end() || found->second.kind != 18 || !found->second.weapon) return false;
+    out = *found->second.weapon;
+    return true;
+}
+
 const char* ElementKindName(uint32_t id) {
     std::lock_guard<std::mutex> lock(g_lock);
     if (id == g_local) return "player";
@@ -376,6 +396,7 @@ const char* ElementKindName(uint32_t id) {
         case 1: return "player";
         case 2: return "vehicle";
         case 14: return "ped";
+        case 18: return "weapon";
         case 4: return "marker";
         case 5: return "blip";
         default: return "element";
@@ -494,7 +515,14 @@ void OnEntityAdd(const uint8_t* body, size_t length, size_t bits) {
         }
         Visual visual;
         visual.kind = common.type;
-        if (!ReadEntityBody(reader, common, visual)) {
+        const auto resolveKind = +[](uint32_t id) -> int {
+            // OnEntityAdd already holds g_lock: do not call ElementKindName here.
+            if (id == 0 || id == 0xFFFFFFFFu) return -1;
+            if (id == g_local || g_nicks.find(id) != g_nicks.end()) return kTypePlayer;
+            auto found = g_visuals.find(id);
+            return found == g_visuals.end() ? -1 : found->second.kind;
+        };
+        if (!ReadEntityBody(reader, common, visual, resolveKind)) {
             DIAG("ENTITY_ADD fail idx=%u/%u id=%u type=%u bit=%zu", index, static_cast<unsigned>(count), common.id, static_cast<unsigned>(common.type), reader.GetReadOffsetBits());
             break;
         }
@@ -523,6 +551,7 @@ void OnEntityRemove(const uint8_t* body, size_t length, size_t bits) {
             g_visuals.erase(id);
             g_data.erase(id);
             g_nicks.erase(id);
+            ForgetWeaponReferences(id);
         }
         // Deleting a CClientPed takes it out of CPedSync (CClientPed::~CClientPed, CClientPed.cpp 926). Without this a reused
         // ElementID inherits the old hosted flag and interpolators.
@@ -558,6 +587,7 @@ void OnPlayerQuit(uint32_t id) {
         g_visuals.erase(id);
         g_data.erase(id);
         g_nicks.erase(id);
+        ForgetWeaponReferences(id);
     }
     WorldRPG::Sync::PedSyncState::Forget(id);
     Game::ForgetPedNativeTaskState(id);
@@ -760,6 +790,7 @@ void ForgetPlaceholder(uint32_t id) {
     auto found = g_visuals.find(id);
     if (found == g_visuals.end() || found->second.kind != 0) return;
     g_visuals.erase(found);
+    ForgetWeaponReferences(id);
     if (g_resourceRoot == id) g_resourceRoot = 0;
 }
 

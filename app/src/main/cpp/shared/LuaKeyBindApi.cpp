@@ -294,6 +294,37 @@ int GetKeyState(lua_State* L) {
     return 1;
 }
 
+// CLuaFunctionDefs.Input.cpp:363-418 and CKeyBinds.cpp:1030-1046, 1388-1405.
+int GetBoundKeys(lua_State* L) {
+    if (!IsStringArg(L, 1)) return Fail(L, "getBoundKeys", "string", 1);
+    const char* name = lua_tostring(L, 1);
+    // GTA_CONTROL binds map physical keys to controls; FunctionBind entries for
+    // "fire" etc. are script callbacks, not such mappings. The phone currently
+    // has no GTA_CONTROL keyboard mappings. A control name takes precedence over
+    // a command of the same name, as on desktop, so never fall through here.
+    if (Find(kControls, name)) {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+
+    bool found = false;
+    lua_newtable(L);
+    for (const CommandBind& bind : g_commands) {
+        if (strcasecmp(bind.command.c_str(), name) != 0) continue;
+        // Deliberately not filtered by owner: desktop queries all command binds.
+        // Later binds overwrite earlier states of the same key (including both).
+        lua_pushstring(L, bind.key);
+        lua_pushstring(L, bind.down ? "down" : "up");
+        lua_settable(L, -3);
+        found = true;
+    }
+    if (!found) {
+        lua_pop(L, 1);
+        lua_pushboolean(L, 0);
+    }
+    return 1;
+}
+
 // CLuaFunctionDefs::GetFunctionsBoundToKey (420-497). The name is compared in table spelling.
 int GetFunctionsBoundToKey(lua_State* L) {
     if (!IsStringArg(L, 1)) return Fail(L, "getFunctionsBoundToKey", "string", 1);
@@ -434,6 +465,7 @@ void InstallKeyBindLua(lua_State* L) {
         {"bindKey", BindKey},
         {"unbindKey", UnbindKey},
         {"getKeyState", GetKeyState},
+        {"getBoundKeys", GetBoundKeys},
         {"getFunctionsBoundToKey", GetFunctionsBoundToKey},
         {"getKeyBoundToFunction", GetKeyBoundToFunction},
         {"getCommandsBoundToKey", GetCommandsBoundToKey},

@@ -223,7 +223,8 @@ bool ReadEntityCommon(Net::BitStreamReader& reader, EntityCommon& out) {
     return true;
 }
 
-bool ReadEntityBody(Net::BitStreamReader& reader, const EntityCommon& common, Visual& visual) {
+bool ReadEntityBody(Net::BitStreamReader& reader, const EntityCommon& common, Visual& visual,
+                    ElementKindResolver resolveKind) {
     switch (common.type) {
         case kTypeDummy:
             return ReadEntityBodyDummy(reader, common, visual);
@@ -236,7 +237,7 @@ bool ReadEntityBody(Net::BitStreamReader& reader, const EntityCommon& common, Vi
             return ReadEntityBodyVehicle(reader, common, visual);
         case kTypeObject:
         case 18:  // WEAPON: the reference routes it through the object case
-            return ReadEntityBodyObject(reader, common, visual);
+            return ReadEntityBodyObject(reader, common, visual, resolveKind);
         case kTypeMarker:
             return ReadEntityBodyMarker(reader, common, visual);
         case kTypeBlip:

@@ -63,9 +63,9 @@ CATEGORIES = OrderedDict([
     ("AUDIO_AND_VOICE", {
         "title": "Audio & Voice System (CLuaAudioDefs)",
         "file": "AUDIO_AND_VOICE.md",
-        "description": "2D audio playback, 3D spatial sounds, internet radio streams, sound effects, volume/pitch/pan, sound tags, and Opus voice chat.",
+        "description": "2D audio playback, 3D spatial sounds, internet radio streams, sound effects, volume/pitch/pan, sound tags, and desktop Speex voice chat.",
         "groups": ["CLuaAudioDefs"],
-        "subsystem_notes": "Desktop uses BASS library. Mobile has Opus 1.4 compiled; requires OpenSL ES / AudioTrack output mixer, URL streaming, and 3D listener attenuation math."
+        "subsystem_notes": "Desktop uses BASS for sound and Speex for voice. Mobile plays 2D sounds with MediaPlayer and supports explicit Speex/Opus codecs; the stock desktop handshake maps to Speex. Voice capture/playback and packet integration remain pending; 3D sound needs listener attenuation."
     }),
     ("CAMERA", {
         "title": "Camera & Viewport (CLuaCameraDefs)",
@@ -139,6 +139,20 @@ def format_status(status):
         return "Missing"
 
 def guess_conversion_notes(name, group, status, detail):
+    if status == "implemented" and name in {"createProjectile", "getProjectileType", "getProjectileCreator", "getProjectileTarget", "getProjectileForce", "getProjectileCounter", "setProjectileCounter"}:
+        return "Native local-projectile bridge for verified GTA 2.10 arm64. Rotation/model overrides, satchel attachment, creation event and packet sync remain unported. Host guards tested; Android compiles; physical runtime not device-tested."
+    if status == "implemented" and name in {"getWeaponAmmo", "getWeaponClipAmmo", "getWeaponState", "getWeaponOwner", "getWeaponTarget"}:
+        return f"Queries the last server ENTITY_ADD weapon snapshot; native firing and later weapon RPC updates are not ported. Host-tested, not device-verified. ({detail})"
+    if status == "implemented" and name == "getSoundLength":
+        return "2D MediaPlayer duration in seconds, reported asynchronously; 0 while unknown. Player voice overload is not ported. Host-tested bridge; not device-verified."
+    if status == "implemented" and name == "getRadioChannelName":
+        return "Desktop station-name lookup (IDs 0..12); does not tune the GTA radio. Host-tested."
+    if status == "implemented" and name in {"setSoundPan", "getSoundPan"}:
+        return "2D sound pan is applied to MediaPlayer left/right gains. Player voice overload is not ported. Android compiles; not device-verified."
+    if status == "implemented" and name == "getValidPedModels":
+        return "Stock models only (0..312 excluding 74, 149, 208); custom allocation is not ported. Host-tested; not device-verified. (GetValidPedModels)"
+    if status == "implemented" and name == "getBoundKeys":
+        return "Queries command bindings across resources; no physical GTA-control keyboard mappings on mobile yet. Host-tested; not device-verified. (GetBoundKeys)"
     if status == "implemented":
         return f"Operational on Android. ({detail})"
     if status == "stub":

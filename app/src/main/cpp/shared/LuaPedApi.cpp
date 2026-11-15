@@ -1,4 +1,4 @@
-// Player Lua functions whose desktop bodies do not call into CPed / CPlayerPed.
+// Ped model and player Lua queries that do not call into CPed / CPlayerPed.
 // Ped, clothes, bone, weapon, task, voice, jetpack and mission-text functions stay
 // unregistered: those hooks are not wired, and a stored flag would not be the desktop call.
 
@@ -58,6 +58,24 @@ int Fail(lua_State* L, const char* name, const char* message) {
 
 int PushFalse(lua_State* L) {
     lua_pushboolean(L, 0);
+    return 1;
+}
+
+// CLuaFunctionDefs.Util.cpp:13-54. Only stock models are available: the port's
+// engineRequestModel is still a stub, so both custom-model walks are empty.
+// The stock validity set follows CPlayerManager::IsValidPlayerModel
+// (Server/mods/deathmatch/logic/CPlayerManager.cpp:338-352). Do not infer model
+// availability from a streamed ped: the desktop also lists unloaded models.
+int GetValidPedModels(lua_State* L) {
+    // ReadBool(includeCustom, true) does not gate the desktop body on HasErrors:
+    // even a non-boolean argument returns the stock list, with custom=false.
+    lua_newtable(L);
+    int index = 0;
+    for (int model = 0; model <= 312; ++model) {
+        if (model == 74 || model == 149 || model == 208) continue;
+        lua_pushnumber(L, model);
+        lua_rawseti(L, -2, ++index);
+    }
     return 1;
 }
 
@@ -399,6 +417,7 @@ void BindPedLua(lua_State* L) {
         const char* name;
         lua_CFunction fn;
     } binds[] = {
+        {"getValidPedModels", GetValidPedModels},
         {"getPedOccupiedVehicle", GetPedOccupiedVehicle},
         {"getPedOccupiedVehicleSeat", GetPedOccupiedVehicleSeat},
         {"isPedInVehicle", IsPedInVehicle},

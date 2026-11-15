@@ -99,8 +99,10 @@ public final class EngineHostActivity extends GTASA {
     private native void nativeCursorEvent(int action, float x, float y);
     private native void nativeScriptInput(String text, int backspaces, String key);
     private native void nativeSoundEnded(int id);
+    private native void nativeSoundLength(int id, double seconds);
     private final java.util.HashMap<Integer, MediaPlayer> sounds = new java.util.HashMap<>();
     private final java.util.HashMap<Integer, Float> soundVolume = new java.util.HashMap<>();
+    private final java.util.HashMap<Integer, Float> soundPan = new java.util.HashMap<>();
     private final java.util.HashMap<Integer, Boolean> soundLoop = new java.util.HashMap<>();
     private final java.util.HashMap<Integer, Boolean> soundPaused = new java.util.HashMap<>();
     private native boolean nativeSendChat(String text);
@@ -677,11 +679,8 @@ public final class EngineHostActivity extends GTASA {
         catch (NumberFormatException error) { return; }
         boolean loop = "1".equals(body.substring(bar + 1, bar2));
         String url = body.substring(bar2 + 1);
-        // One stream at a time. A second playSound was leaving the previous players
-        // running, so the login tracks stacked.
-        for (Integer existing : new java.util.ArrayList<>(sounds.keySet())) {
-            if (existing != id) stopUrlSound(Integer.toString(existing));
-        }
+        // Each Lua sound owns its player. Resource cleanup or stopSound releases
+        // that id; starting another sound must not stop unrelated audio.
         stopUrlSound(Integer.toString(id));
         MediaPlayer player = new MediaPlayer();
         player.setAudioAttributes(new AudioAttributes.Builder()
@@ -692,18 +691,31 @@ public final class EngineHostActivity extends GTASA {
             player.setDataSource(url);
             player.setLooping(loop);
             player.setOnPreparedListener(ready -> {
-                Float gain = soundVolume.get(id);
-                if (gain != null) ready.setVolume(gain, gain);
+                if (sounds.get(id) != ready) return;
+                nativeSoundLength(id, Math.max(0, ready.getDuration()) / 1000.0);
+                applySoundGains(id, ready);
                 Boolean looped = soundLoop.get(id);
                 if (looped != null) ready.setLooping(looped);
                 if (Boolean.TRUE.equals(soundPaused.get(id))) return;
                 ready.start();
             });
-            player.setOnCompletionListener(done -> nativeSoundEnded(id));
-            player.prepareAsync();
+            player.setOnCompletionListener(done -> {
+                if (sounds.get(id) != done) return;
+                stopUrlSound(Integer.toString(id));
+                nativeSoundEnded(id);
+            });
+            player.setOnErrorListener((failed, what, extra) -> {
+                if (sounds.get(id) == failed) {
+                    stopUrlSound(Integer.toString(id));
+                    nativeSoundEnded(id);
+                }
+                return true;
+            });
             sounds.put(id, player);
+            player.prepareAsync();
         } catch (Exception error) {
-            player.release();
+            if (sounds.get(id) == player) stopUrlSound(Integer.toString(id));
+            else player.release();
             nativeSoundEnded(id);
         }
     }
@@ -713,11 +725,14 @@ public final class EngineHostActivity extends GTASA {
         try { id = Integer.parseInt(body); }
         catch (NumberFormatException error) { return; }
         soundVolume.remove(id);
+        soundPan.remove(id);
         soundLoop.remove(id);
         soundPaused.remove(id);
         MediaPlayer player = sounds.remove(id);
         if (player == null) return;
         player.setOnCompletionListener(null);
+        player.setOnPreparedListener(null);
+        player.setOnErrorListener(null);
         try { player.stop(); } catch (Exception ignored) {}
         player.release();
     }
@@ -731,11 +746,36 @@ public final class EngineHostActivity extends GTASA {
             id = Integer.parseInt(body.substring(0, bar));
             volume = Float.parseFloat(body.substring(bar + 1));
         } catch (NumberFormatException error) { return; }
+        if (!Float.isFinite(volume)) return;
         float gain = Math.max(0f, Math.min(1f, volume));
         soundVolume.put(id, gain);
         MediaPlayer player = sounds.get(id);
         if (player == null) return;
-        try { player.setVolume(gain, gain); } catch (Exception ignored) {}
+        applySoundGains(id, player);
+    }
+
+    private void applySoundGains(int id, MediaPlayer player) {
+        float volume = soundVolume.containsKey(id) ? soundVolume.get(id) : 1f;
+        float pan = soundPan.containsKey(id) ? soundPan.get(id) : 0f;
+        // Full left (-1) silences right; full right (+1) silences left.
+        float left = volume * (pan > 0f ? 1f - pan : 1f);
+        float right = volume * (pan < 0f ? 1f + pan : 1f);
+        try { player.setVolume(left, right); } catch (Exception ignored) {}
+    }
+
+    private void panUrlSound(String body) {
+        int bar = body.indexOf('|');
+        if (bar <= 0) return;
+        int id;
+        float pan;
+        try {
+            id = Integer.parseInt(body.substring(0, bar));
+            pan = Float.parseFloat(body.substring(bar + 1));
+        } catch (NumberFormatException error) { return; }
+        if (!Float.isFinite(pan) || pan < -1f || pan > 1f) return;
+        soundPan.put(id, pan);
+        MediaPlayer player = sounds.get(id);
+        if (player != null) applySoundGains(id, player);
     }
 
     private void loopUrlSound(String body) {
@@ -845,6 +885,10 @@ public final class EngineHostActivity extends GTASA {
             }
             if (kind == 16) {
                 seekUrlSound(text);
+                return;
+            }
+            if (kind == 18) {
+                panUrlSound(text);
                 return;
             }
             if (kind == 10) {
@@ -1078,6 +1122,7 @@ public final class EngineHostActivity extends GTASA {
 
     @Override
     public void onDestroy() {
+        for (Integer id : new java.util.ArrayList<>(sounds.keySet())) stopUrlSound(Integer.toString(id));
         if (transferBox != null) transferBox.setProgress(0, 0);
         netRunning = false;
         if (netThread != null) netThread.interrupt();

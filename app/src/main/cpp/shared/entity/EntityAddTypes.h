@@ -15,6 +15,7 @@
 
 #include "../../net/raknet/RakNetWrapper.h"
 #include "PedSpawn.h"
+#include "WeaponSpawn.h"
 
 #ifdef __ANDROID__
 #include <android/log.h>
@@ -76,6 +77,7 @@ struct Visual {
     bool blipLive = false;
     // Peds (kind 14) only: the rest of the ENTITY_ADD ped body. Shared so copies of Visual stay cheap.
     std::shared_ptr<const PedSpawn> ped;
+    std::shared_ptr<const WeaponSpawn> weapon;
 };
 
 struct Datum {
@@ -197,12 +199,16 @@ bool ReadEntityCommon(Net::BitStreamReader& reader, EntityCommon& out);
 
 // Dispatch on common.type. Defined in EntityAddCore.cpp.
 // Returns false on a parse failure (DIAG already logged); the caller stops the packet.
-bool ReadEntityBody(Net::BitStreamReader& reader, const EntityCommon& common, Visual& visual);
+// Resolver runs under the caller's element-table lock; -1 means unknown.
+using ElementKindResolver = int (*)(uint32_t id);
+bool ReadEntityBody(Net::BitStreamReader& reader, const EntityCommon& common, Visual& visual,
+                    ElementKindResolver resolveKind = nullptr);
 
 // Per-type bodies.
 bool ReadEntityBodyPed(Net::BitStreamReader& reader, const EntityCommon& common, Visual& visual);      // EntityAddPed.cpp (stub)
 bool ReadEntityBodyVehicle(Net::BitStreamReader& reader, const EntityCommon& common, Visual& visual);  // EntityAddVehicle.cpp (stub)
-bool ReadEntityBodyObject(Net::BitStreamReader& reader, const EntityCommon& common, Visual& visual);   // EntityAddObject.cpp (stub)
+bool ReadEntityBodyObject(Net::BitStreamReader& reader, const EntityCommon& common, Visual& visual,
+                          ElementKindResolver resolveKind = nullptr); // EntityAddObject.cpp
 bool ReadEntityBodyDummy(Net::BitStreamReader& reader, const EntityCommon& common, Visual& visual);   // EntityAddDummy.cpp
 bool ReadEntityBodyMarker(Net::BitStreamReader& reader, const EntityCommon& common, Visual& visual);  // EntityAddMarker.cpp
 bool ReadEntityBodyOther(Net::BitStreamReader& reader, const EntityCommon& common, Visual& visual);   // EntityAddOther.cpp: BLIP, PICKUP, RADAR_AREA, COLSHAPE, PATH_NODE, TEAM, ...

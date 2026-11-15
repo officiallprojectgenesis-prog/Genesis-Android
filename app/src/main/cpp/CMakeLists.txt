@@ -48,6 +48,7 @@ add_subdirectory(lua53)
 # Phase 6: Replaces VoiceCodecStub with real Opus encoder/decoder.
 # ---------------------------------------------------------------------------
 add_subdirectory(opus)
+add_subdirectory(speex)
 
 add_library(WorldRPGNeon SHARED ${NATIVE_SOURCES})
 
@@ -68,6 +69,7 @@ target_link_libraries(WorldRPGNeon
     z
     lua53
     opus
+    neon_speex
 )
 
 # Resolve every native dependency during the Android link

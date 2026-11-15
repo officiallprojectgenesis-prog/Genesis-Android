@@ -1,5 +1,7 @@
 #include "../shared/DebugFlags.h"
 #include "GameEngine.h"
+#include "GameTasks.h"
+#include "ProjectileEngine.h"
 #include "PlayerPedPort.h"
 #include "RenderGuard.h"
 #include "GTASAOffsets.h"
@@ -2884,6 +2886,25 @@ void NoteLocalHealth(float health) {
 
 
 
+static void* ResolveProjectileEntity(uint32_t id) {
+    if (id == 0 || id == 0xFFFFFFFFu) return nullptr;
+    auto live = [](void* body) -> void* { return body && !IsPlaceableVtable(body) ? body : nullptr; };
+    if (id == ServerWorld::LocalPlayer()) return live(g_findPlayer ? g_findPlayer(0) : nullptr);
+    {
+        std::lock_guard lock(g_remoteMutex);
+        auto ped = g_remoteBodies.find(id);
+        if (ped != g_remoteBodies.end()) return live(ped->second.ped);
+        auto car = g_remoteCars.find(id);
+        if (car != g_remoteCars.end()) return live(car->second.body);
+    }
+    {
+        std::lock_guard lock(g_scriptMu);
+        for (const auto& ped : g_scriptPeds)
+            if (ped.used && ped.id == id && !ped.drop) return live(ped.body);
+    }
+    return nullptr;
+}
+
 extern "C" void WorldRPG_NoStoryScript(void*) {
     t_onGameThread = true;
     ServiceGroundQueries();
@@ -2893,6 +2914,8 @@ extern "C" void WorldRPG_NoStoryScript(void*) {
     if (depth > 0) return;
     if (ready) {
         ++depth;
+        Projectiles::Pump(ResolveProjectileEntity);
+        GameTasks::Service();
         if (g_pedDensity) *g_pedDensity = 0.f;
         SampleLocalPose();
         SampleLocalPadAndCamera();
@@ -2902,6 +2925,8 @@ extern "C" void WorldRPG_NoStoryScript(void*) {
         return;
     }
     ++depth;
+    Projectiles::Pump(ResolveProjectileEntity);
+    GameTasks::Service();
     if (g_requestSpecial && g_loadAll && g_setupPlayer) {
         g_requestSpecial(0, "player", 26);
         g_loadAll(true);

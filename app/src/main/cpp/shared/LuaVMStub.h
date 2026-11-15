@@ -6,6 +6,8 @@
 #include <string>
 #include <vector>
 
+struct lua_State;
+
 #ifdef __ANDROID__
 #include <android/log.h>
 #define LUA_LOG_TAG "WorldRPGNeon"
@@ -109,6 +111,10 @@ void ActiveVmQueueCursor(int action, float x, float y);
 void ActiveVmQueueScriptInput(const char* text, int backspaces, const char* key);
 // MediaPlayer finished a playSound id. Any thread.
 void ActiveVmNoteSoundEnded(uint32_t id);
+// MediaPlayer prepared a sound. Seconds are zero while duration is unknown (streams).
+void ActiveVmNoteSoundLength(uint32_t id, double seconds);
+// VM-thread introspection used by host callback tests.
+lua_State* ActiveVmState();
 // True while that playSound id still has a player. isElement uses this, because the
 // element-tree isElement binding runs after the sound binding and would otherwise
 // say the login track is already gone.

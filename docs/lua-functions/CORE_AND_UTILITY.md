@@ -5,9 +5,9 @@ Timers, event handling, network latent transfers, file I/O, XML parsing, JSON se
 ## Parity Status
 
 - **Total Functions:** 195
-- **Implemented:** 167 (85.6%)
+- **Implemented:** 169 (86.7%)
 - **Stubs:** 2
-- **Missing:** 26
+- **Missing:** 24
 
 > **Technical Requirement:** Pure CPU/platform logic. Mostly ported or needs standard library wrappers (e.g. tinyxml2, sha256, zlib).
 
@@ -71,7 +71,7 @@ Timers, event handling, network latent transfers, file I/O, XML parsing, JSON se
 | `generateKeyPair` | Missing | `CLuaCryptDefs.cpp:30` | `ArgumentParser<GenerateKeyPair>` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
 | `getAnalogControlState` | Missing | `CLuaManager.cpp:212` | `CLuaFunctionDefs::GetAnalogControlState` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
 | `getBodyPartName` | **Implemented** | `CLuaManager.cpp:189` | `CLuaFunctionDefs::GetBodyPartName` | Operational on Android. (l_getBodyPartName) |
-| `getBoundKeys` | Missing | `CLuaManager.cpp:215` | `CLuaFunctionDefs::GetBoundKeys` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
+| `getBoundKeys` | **Implemented** | `CLuaManager.cpp:215` | `CLuaFunctionDefs::GetBoundKeys` | Queries command bindings across resources; no physical GTA-control keyboard mappings on mobile yet. Host-tested; not device-verified. (GetBoundKeys) |
 | `getClothesByTypeIndex` | **Implemented** | `CLuaManager.cpp:190` | `CLuaFunctionDefs::GetClothesByTypeIndex` | Operational on Android. (l_getClothesByTypeIndex) |
 | `getClothesTypeName` | **Implemented** | `CLuaManager.cpp:192` | `CLuaFunctionDefs::GetClothesTypeName` | Operational on Android. (l_getClothesTypeName) |
 | `getColorFromString` | **Implemented** | `CLuaUtilDefs.cpp:52` | `GetColorFromString` | Operational on Android. (l_getColorFromString) |
@@ -116,7 +116,7 @@ Timers, event handling, network latent transfers, file I/O, XML parsing, JSON se
 | `getTimers` | **Implemented** | `CLuaTimerDefs.cpp:23` | `GetTimers` | Operational on Android. (l_getTimers) |
 | `getTypeIndexFromClothes` | **Implemented** | `CLuaManager.cpp:191` | `CLuaFunctionDefs::GetTypeIndexFromClothes` | Operational on Android. (l_getTypeIndexFromClothes) |
 | `getUserdataType` | **Implemented** | `CLuaUtilDefs.cpp:50` | `GetUserdataType` | Operational on Android. (l_getUserdataType) |
-| `getValidPedModels` | Missing | `CLuaManager.cpp:205` | `CLuaFunctionDefs::GetValidPedModels` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
+| `getValidPedModels` | **Implemented** | `CLuaManager.cpp:205` | `CLuaFunctionDefs::GetValidPedModels` | Stock models only (0..312 excluding 74, 149, 208); custom allocation is not ported. Host-tested; not device-verified. (GetValidPedModels) |
 | `getVersion` | **Implemented** | `CLuaManager.cpp:240` | `CLuaFunctionDefs::GetVersion` | Operational on Android. (l_getVersion) |
 | `getfenv` | **Implemented** | `CLuaMain.cpp:90` | `CLuaUtilDefs::DisabledFunction` | Operational on Android. (l_unsafe) |
 | `gettok` | **Implemented** | `CLuaUtilDefs.cpp:73` | `GetTok` | Operational on Android. (l_gettok) |

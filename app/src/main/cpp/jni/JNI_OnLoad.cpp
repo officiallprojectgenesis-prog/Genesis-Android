@@ -438,6 +438,12 @@ Java_com_worldrpg_neonlauncher_game_EngineHostActivity_nativeSoundEnded(
 }
 
 JNIEXPORT void JNICALL
+Java_com_worldrpg_neonlauncher_game_EngineHostActivity_nativeSoundLength(
+    JNIEnv*, jobject, jint id, jdouble seconds) {
+    WorldRPG::Script::ActiveVmNoteSoundLength(static_cast<uint32_t>(id), seconds);
+}
+
+JNIEXPORT void JNICALL
 Java_com_worldrpg_neonlauncher_game_EngineHostActivity_nativeScriptInput(
     JNIEnv* env, jobject, jstring text, jint backspaces, jstring key) {
     const char* chars = text ? env->GetStringUTFChars(text, nullptr) : nullptr;

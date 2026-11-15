@@ -6,6 +6,7 @@
 #include <vector>
 
 #include "entity/PedSpawn.h"
+#include "entity/WeaponSpawn.h"
 
 namespace WorldRPG::Net {
 struct ResourceStartInfo;
@@ -78,6 +79,8 @@ const char* ElementKindName(uint32_t id);
 uint8_t SyncTimeContext(uint32_t id);
 // The ENTITY_ADD ped body beyond pose and model (PedSpawn.h). False when the id is not a ped from ENTITY_ADD.
 bool CopyPedSpawn(uint32_t id, Entity::PedSpawn& out);
+// Last ENTITY_ADD weapon snapshot. False for removed elements and other types.
+bool CopyWeaponSpawn(uint32_t id, Entity::WeaponSpawn& out);
 // PLAYER_QUIT (5): CPacketHandler::Packet_PlayerQuit -> CClientGame::QuitPlayer deletes the player element.
 void OnPlayerQuit(uint32_t id);
 // A remote player this session knows (PLAYER_LIST nick, PLAYER_SPAWN skin, or a body record of kind 1).

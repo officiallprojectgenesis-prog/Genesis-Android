@@ -18,6 +18,7 @@
 #include "ResourcePackets.h"
 #include "ServerWorld.h"
 #include "../gtasa/GameEngine.h"
+#include "../gtasa/ProjectileEngine.h"
 #include "../gtasa/HudComponents.h"
 #include "../net/HttpDownloader.h"
 #include "../net/NeonJoinProtocol.h"
@@ -105,6 +106,10 @@ struct SoundSlot {
     float maxDistance = 20.f;
     float speed = 1.f;
     float pan = 0.f;
+    double length = 0;
+    std::string owner;
+    uint16_t ownerNetId = 0;
+    uint32_t ownerGeneration = 0;
 };
 static std::mutex g_soundMu;
 static SoundSlot g_sounds[8];
@@ -112,6 +117,24 @@ static uint32_t g_nextSound = kFirstSoundId;
 static std::mutex g_soundEndMu;
 static std::vector<uint32_t> g_soundEnded;
 static bool SoundAlive(uint32_t id);
+
+static void StopOwnedSounds(const std::string* owner = nullptr, uint16_t netId = 0, uint32_t generation = 0) {
+    std::vector<uint32_t> stopped;
+    {
+        std::lock_guard<std::mutex> lock(g_soundMu);
+        for (auto& slot : g_sounds) {
+            if (!slot.alive) continue;
+            if (owner && (slot.owner != *owner || (netId && slot.ownerNetId != netId) ||
+                          (generation && slot.ownerGeneration != generation))) continue;
+            slot.alive = false;
+            stopped.push_back(slot.id);
+        }
+    }
+    for (uint32_t id : stopped) {
+        const std::string text = std::to_string(id);
+        ::WorldRPG::JniBridge::PostGameLine(12, text.c_str());
+    }
+}
 // The IME action button asked to leave the field. Holds the keyboard closed until the next tap.
 static bool g_imeDismissed = false;
 static float g_cursorX = 0.f, g_cursorY = 0.f;
@@ -1262,6 +1285,11 @@ static int l_getElementType(lua_State* L) {
 
 static int l_getElementPosition(lua_State* L) {
     const uint32_t id = ElementIdOf(L, 1);
+    Projectiles::Snapshot projectile;
+    if (Projectiles::Copy(id, projectile)) {
+        lua_pushnumber(L, projectile.position.x); lua_pushnumber(L, projectile.position.y); lua_pushnumber(L, projectile.position.z);
+        return 3;
+    }
     float x = 0, y = 0, z = 0, heading = 0;
     if (id == 0 || id == ServerWorld::LocalPlayer()) Game::CopyPose(x, y, z, heading);
     else if (!Game::CopyRemotePose(id, x, y, z) && !ServerWorld::ElementPose(id, x, y, z)) {
@@ -1534,6 +1562,7 @@ static int l_playSound(lua_State* L) {
         std::lock_guard<std::mutex> lock(g_soundMu);
         for (auto& slot : g_sounds) {
             if (slot.alive) continue;
+            slot = SoundSlot{};
             slot.alive = true;
             slot.volume = 1.f;
             slot.loop = loop;
@@ -1541,6 +1570,9 @@ static int l_playSound(lua_State* L) {
             slot.position = 0;
             slot.positionAt = DxNow();
             slot.id = g_nextSound++;
+            slot.owner = ActiveVmOwner();
+            slot.ownerNetId = ActiveVmOwnerNet();
+            slot.ownerGeneration = ActiveVmOwnerGeneration();
             if (g_nextSound < kFirstSoundId) g_nextSound = kFirstSoundId;
             id = slot.id;
             break;
@@ -1582,6 +1614,10 @@ static int l_setSoundVolume(lua_State* L) {
         return 1;
     }
     float volume = static_cast<float>(lua_tonumber(L, 2));
+    if (!std::isfinite(volume)) {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
     if (volume < 0.f) volume = 0.f;
     if (volume > 1.f) volume = 1.f;
     {
@@ -1784,7 +1820,52 @@ static int SetSoundNumber(lua_State* L, float SoundSlot::*field, float minValue,
 static int l_setSoundMaxDistance(lua_State* L) { return SetSoundNumber(L, &SoundSlot::maxDistance, 0.f, 1.0e6f); }
 static int l_setSoundMinDistance(lua_State* L) { return SetSoundNumber(L, &SoundSlot::minDistance, 0.f, 1.0e6f); }
 static int l_setSoundSpeed(lua_State* L) { return SetSoundNumber(L, &SoundSlot::speed, 0.0001f, 100.f); }
-static int l_setSoundPan(lua_State* L) { return SetSoundNumber(L, &SoundSlot::pan, -1.f, 1.f); }
+// CLuaAudioDefs.cpp:2773-2813, CClientSound.cpp:874-885. Apply 2D pan to
+// MediaPlayer's channel gains; distance and speed remain separate unported hooks.
+static int l_setSoundPan(lua_State* L) {
+    const uint32_t id = ElementIdOf(L, 1);
+    if (!lua_isnumber(L, 2)) { lua_pushboolean(L, 0); return 1; }
+    const float pan = static_cast<float>(lua_tonumber(L, 2));
+    if (!std::isfinite(pan) || pan < -1.f || pan > 1.f) { lua_pushboolean(L, 0); return 1; }
+    {
+        std::lock_guard<std::mutex> lock(g_soundMu);
+        SoundSlot* slot = FindSound(id);
+        if (!slot) { lua_pushboolean(L, 0); return 1; }
+        slot->pan = pan;
+    }
+    char line[64];
+    std::snprintf(line, sizeof(line), "%u|%.6f", id, pan);
+    ::WorldRPG::JniBridge::PostGameLine(18, line);
+    lua_pushboolean(L, 1);
+    return 1;
+}
+
+// CLuaAudioDefs.cpp:685-731 / CClientSound.cpp:385-414. The Android backend
+// reports duration asynchronously; until prepared or for an unknown live stream it is 0.
+static int l_getSoundLength(lua_State* L) {
+    std::lock_guard<std::mutex> lock(g_soundMu);
+    const SoundSlot* slot = FindSound(ElementIdOf(L, 1));
+    // The desktop bad-pointer branch pushes false but returns 0 Lua results.
+    if (!slot) return 0;
+    lua_pushnumber(L, slot->length);
+    return 1;
+}
+
+// CLuaAudioDefs.cpp:2895-2922. Pure lookup, independent of the GTA radio hook.
+static int l_getRadioChannelName(lua_State* L) {
+    static const char* stations[] = {"Radio off", "Playback FM", "K-Rose", "K-DST", "Bounce FM", "SF-UR",
+        "Radio Los Santos", "Radio X", "CSR 103.9", "K-Jah West", "Master Sounds 98.3", "WCTR", "User Track Player"};
+    if (lua_isnumber(L, 1)) {
+        const double value = lua_tonumber(L, 1);
+        // ReadNumber<int> truncates before testing the station index.
+        if (std::isfinite(value) && value > -1 && value < 13) {
+            lua_pushstring(L, stations[static_cast<int>(value)]);
+            return 1;
+        }
+    }
+    lua_pushboolean(L, 0);
+    return 1;
+}
 
 static int GetSoundNumber(lua_State* L, float SoundSlot::*field) {
     const uint32_t id = ElementIdOf(L, 1);
@@ -1832,6 +1913,8 @@ static void installWardrobeBindings(lua_State* L) {
         {"setSoundPaused", l_setSoundPaused},
         {"isSoundPaused", l_isSoundPaused},
         {"getSoundPosition", l_getSoundPosition},
+        {"getSoundLength", l_getSoundLength},
+        {"getRadioChannelName", l_getRadioChannelName},
         {"setSoundPosition", l_setSoundPosition},
         {"playSoundFrontEnd", l_playSoundFrontEnd},
         {"setSoundMaxDistance", l_setSoundMaxDistance},
@@ -2498,6 +2581,8 @@ std::string LuaVMStub::pumpDx() {
 
 void LuaVMStub::shutdown() {
     if (!pImpl_->initialized) return;
+    StopOwnedSounds();
+    Projectiles::Reset();
     if (g_active == this) g_active = nullptr;
     g_imeDismissed = false;
     g_dx = DxRuntime{};
@@ -2664,6 +2749,8 @@ bool ActiveVmOnServerEvent(const uint8_t* body, size_t length, size_t bits) {
 // Removes the handlers and timers that a resource registered, and the resource's
 // Lua state with them (its environment is only referenced by those closures).
 static void DropResourceState(lua_State* L, const std::string& name, uint16_t netId, uint32_t generation) {
+    Projectiles::DropOwner(name, netId, generation);
+    StopOwnedSounds(&name, netId, generation);
     GuiDropResource(name, netId, generation);
     Events::DropOwner(name, netId, generation);
     KeyBindsDropResource(L, name, netId, generation);
@@ -2809,6 +2896,14 @@ void ActiveVmQueueCursor(int action, float x, float y) {
 void ActiveVmNoteSoundEnded(uint32_t id) {
     std::lock_guard<std::mutex> lock(g_soundEndMu);
     if (g_soundEnded.size() < 32) g_soundEnded.push_back(id);
+}
+
+lua_State* ActiveVmState() { return g_dx.L; }
+
+void ActiveVmNoteSoundLength(uint32_t id, double seconds) {
+    if (!std::isfinite(seconds) || seconds < 0) return;
+    std::lock_guard<std::mutex> lock(g_soundMu);
+    if (SoundSlot* slot = FindSound(id)) slot->length = seconds;
 }
 
 void ActiveVmQueueScriptInput(const char* text, int backspaces, const char* key) {

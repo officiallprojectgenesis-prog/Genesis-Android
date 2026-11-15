@@ -1,6 +1,6 @@
 # Neon Parity Matrix (P5)
 
-Generated: 2026-11-14
+Generated: 2026-11-15
 
 Regenerate: `python3 tools/parity_matrix.py` (optional `--desktop <mta_neon_source checkout>`, defaults to `/home/samuel/projects/world-rpg-br-en-eu/mta_neon_source`).
 
@@ -12,11 +12,11 @@ Percent = implemented / desktop total. Stub and missing columns are defined in t
 
 | Section | Desktop total | Implemented | Stub | Missing | % | Notes |
 |---|---|---|---|---|---|---|
-| A1 Lua functions | 1581 | 602 | 138 | 841 | 38.1% | Port-only bindings not in desktop: 6. Duplicates across groups skipped: 0. |
+| A1 Lua functions | 1581 | 618 | 138 | 825 | 39.1% | Port-only bindings not in desktop: 6. Duplicates across groups skipped: 0. |
 | A2 Lua OOP classes | 63 | 0 | 0 | 63 | 0.0% | Matched by global name only. Port class-registration calls found: 0. |
 | B Client events | 144 | 11 | 0 | 133 | 7.6% | Port fires 11 literal event names in total (onClientKey, onClientCharacter, onClientConsole, onClientSoundStopped, onClientResourceStart, onClientChatMessage, onClientCursorMove, onClientClick, onClientPreRender, onClientRender, onClientResourceStop). Server-triggered names from packet 81 are dispatched dynamically and are not counted. |
-| C1 Inbound packets (UPE game ids) | 62 | 24 | 0 | 38 | 38.7% | 1 desktop ids reachable only via provisional registerHandler (ids 0-11, not wire ids) counted as missing. Port explicitly dispatches 25 ids. |
-| C2 Outbound packets (client sends) | 31 | 10 | 0 | 21 | 32.3% | Port sends 11 game ids in total, of which 1 have no desktop SendPacket site. |
+| C1 Inbound packets (UPE game ids) | 62 | 22 | 0 | 40 | 35.5% | 2 desktop ids reachable only via provisional registerHandler (ids 0-11, not wire ids) counted as missing. Port explicitly dispatches 24 ids. |
+| C2 Outbound packets (client sends) | 31 | 9 | 0 | 22 | 29.0% | Port sends 10 game ids in total, of which 1 have no desktop SendPacket site. |
 | D Element types (ENTITY_ADD) | 17 | 13 | 1 | 3 | 76.5% | Desktop enum has 25 entries; 8 not in the desktop ENTITY_ADD switch. Desktop default branch present: yes. |
 
 ## A. Client Lua functions
@@ -33,12 +33,12 @@ Desktop scope: the load graph from `CLuaManager::LoadCFunctions` (52 loader func
 | FalseResult | lua_pushboolean(L, 0) | shared/LuaApiExtra.cpp:247 |
 | FileOpen | lua_pushnil(L) | shared/LuaApiExtra.cpp:253 |
 | PushFalse | lua_pushboolean(L, 0) | shared/LuaPedApi.cpp:59 |
-| GetPlayerUserName | lua_pushboolean(L, 0) | shared/LuaPedApi.cpp:259 |
-| l_nil | lua_pushnil(L) | shared/LuaVMStub.cpp:956 |
-| l_num0 | lua_pushinteger(L, 0) | shared/LuaVMStub.cpp:957 |
-| l_false | lua_pushboolean(L, 0) | shared/LuaVMStub.cpp:1118 |
-| l_true | lua_pushboolean(L, 1) | shared/LuaVMStub.cpp:1119 |
+| GetPlayerUserName | lua_pushboolean(L, 0) | shared/LuaPedApi.cpp:277 |
 | Fail | lua_pushboolean(L, 0) | shared/LuaVehicleApi.cpp:406 |
+| l_nil | lua_pushnil(L) | shared/LuaVMStub.cpp:979 |
+| l_num0 | lua_pushinteger(L, 0) | shared/LuaVMStub.cpp:980 |
+| l_false | lua_pushboolean(L, 0) | shared/LuaVMStub.cpp:1141 |
+| l_true | lua_pushboolean(L, 1) | shared/LuaVMStub.cpp:1142 |
 
 Plus the `DefaultValue` dispatcher (`LuaApiExtra.cpp`), which returns the kind in its `defaults[]` row (`kTrue`, `kFalse`, `kNil`, `kZero`, ...). A name bound there is a stub.
 
@@ -46,8 +46,8 @@ Plus the `DefaultValue` dispatcher (`LuaApiExtra.cpp`), which returns the kind i
 
 | Desktop group | Total | Implemented | Stub | Missing | % |
 |---|---|---|---|---|---|
-| CLuaManager (LoadCFunctions table) | 62 | 45 | 2 | 15 | 72.6% |
-| CLuaAudioDefs | 57 | 19 | 1 | 37 | 33.3% |
+| CLuaManager (LoadCFunctions table) | 62 | 47 | 2 | 13 | 75.8% |
+| CLuaAudioDefs | 57 | 21 | 1 | 35 | 36.8% |
 | CLuaBlipDefs | 12 | 0 | 1 | 11 | 0.0% |
 | CLuaBrowserDefs | 34 | 0 | 0 | 34 | 0.0% |
 | CLuaCameraDefs | 47 | 47 | 0 | 0 | 100.0% |
@@ -68,7 +68,7 @@ Plus the `DefaultValue` dispatcher (`LuaApiExtra.cpp`), which returns the kind i
 | CLuaPedDefs | 167 | 10 | 75 | 82 | 6.0% |
 | CLuaPickupDefs | 6 | 0 | 0 | 6 | 0.0% |
 | CLuaPlayerDefs | 39 | 17 | 2 | 20 | 43.6% |
-| CLuaProjectileDefs | 7 | 0 | 0 | 7 | 0.0% |
+| CLuaProjectileDefs | 7 | 7 | 0 | 0 | 100.0% |
 | CLuaPointLightDefs | 8 | 0 | 0 | 8 | 0.0% |
 | CLuaRadarAreaDefs | 8 | 0 | 0 | 8 | 0.0% |
 | CLuaResourceDefs | 13 | 10 | 0 | 3 | 76.9% |
@@ -78,7 +78,7 @@ Plus the `DefaultValue` dispatcher (`LuaApiExtra.cpp`), which returns the kind i
 | CLuaVectorGraphicDefs | 6 | 0 | 0 | 6 | 0.0% |
 | CLuaVehicleDefs | 165 | 9 | 19 | 137 | 5.5% |
 | CLuaWaterDefs | 12 | 7 | 1 | 4 | 58.3% |
-| CLuaWeaponDefs | 24 | 8 | 0 | 16 | 33.3% |
+| CLuaWeaponDefs | 24 | 13 | 0 | 11 | 54.2% |
 | CLuaWorldDefs | 140 | 104 | 7 | 29 | 74.3% |
 | CLuaXMLDefs | 18 | 18 | 0 | 0 | 100.0% |
 | CLuaClientDefs | 12 | 10 | 0 | 2 | 83.3% |
@@ -100,7 +100,7 @@ Plus the `DefaultValue` dispatcher (`LuaApiExtra.cpp`), which returns the kind i
 
 #### CLuaManager (LoadCFunctions table)
 
-Implemented (45): `addEvent`, `addEventHandler`, `removeEventHandler`, `getEventHandlers`, `triggerEvent`, `triggerServerEvent`, `cancelEvent`, `wasEventCancelled`, `outputConsole`, `outputChatBox`, `outputDebugString`, `setClipboard`, `clearChatBox`, `isTrayNotificationEnabled`, `getBodyPartName`, `getClothesByTypeIndex`, `getTypeIndexFromClothes`, `getClothesTypeName`, `addClothingModel`, `removeClothingModel`, `getCursorPosition`, `setCursorPosition`, `isCursorShowing`, `showCursor`, `getCursorAlpha`, `setCursorAlpha`, `bindKey`, `unbindKey`, `getKeyState`, `getFunctionsBoundToKey`, `getKeyBoundToFunction`, `getCommandsBoundToKey`, `getKeyBoundToCommand`, `addCommandHandler`, `removeCommandHandler`, `executeCommandHandler`, `getCommandHandlers`, `getNetworkUsageData`, `getNetworkStats`, `setDevelopmentMode`, `getDevelopmentMode`, `getVersion`, `getLocalization`, `getKeyboardLayout`, `isVoiceEnabled`
+Implemented (47): `addEvent`, `addEventHandler`, `removeEventHandler`, `getEventHandlers`, `triggerEvent`, `triggerServerEvent`, `cancelEvent`, `wasEventCancelled`, `outputConsole`, `outputChatBox`, `outputDebugString`, `setClipboard`, `clearChatBox`, `isTrayNotificationEnabled`, `getBodyPartName`, `getClothesByTypeIndex`, `getTypeIndexFromClothes`, `getClothesTypeName`, `addClothingModel`, `removeClothingModel`, `getCursorPosition`, `setCursorPosition`, `isCursorShowing`, `showCursor`, `getCursorAlpha`, `setCursorAlpha`, `getValidPedModels`, `bindKey`, `unbindKey`, `getKeyState`, `getBoundKeys`, `getFunctionsBoundToKey`, `getKeyBoundToFunction`, `getCommandsBoundToKey`, `getKeyBoundToCommand`, `addCommandHandler`, `removeCommandHandler`, `executeCommandHandler`, `getCommandHandlers`, `getNetworkUsageData`, `getNetworkStats`, `setDevelopmentMode`, `getDevelopmentMode`, `getVersion`, `getLocalization`, `getKeyboardLayout`, `isVoiceEnabled`
 
 Stub (2):
 
@@ -109,11 +109,11 @@ Stub (2):
 | isControlEnabled | DefaultValue(kTrue) | shared/LuaApiExtra.cpp:616 |
 | toggleControl | DefaultValue(kTrue) | shared/LuaApiExtra.cpp:616 |
 
-Missing (15): `triggerLatentServerEvent`, `getLatentEventHandles`, `getLatentEventStatus`, `cancelLatentEvent`, `setWindowFlashing`, `createTrayNotification`, `getValidPedModels`, `downloadFile`, `getAnalogControlState`, `setAnalogControlState`, `getBoundKeys`, `toggleAllControls`, `getPerformanceStats`, `addDebugHook`, `removeDebugHook`
+Missing (13): `triggerLatentServerEvent`, `getLatentEventHandles`, `getLatentEventStatus`, `cancelLatentEvent`, `setWindowFlashing`, `createTrayNotification`, `downloadFile`, `getAnalogControlState`, `setAnalogControlState`, `toggleAllControls`, `getPerformanceStats`, `addDebugHook`, `removeDebugHook`
 
 #### CLuaAudioDefs
 
-Implemented (19): `playSoundFrontEnd`, `playSound`, `stopSound`, `setSoundPosition`, `getSoundPosition`, `setSoundLooped`, `isSoundLooped`, `setSoundPaused`, `isSoundPaused`, `setSoundVolume`, `getSoundVolume`, `setSoundSpeed`, `getSoundSpeed`, `setSoundMinDistance`, `getSoundMinDistance`, `setSoundMaxDistance`, `getSoundMaxDistance`, `setSoundPan`, `getSoundPan`
+Implemented (21): `playSoundFrontEnd`, `playSound`, `stopSound`, `setSoundPosition`, `getSoundPosition`, `getSoundLength`, `setSoundLooped`, `isSoundLooped`, `setSoundPaused`, `isSoundPaused`, `setSoundVolume`, `getSoundVolume`, `setSoundSpeed`, `getSoundSpeed`, `setSoundMinDistance`, `getSoundMinDistance`, `setSoundMaxDistance`, `getSoundMaxDistance`, `setSoundPan`, `getSoundPan`, `getRadioChannelName`
 
 Stub (1):
 
@@ -121,7 +121,7 @@ Stub (1):
 |---|---|---|
 | playSound3D | DefaultValue(kFalse) | shared/LuaApiExtra.cpp:619 |
 
-Missing (37): `playMissionPassedTune`, `setAmbientSoundEnabled`, `isAmbientSoundEnabled`, `resetAmbientSounds`, `setWorldSoundEnabled`, `isWorldSoundEnabled`, `resetWorldSounds`, `playSFX`, `playSFX3D`, `getSFXStatus`, `requestMissionAudio`, `isMissionAudioLoaded`, `playMissionAudio`, `isMissionAudioFinished`, `releaseMissionAudio`, `reportPositionMissionAudioEvent`, `reportVehicleMissionAudioEvent`, `getSoundLength`, `getSoundBufferLength`, `setSoundProperties`, `getSoundProperties`, `getSoundFFTData`, `getSoundWaveData`, `getSoundLevelData`, `getSoundBPM`, `setSoundPanningEnabled`, `isSoundPanningEnabled`, `getSoundMetaTags`, `setSoundEffectEnabled`, `getSoundEffects`, `setSoundEffectParameter`, `getSoundEffectParameters`, `setRadioChannel`, `getRadioChannel`, `getRadioChannelName`, `showSound`, `isShowSoundEnabled`
+Missing (35): `playMissionPassedTune`, `setAmbientSoundEnabled`, `isAmbientSoundEnabled`, `resetAmbientSounds`, `setWorldSoundEnabled`, `isWorldSoundEnabled`, `resetWorldSounds`, `playSFX`, `playSFX3D`, `getSFXStatus`, `requestMissionAudio`, `isMissionAudioLoaded`, `playMissionAudio`, `isMissionAudioFinished`, `releaseMissionAudio`, `reportPositionMissionAudioEvent`, `reportVehicleMissionAudioEvent`, `getSoundBufferLength`, `setSoundProperties`, `getSoundProperties`, `getSoundFFTData`, `getSoundWaveData`, `getSoundLevelData`, `getSoundBPM`, `setSoundPanningEnabled`, `isSoundPanningEnabled`, `getSoundMetaTags`, `setSoundEffectEnabled`, `getSoundEffects`, `setSoundEffectParameter`, `getSoundEffectParameters`, `setRadioChannel`, `getRadioChannel`, `showSound`, `isShowSoundEnabled`
 
 #### CLuaBlipDefs
 
@@ -192,7 +192,7 @@ Stub (8):
 |---|---|---|
 | getElementAngularVelocity | DefaultValue(kZero3) | shared/LuaApiExtra.cpp:594 |
 | getElementDistanceFromCentreOfMassToBaseOfModel | DefaultValue(kZero) | shared/LuaApiExtra.cpp:595 |
-| isElementOnScreen | l_false: lua_pushboolean(L, 0) | shared/LuaVMStub.cpp:1907 |
+| isElementOnScreen | l_false: lua_pushboolean(L, 0) | shared/LuaVMStub.cpp:1990 |
 | setElementPosition | TrueResult: lua_pushboolean(L, 1) | shared/LuaApiExtra.cpp:585 |
 | setElementVelocity | DefaultValue(kTrue) | shared/LuaApiExtra.cpp:592 |
 | setElementAngularVelocity | DefaultValue(kTrue) | shared/LuaApiExtra.cpp:592 |
@@ -282,81 +282,81 @@ Stub (75):
 
 | Lua function | Port binding | Where |
 |---|---|---|
-| removePedFromVehicle | l_true: lua_pushboolean(L, 1) | shared/LuaVMStub.cpp:1924 |
-| setPedRotation | l_true: lua_pushboolean(L, 1) | shared/LuaVMStub.cpp:1930 |
-| setPedWeaponSlot | l_true: lua_pushboolean(L, 1) | shared/LuaVMStub.cpp:1933 |
+| removePedFromVehicle | l_true: lua_pushboolean(L, 1) | shared/LuaVMStub.cpp:2007 |
+| setPedRotation | l_true: lua_pushboolean(L, 1) | shared/LuaVMStub.cpp:2013 |
+| setPedWeaponSlot | l_true: lua_pushboolean(L, 1) | shared/LuaVMStub.cpp:2016 |
 | setPedCanBeKnockedOffBike | DefaultValue(kTrue) | shared/LuaApiExtra.cpp:609 |
 | setPedAnimation | TrueResult: lua_pushboolean(L, 1) | shared/LuaApiExtra.cpp:587 |
-| setPedControlState | l_true: lua_pushboolean(L, 1) | shared/LuaVMStub.cpp:1927 |
+| setPedControlState | l_true: lua_pushboolean(L, 1) | shared/LuaVMStub.cpp:2010 |
 | setPedEnterVehicle | DefaultValue(kTrue) | shared/LuaApiExtra.cpp:612 |
 | setPedExitVehicle | DefaultValue(kTrue) | shared/LuaApiExtra.cpp:613 |
-| setPedWeaponShootingRate | l_true: lua_pushboolean(L, 1) | shared/LuaVMStub.cpp:1935 |
-| setPedWeaponAccuracy | l_true: lua_pushboolean(L, 1) | shared/LuaVMStub.cpp:1934 |
+| setPedWeaponShootingRate | l_true: lua_pushboolean(L, 1) | shared/LuaVMStub.cpp:2018 |
+| setPedWeaponAccuracy | l_true: lua_pushboolean(L, 1) | shared/LuaVMStub.cpp:2017 |
 | setPedGoTo | DefaultValue(kTrue) | shared/LuaApiExtra.cpp:611 |
-| setPedNavigateTo | l_true: lua_pushboolean(L, 1) | shared/LuaVMStub.cpp:1929 |
+| setPedNavigateTo | l_true: lua_pushboolean(L, 1) | shared/LuaVMStub.cpp:2012 |
 | setPedAimAt | DefaultValue(kTrue) | shared/LuaApiExtra.cpp:612 |
-| setPedStandStill | l_true: lua_pushboolean(L, 1) | shared/LuaVMStub.cpp:1931 |
+| setPedStandStill | l_true: lua_pushboolean(L, 1) | shared/LuaVMStub.cpp:2014 |
 | setPedHandsUp | DefaultValue(kTrue) | shared/LuaApiExtra.cpp:612 |
 | setPedTurnToFace | DefaultValue(kTrue) | shared/LuaApiExtra.cpp:612 |
 | setPedKillOnFoot | DefaultValue(kTrue) | shared/LuaApiExtra.cpp:611 |
-| isPedNativeAmbientCopWanderTask | l_false: lua_pushboolean(L, 0) | shared/LuaVMStub.cpp:1912 |
-| setPedJump | l_true: lua_pushboolean(L, 1) | shared/LuaVMStub.cpp:1928 |
+| isPedNativeAmbientCopWanderTask | l_false: lua_pushboolean(L, 0) | shared/LuaVMStub.cpp:1995 |
+| setPedJump | l_true: lua_pushboolean(L, 1) | shared/LuaVMStub.cpp:2011 |
 | setPedTaskSequence | DefaultValue(kTrue) | shared/LuaApiExtra.cpp:613 |
 | setPedDriveTo | DefaultValue(kTrue) | shared/LuaApiExtra.cpp:611 |
 | setPedDriveMission | DefaultValue(kTrue) | shared/LuaApiExtra.cpp:611 |
 | setPedDriveBy | DefaultValue(kTrue) | shared/LuaApiExtra.cpp:610 |
 | setPedMissionActor | DefaultValue(kTrue) | shared/LuaApiExtra.cpp:604 |
-| acquirePedNativeGroup | l_false: lua_pushboolean(L, 0) | shared/LuaVMStub.cpp:1915 |
-| releasePedNativeGroup | l_true: lua_pushboolean(L, 1) | shared/LuaVMStub.cpp:1918 |
-| isPedNativeGroupActive | l_false: lua_pushboolean(L, 0) | shared/LuaVMStub.cpp:1911 |
-| getPedNativeGroupDiagnostic | l_false: lua_pushboolean(L, 0) | shared/LuaVMStub.cpp:1923 |
-| validatePedNativeCouple | l_false: lua_pushboolean(L, 0) | shared/LuaVMStub.cpp:1919 |
-| acquirePedNativeCouple | l_false: lua_pushboolean(L, 0) | shared/LuaVMStub.cpp:1913 |
-| releasePedNativeCouple | l_true: lua_pushboolean(L, 1) | shared/LuaVMStub.cpp:1916 |
-| isPedNativeCoupleActive | l_false: lua_pushboolean(L, 0) | shared/LuaVMStub.cpp:1909 |
-| getPedNativeCoupleDiagnostic | l_false: lua_pushboolean(L, 0) | shared/LuaVMStub.cpp:1922 |
-| acquirePedNativeCouplePresentation | l_false: lua_pushboolean(L, 0) | shared/LuaVMStub.cpp:1914 |
-| updatePedNativeCouplePresentation | l_true: lua_pushboolean(L, 1) | shared/LuaVMStub.cpp:1920 |
-| releasePedNativeCouplePresentation | l_true: lua_pushboolean(L, 1) | shared/LuaVMStub.cpp:1917 |
-| isPedNativeCouplePresentationActive | l_false: lua_pushboolean(L, 0) | shared/LuaVMStub.cpp:1910 |
+| acquirePedNativeGroup | l_false: lua_pushboolean(L, 0) | shared/LuaVMStub.cpp:1998 |
+| releasePedNativeGroup | l_true: lua_pushboolean(L, 1) | shared/LuaVMStub.cpp:2001 |
+| isPedNativeGroupActive | l_false: lua_pushboolean(L, 0) | shared/LuaVMStub.cpp:1994 |
+| getPedNativeGroupDiagnostic | l_false: lua_pushboolean(L, 0) | shared/LuaVMStub.cpp:2006 |
+| validatePedNativeCouple | l_false: lua_pushboolean(L, 0) | shared/LuaVMStub.cpp:2002 |
+| acquirePedNativeCouple | l_false: lua_pushboolean(L, 0) | shared/LuaVMStub.cpp:1996 |
+| releasePedNativeCouple | l_true: lua_pushboolean(L, 1) | shared/LuaVMStub.cpp:1999 |
+| isPedNativeCoupleActive | l_false: lua_pushboolean(L, 0) | shared/LuaVMStub.cpp:1992 |
+| getPedNativeCoupleDiagnostic | l_false: lua_pushboolean(L, 0) | shared/LuaVMStub.cpp:2005 |
+| acquirePedNativeCouplePresentation | l_false: lua_pushboolean(L, 0) | shared/LuaVMStub.cpp:1997 |
+| updatePedNativeCouplePresentation | l_true: lua_pushboolean(L, 1) | shared/LuaVMStub.cpp:2003 |
+| releasePedNativeCouplePresentation | l_true: lua_pushboolean(L, 1) | shared/LuaVMStub.cpp:2000 |
+| isPedNativeCouplePresentationActive | l_false: lua_pushboolean(L, 0) | shared/LuaVMStub.cpp:1993 |
 | acquirePedNativePointArm | DefaultValue(kFalse) | shared/LuaApiExtra.cpp:615 |
 | updatePedNativePointArm | DefaultValue(kFalse) | shared/LuaApiExtra.cpp:632 |
 | releasePedNativePointArm | DefaultValue(kTrue) | shared/LuaApiExtra.cpp:614 |
-| addPedNativeDamageResponseEvent | l_true: lua_pushboolean(L, 1) | shared/LuaVMStub.cpp:1921 |
+| addPedNativeDamageResponseEvent | l_true: lua_pushboolean(L, 1) | shared/LuaVMStub.cpp:2004 |
 | getPedNativeVehicleResponse | DefaultValue(kNil) | shared/LuaApiExtra.cpp:607 |
 | restorePedNativeVehicleResponse | DefaultValue(kTrue) | shared/LuaApiExtra.cpp:614 |
 | setPedSuffersCriticalHits | DefaultValue(kTrue) | shared/LuaApiExtra.cpp:609 |
 | setPedCanBeDraggedOut | DefaultValue(kTrue) | shared/LuaApiExtra.cpp:613 |
 | setPedOnlyDamagedByPlayer | DefaultValue(kTrue) | shared/LuaApiExtra.cpp:610 |
-| setPedStayInSamePlace | l_true: lua_pushboolean(L, 1) | shared/LuaVMStub.cpp:1932 |
+| setPedStayInSamePlace | l_true: lua_pushboolean(L, 1) | shared/LuaVMStub.cpp:2015 |
 | setPedNeverTargeted | DefaultValue(kTrue) | shared/LuaApiExtra.cpp:610 |
 | setPedPhysicalProofs | DefaultValue(kTrue) | shared/LuaApiExtra.cpp:609 |
-| getPedWeaponSlot | l_num0: lua_pushinteger(L, 0) | shared/LuaVMStub.cpp:1896 |
+| getPedWeaponSlot | l_num0: lua_pushinteger(L, 0) | shared/LuaVMStub.cpp:1979 |
 | canPedBeKnockedOffBike | DefaultValue(kFalse) | shared/LuaApiExtra.cpp:605 |
-| getPedControlState | l_false: lua_pushboolean(L, 0) | shared/LuaVMStub.cpp:1904 |
+| getPedControlState | l_false: lua_pushboolean(L, 0) | shared/LuaVMStub.cpp:1987 |
 | isPedDoingGangDriveby | DefaultValue(kFalse) | shared/LuaApiExtra.cpp:607 |
 | getPedCameraRotation | DefaultValue(kZero) | shared/LuaApiExtra.cpp:607 |
 | isPedMissionActor | DefaultValue(kFalse) | shared/LuaApiExtra.cpp:603 |
 | getPedSuffersCriticalHits | DefaultValue(kFalse) | shared/LuaApiExtra.cpp:605 |
 | canPedBeDraggedOut | DefaultValue(kFalse) | shared/LuaApiExtra.cpp:606 |
 | isPedOnlyDamagedByPlayer | DefaultValue(kFalse) | shared/LuaApiExtra.cpp:606 |
-| getPedStayInSamePlace | l_false: lua_pushboolean(L, 0) | shared/LuaVMStub.cpp:1905 |
+| getPedStayInSamePlace | l_false: lua_pushboolean(L, 0) | shared/LuaVMStub.cpp:1988 |
 | isPedNeverTargeted | DefaultValue(kFalse) | shared/LuaApiExtra.cpp:606 |
 | getPedPhysicalProofs | DefaultValue(kFalse) | shared/LuaApiExtra.cpp:605 |
-| getPedStat | l_num0: lua_pushinteger(L, 0) | shared/LuaVMStub.cpp:1899 |
-| getPedTask | l_false: lua_pushboolean(L, 0) | shared/LuaVMStub.cpp:1902 |
+| getPedStat | l_num0: lua_pushinteger(L, 0) | shared/LuaVMStub.cpp:1982 |
+| getPedTask | l_false: lua_pushboolean(L, 0) | shared/LuaVMStub.cpp:1985 |
 | getPedSimplestTask | DefaultValue(kEmptyString) | shared/LuaApiExtra.cpp:604 |
-| getPedTarget | l_false: lua_pushboolean(L, 0) | shared/LuaVMStub.cpp:1903 |
-| getPedWeapon | l_num0: lua_pushinteger(L, 0) | shared/LuaVMStub.cpp:1895 |
-| getPedWeaponShootingRate | l_num0: lua_pushinteger(L, 0) | shared/LuaVMStub.cpp:1898 |
-| getPedWeaponAccuracy | l_num0: lua_pushinteger(L, 0) | shared/LuaVMStub.cpp:1897 |
-| getPedAmmoInClip | l_num0: lua_pushinteger(L, 0) | shared/LuaVMStub.cpp:1893 |
-| getPedTotalAmmo | l_num0: lua_pushinteger(L, 0) | shared/LuaVMStub.cpp:1894 |
+| getPedTarget | l_false: lua_pushboolean(L, 0) | shared/LuaVMStub.cpp:1986 |
+| getPedWeapon | l_num0: lua_pushinteger(L, 0) | shared/LuaVMStub.cpp:1978 |
+| getPedWeaponShootingRate | l_num0: lua_pushinteger(L, 0) | shared/LuaVMStub.cpp:1981 |
+| getPedWeaponAccuracy | l_num0: lua_pushinteger(L, 0) | shared/LuaVMStub.cpp:1980 |
+| getPedAmmoInClip | l_num0: lua_pushinteger(L, 0) | shared/LuaVMStub.cpp:1976 |
+| getPedTotalAmmo | l_num0: lua_pushinteger(L, 0) | shared/LuaVMStub.cpp:1977 |
 | getPedTaskSequenceProgress | DefaultValue(kZero) | shared/LuaApiExtra.cpp:604 |
 | getPedBonePosition | DefaultValue(kZero3) | shared/LuaApiExtra.cpp:608 |
-| isPedOnGround | l_true: lua_pushboolean(L, 1) | shared/LuaVMStub.cpp:1908 |
+| isPedOnGround | l_true: lua_pushboolean(L, 1) | shared/LuaVMStub.cpp:1991 |
 | isPedDoingTask | DefaultValue(kFalse) | shared/LuaApiExtra.cpp:603 |
-| isPedDead | l_false: lua_pushboolean(L, 0) | shared/LuaVMStub.cpp:1962 |
+| isPedDead | l_false: lua_pushboolean(L, 0) | shared/LuaVMStub.cpp:2045 |
 
 Missing (82): `detonateSatchels`, `killPed`, `resetPedVoice`, `updateElementRpHAnim`, `warpPedIntoVehicle`, `givePedWeapon`, `setPedVoice`, `setElementBonePosition`, `setElementBoneRotation`, `setElementBoneQuaternion`, `setElementBoneMatrix`, `setPedAnimationProgress`, `setPedAnimationSpeed`, `setPedWalkingStyle`, `setPedUseNativeWalkingStyle`, `setPedAnalogControlState`, `setPedDoingGangDriveby`, `setPedFightingStyle`, `setPedLookAt`, `setPedHeadless`, `setPedFrozen`, `setPedFootBloodEnabled`, `setPedCameraRotation`, `setPedAimTarget`, `setPedStat`, `setPedOxygenLevel`, `setPedArmor`, `isPedNativeTaskReady`, `setPedChatWith`, `setPedAchieveHeading`, `setPedGoToOffset`, `setPedScriptedSpeechMuted`, `setPedFacialTalk`, `stopPedFacialTalk`, `setPedShootAt`, `setPedCarryObject`, `pickUpPedObject`, `getPedNoiseLevel`, `getPedCarriedObject`, `putDownPedObject`, `cancelPedCarryObject`, `setPedDriveWander`, `acquirePedNativeEventProfile`, `releasePedNativeEventProfile`, `isPedNativeEventProfileActive`, `isPedNativePointArmActive`, `addPedNativeGunAimedAtEvent`, `addPedNativeDamageEvent`, `addPedNativeBikeJackTask`, `setPedStoryProtected`, `setPedBleeding`, `playPedVoiceLine`, `getPedVoice`, `getElementBonePosition`, `getElementBoneRotation`, `getElementBoneQuaternion`, `getElementBoneMatrix`, `getPedAnimation`, `getPedAnimationProgress`, `getPedAnimationSpeed`, `getPedAnimationLength`, `getPedWalkingStyle`, `isPedUsingNativeWalkingStyle`, `getPedAnalogControlState`, `getPedFightingStyle`, `isPedHeadless`, `isPedFrozen`, `isPedFootBloodEnabled`, `isPedStoryProtected`, `getPedOxygenLevel`, `isPedBleeding`, `getPedContactElement`, `getPedTargetStart`, `getPedTargetEnd`, `getPedTargetCollision`, `getPedClothes`, `doesPedHaveJetPack`, `isPedWearingJetpack`, `isPedChoking`, `isPedDucked`, `isPedReloadingWeapon`, `killPedTask`
 
@@ -372,14 +372,14 @@ Stub (2):
 
 | Lua function | Port binding | Where |
 |---|---|---|
-| getPlayerWantedLevel | l_num0: lua_pushinteger(L, 0) | shared/LuaVMStub.cpp:1876 |
-| getPlayerUserName | GetPlayerUserName: lua_pushboolean(L, 0) | shared/LuaPedApi.cpp:413 |
+| getPlayerWantedLevel | l_num0: lua_pushinteger(L, 0) | shared/LuaVMStub.cpp:1959 |
+| getPlayerUserName | GetPlayerUserName: lua_pushboolean(L, 0) | shared/LuaPedApi.cpp:432 |
 
 Missing (20): `getPlayerScriptDebugLevel`, `isPlayerCrosshairVisible`, `setPlayerMoney`, `givePlayerMoney`, `takePlayerMoney`, `setPlayerHudComponentProperty`, `resetPlayerHudComponentProperty`, `forcePlayerMap`, `isPlayerMapForced`, `isPlayerMapVisible`, `getPlayerMapBoundingBox`, `getPlayerMapOpacity`, `getPlayerHudComponentProperty`, `acquireMissionText`, `showMissionText`, `showMissionHelp`, `showMissionBigText`, `clearMissionTexts`, `clearMissionHelp`, `releaseMissionText`
 
 #### CLuaProjectileDefs
 
-Missing (7): `createProjectile`, `getProjectileType`, `getProjectileTarget`, `getProjectileCreator`, `getProjectileForce`, `setProjectileCounter`, `getProjectileCounter`
+Implemented (7): `createProjectile`, `getProjectileType`, `getProjectileTarget`, `getProjectileCreator`, `getProjectileForce`, `setProjectileCounter`, `getProjectileCounter`
 
 #### CLuaPointLightDefs
 
@@ -455,9 +455,9 @@ Missing (4): `createWater`, `testLineAgainstWater`, `setWaterVertexPosition`, `g
 
 #### CLuaWeaponDefs
 
-Implemented (8): `getWeaponNameFromID`, `getWeaponIDFromName`, `getSlotFromWeapon`, `setWeaponProperty`, `getWeaponProperty`, `getOriginalWeaponProperty`, `setWeaponRenderEnabled`, `isWeaponRenderEnabled`
+Implemented (13): `getWeaponNameFromID`, `getWeaponIDFromName`, `getSlotFromWeapon`, `setWeaponProperty`, `getWeaponProperty`, `getOriginalWeaponProperty`, `getWeaponState`, `getWeaponTarget`, `getWeaponOwner`, `getWeaponAmmo`, `getWeaponClipAmmo`, `setWeaponRenderEnabled`, `isWeaponRenderEnabled`
 
-Missing (16): `createWeapon`, `fireWeapon`, `setWeaponState`, `getWeaponState`, `setWeaponTarget`, `getWeaponTarget`, `getWeaponOwner`, `setWeaponFlags`, `getWeaponFlags`, `setWeaponFiringRate`, `getWeaponFiringRate`, `resetWeaponFiringRate`, `getWeaponAmmo`, `getWeaponClipAmmo`, `setWeaponAmmo`, `setWeaponClipAmmo`
+Missing (11): `createWeapon`, `fireWeapon`, `setWeaponState`, `setWeaponTarget`, `setWeaponFlags`, `getWeaponFlags`, `setWeaponFiringRate`, `getWeaponFiringRate`, `resetWeaponFiringRate`, `setWeaponAmmo`, `setWeaponClipAmmo`
 
 #### CLuaWorldDefs
 
@@ -467,10 +467,10 @@ Stub (7):
 
 | Lua function | Port binding | Where |
 |---|---|---|
-| processLineOfSight | l_false: lua_pushboolean(L, 0) | shared/LuaVMStub.cpp:1948 |
+| processLineOfSight | l_false: lua_pushboolean(L, 0) | shared/LuaVMStub.cpp:2031 |
 | getScreenFromWorldPosition | DefaultValue(kNil) | shared/LuaApiExtra.cpp:616 |
-| updateAmbientPedPopulationModels | l_true: lua_pushboolean(L, 1) | shared/LuaVMStub.cpp:1947 |
-| resetAmbientPedPopulationModels | l_true: lua_pushboolean(L, 1) | shared/LuaVMStub.cpp:1938 |
+| updateAmbientPedPopulationModels | l_true: lua_pushboolean(L, 1) | shared/LuaVMStub.cpp:2030 |
+| resetAmbientPedPopulationModels | l_true: lua_pushboolean(L, 1) | shared/LuaVMStub.cpp:2021 |
 | removeWorldModel | DefaultValue(kTrue) | shared/LuaApiExtra.cpp:630 |
 | restoreWorldModel | DefaultValue(kTrue) | shared/LuaApiExtra.cpp:630 |
 | isLineOfSightClear | DefaultValue(kFalse) | shared/LuaApiExtra.cpp:615 |
@@ -623,8 +623,8 @@ Desktop: literal `AddEvent("name", ...)` calls under `Client/mods/deathmatch/log
 |---|---|---|---|
 | onClientBirdShot | not fired | - | Client/mods/deathmatch/logic/CClientBirdManager.cpp:84 |
 | onClientFireDamage | not fired | - | Client/mods/deathmatch/logic/CClientFireManager.cpp:99 |
-| onClientResourceStart | fired | app/src/main/cpp/shared/LuaVMStub.cpp:2364 | Client/mods/deathmatch/logic/CClientGame.cpp:2730 |
-| onClientResourceStop | fired | app/src/main/cpp/shared/LuaVMStub.cpp:2699, app/src/main/cpp/shared/LuaVMStub.cpp:2705 | Client/mods/deathmatch/logic/CClientGame.cpp:2731 |
+| onClientResourceStart | fired | app/src/main/cpp/shared/LuaVMStub.cpp:2447 | Client/mods/deathmatch/logic/CClientGame.cpp:2730 |
+| onClientResourceStop | fired | app/src/main/cpp/shared/LuaVMStub.cpp:2786, app/src/main/cpp/shared/LuaVMStub.cpp:2792 | Client/mods/deathmatch/logic/CClientGame.cpp:2731 |
 | onClientElementDataChange | not fired | - | Client/mods/deathmatch/logic/CClientGame.cpp:2734 |
 | onClientElementStreamIn | not fired | - | Client/mods/deathmatch/logic/CClientGame.cpp:2735 |
 | onClientElementStreamOut | not fired | - | Client/mods/deathmatch/logic/CClientGame.cpp:2736 |
@@ -705,23 +705,23 @@ Desktop: literal `AddEvent("name", ...)` calls under `Client/mods/deathmatch/log
 | onClientGUISize | not fired | - | Client/mods/deathmatch/logic/CClientGame.cpp:2825 |
 | onClientGUIFocus | not fired | - | Client/mods/deathmatch/logic/CClientGame.cpp:2826 |
 | onClientGUIBlur | not fired | - | Client/mods/deathmatch/logic/CClientGame.cpp:2827 |
-| onClientKey | fired | app/src/main/cpp/shared/LuaVMStub.cpp:260, app/src/main/cpp/shared/LuaVMStub.cpp:263, app/src/main/cpp/shared/LuaVMStub.cpp:454 | Client/mods/deathmatch/logic/CClientGame.cpp:2828 |
-| onClientCharacter | fired | app/src/main/cpp/shared/LuaVMStub.cpp:344 | Client/mods/deathmatch/logic/CClientGame.cpp:2829 |
+| onClientKey | fired | app/src/main/cpp/shared/LuaVMStub.cpp:283, app/src/main/cpp/shared/LuaVMStub.cpp:286, app/src/main/cpp/shared/LuaVMStub.cpp:477 | Client/mods/deathmatch/logic/CClientGame.cpp:2828 |
+| onClientCharacter | fired | app/src/main/cpp/shared/LuaVMStub.cpp:367 | Client/mods/deathmatch/logic/CClientGame.cpp:2829 |
 | onClientPaste | not fired | - | Client/mods/deathmatch/logic/CClientGame.cpp:2830 |
-| onClientConsole | fired | app/src/main/cpp/shared/LuaVMStub.cpp:420 | Client/mods/deathmatch/logic/CClientGame.cpp:2833 |
+| onClientConsole | fired | app/src/main/cpp/shared/LuaVMStub.cpp:443 | Client/mods/deathmatch/logic/CClientGame.cpp:2833 |
 | onClientCoreCommand | not fired | - | Client/mods/deathmatch/logic/CClientGame.cpp:2834 |
-| onClientChatMessage | fired | app/src/main/cpp/shared/LuaVMStub.cpp:2372, app/src/main/cpp/shared/LuaVMStub.cpp:2380, app/src/main/cpp/shared/LuaVMStub.cpp:2392, app/src/main/cpp/shared/LuaVMStub.cpp:2400, app/src/main/cpp/shared/LuaVMStub.cpp:2690 | Client/mods/deathmatch/logic/CClientGame.cpp:2837 |
+| onClientChatMessage | fired | app/src/main/cpp/shared/LuaVMStub.cpp:2455, app/src/main/cpp/shared/LuaVMStub.cpp:2463, app/src/main/cpp/shared/LuaVMStub.cpp:2475, app/src/main/cpp/shared/LuaVMStub.cpp:2483, app/src/main/cpp/shared/LuaVMStub.cpp:2777 | Client/mods/deathmatch/logic/CClientGame.cpp:2837 |
 | onClientDebugMessage | not fired | - | Client/mods/deathmatch/logic/CClientGame.cpp:2840 |
-| onClientPreRender | fired | app/src/main/cpp/shared/LuaVMStub.cpp:2478 | Client/mods/deathmatch/logic/CClientGame.cpp:2843 |
+| onClientPreRender | fired | app/src/main/cpp/shared/LuaVMStub.cpp:2561 | Client/mods/deathmatch/logic/CClientGame.cpp:2843 |
 | onClientPedsProcessed | not fired | - | Client/mods/deathmatch/logic/CClientGame.cpp:2844 |
 | onClientNativeUI | not fired | - | Client/mods/deathmatch/logic/CClientGame.cpp:2845 |
 | onClientHUDRender | not fired | - | Client/mods/deathmatch/logic/CClientGame.cpp:2846 |
-| onClientRender | fired | app/src/main/cpp/shared/LuaVMStub.cpp:2479 | Client/mods/deathmatch/logic/CClientGame.cpp:2847 |
+| onClientRender | fired | app/src/main/cpp/shared/LuaVMStub.cpp:2562 | Client/mods/deathmatch/logic/CClientGame.cpp:2847 |
 | onClientMinimize | not fired | - | Client/mods/deathmatch/logic/CClientGame.cpp:2848 |
 | onClientRestore | not fired | - | Client/mods/deathmatch/logic/CClientGame.cpp:2849 |
 | onClientMTAFocusChange | not fired | - | Client/mods/deathmatch/logic/CClientGame.cpp:2850 |
-| onClientClick | fired | app/src/main/cpp/shared/LuaVMStub.cpp:2447 | Client/mods/deathmatch/logic/CClientGame.cpp:2853 |
-| onClientCursorMove | fired | app/src/main/cpp/shared/LuaVMStub.cpp:2428, app/src/main/cpp/shared/LuaVMStub.cpp:2436 | Client/mods/deathmatch/logic/CClientGame.cpp:2854 |
+| onClientClick | fired | app/src/main/cpp/shared/LuaVMStub.cpp:2530 | Client/mods/deathmatch/logic/CClientGame.cpp:2853 |
+| onClientCursorMove | fired | app/src/main/cpp/shared/LuaVMStub.cpp:2511, app/src/main/cpp/shared/LuaVMStub.cpp:2519 | Client/mods/deathmatch/logic/CClientGame.cpp:2854 |
 | onClientMarkerHit | not fired | - | Client/mods/deathmatch/logic/CClientGame.cpp:2857 |
 | onClientMarkerLeave | not fired | - | Client/mods/deathmatch/logic/CClientGame.cpp:2858 |
 | onClientPlayerMarkerHit | not fired | - | Client/mods/deathmatch/logic/CClientGame.cpp:2860 |
@@ -738,7 +738,7 @@ Desktop: literal `AddEvent("name", ...)` calls under `Client/mods/deathmatch/log
 | onClientSoundFinishedDownload | not fired | - | Client/mods/deathmatch/logic/CClientGame.cpp:2881 |
 | onClientSoundChangedMeta | not fired | - | Client/mods/deathmatch/logic/CClientGame.cpp:2882 |
 | onClientSoundStarted | not fired | - | Client/mods/deathmatch/logic/CClientGame.cpp:2883 |
-| onClientSoundStopped | fired | app/src/main/cpp/shared/LuaVMStub.cpp:512 | Client/mods/deathmatch/logic/CClientGame.cpp:2884 |
+| onClientSoundStopped | fired | app/src/main/cpp/shared/LuaVMStub.cpp:535 | Client/mods/deathmatch/logic/CClientGame.cpp:2884 |
 | onClientSoundBeat | not fired | - | Client/mods/deathmatch/logic/CClientGame.cpp:2885 |
 | onClientObjectDamage | not fired | - | Client/mods/deathmatch/logic/CClientGame.cpp:2888 |
 | onClientObjectGangTagProgress | not fired | - | Client/mods/deathmatch/logic/CClientGame.cpp:2889 |
@@ -774,20 +774,20 @@ Desktop ids come from `Shared/sdk/net/Packets.h` (`ePacketID`, 111 ids). Anchors
 
 | Id | Packet | Desktop case (file:line) | Desktop owner | Handler call | Port status | Port site |
 |---|---|---|---|---|---|---|
-| 2 | SERVER_JOIN_COMPLETE | Client/mods/deathmatch/logic/CPacketHandler.cpp:63 | CPacketHandler::ProcessPacket | Packet_ServerConnected | provisional | registered as MTAPacketID::PLAYER_SYNC (app/src/main/cpp/shared/PacketHandler.cpp:1332) under id 2 |
-| 5 | PLAYER_QUIT | Client/mods/deathmatch/logic/CPacketHandler.cpp:79 | CPacketHandler::ProcessPacket | Packet_PlayerQuit | handled | (block) (app/src/main/cpp/shared/PacketHandler.cpp:1436) |
+| 2 | SERVER_JOIN_COMPLETE | Client/mods/deathmatch/logic/CPacketHandler.cpp:63 | CPacketHandler::ProcessPacket | Packet_ServerConnected | provisional | registered as MTAPacketID::PLAYER_SYNC (app/src/main/cpp/shared/PacketHandler.cpp:944) under id 2 |
+| 5 | PLAYER_QUIT | Client/mods/deathmatch/logic/CPacketHandler.cpp:79 | CPacketHandler::ProcessPacket | Packet_PlayerQuit | provisional | registered as MTAPacketID::PED_SYNC (app/src/main/cpp/shared/PacketHandler.cpp:968) under id 5 |
 | 8 | PACKET_PROGRESS | Client/mods/deathmatch/logic/CPacketHandler.cpp:141 | CPacketHandler::ProcessPacket | Packet_PartialPacketInfo | missing |  |
 | 22 | SERVER_JOINEDGAME | Client/mods/deathmatch/logic/CPacketHandler.cpp:67 | CPacketHandler::ProcessPacket | Packet_ServerJoined | missing |  |
 | 23 | SERVER_DISCONNECTED | Client/mods/deathmatch/logic/CPacketHandler.cpp:71 | CPacketHandler::ProcessPacket | Packet_ServerDisconnected | missing |  |
-| 25 | PLAYER_LIST | Client/mods/deathmatch/logic/CPacketHandler.cpp:75 | CPacketHandler::ProcessPacket | Packet_PlayerList | handled | OnPlayerList (app/src/main/cpp/shared/PacketHandler.cpp:1468) |
-| 26 | PLAYER_SPAWN | Client/mods/deathmatch/logic/CPacketHandler.cpp:83 | CPacketHandler::ProcessPacket | Packet_PlayerSpawn | handled | HandlePlayerSpawn (app/src/main/cpp/shared/PacketHandler.cpp:1435) |
+| 25 | PLAYER_LIST | Client/mods/deathmatch/logic/CPacketHandler.cpp:75 | CPacketHandler::ProcessPacket | Packet_PlayerList | handled | OnPlayerList (app/src/main/cpp/shared/PacketHandler.cpp:1048) |
+| 26 | PLAYER_SPAWN | Client/mods/deathmatch/logic/CPacketHandler.cpp:83 | CPacketHandler::ProcessPacket | Packet_PlayerSpawn | handled | HandlePlayerSpawn (app/src/main/cpp/shared/PacketHandler.cpp:1047) |
 | 27 | PLAYER_WASTED | Client/mods/deathmatch/logic/CPacketHandler.cpp:91 | CPacketHandler::ProcessPacket | Packet_PlayerWasted | missing |  |
 | 28 | PLAYER_CHANGE_NICK | Client/mods/deathmatch/logic/CPacketHandler.cpp:95 | CPacketHandler::ProcessPacket | Packet_PlayerChangeNick | missing |  |
 | 29 | PLAYER_STATS | Client/mods/deathmatch/logic/CPacketHandler.cpp:191 | CPacketHandler::ProcessPacket | Packet_PlayerStats | missing |  |
-| 30 | PLAYER_CLOTHES | Client/mods/deathmatch/logic/CPacketHandler.cpp:195 | CPacketHandler::ProcessPacket | Packet_PlayerClothes | handled | HandlePlayerClothes (app/src/main/cpp/shared/PacketHandler.cpp:1465) |
-| 31 | PLAYER_KEYSYNC | Client/mods/deathmatch/logic/CNetAPI.cpp:115 | CNetAPI::ProcessPacket | (inline) | handled | HandleKeySync (app/src/main/cpp/shared/PacketHandler.cpp:1421) |
-| 32 | PLAYER_PURESYNC | Client/mods/deathmatch/logic/CNetAPI.cpp:74 | CNetAPI::ProcessPacket | (inline) | handled | HandlePlayerPureSync (app/src/main/cpp/shared/PacketHandler.cpp:1422) |
-| 33 | PLAYER_VEHICLE_PURESYNC | Client/mods/deathmatch/logic/CNetAPI.cpp:92 | CNetAPI::ProcessPacket | (inline) | handled | HandlePlayerVehiclePureSync (app/src/main/cpp/shared/PacketHandler.cpp:1431) |
+| 30 | PLAYER_CLOTHES | Client/mods/deathmatch/logic/CPacketHandler.cpp:195 | CPacketHandler::ProcessPacket | Packet_PlayerClothes | missing |  |
+| 31 | PLAYER_KEYSYNC | Client/mods/deathmatch/logic/CNetAPI.cpp:115 | CNetAPI::ProcessPacket | (inline) | handled | HandleKeySync (app/src/main/cpp/shared/PacketHandler.cpp:1033) |
+| 32 | PLAYER_PURESYNC | Client/mods/deathmatch/logic/CNetAPI.cpp:74 | CNetAPI::ProcessPacket | (inline) | handled | HandlePlayerPureSync (app/src/main/cpp/shared/PacketHandler.cpp:1034) |
+| 33 | PLAYER_VEHICLE_PURESYNC | Client/mods/deathmatch/logic/CNetAPI.cpp:92 | CNetAPI::ProcessPacket | (inline) | handled | HandlePlayerVehiclePureSync (app/src/main/cpp/shared/PacketHandler.cpp:1043) |
 | 34 | LIGHTSYNC | Client/mods/deathmatch/logic/CNetAPI.cpp:43 | CNetAPI::ProcessPacket | (inline) | missing |  |
 | 35 | VEHICLE_RESYNC | Client/mods/deathmatch/logic/CNetAPI.cpp:56 | CNetAPI::ProcessPacket | (inline) | missing |  |
 | 36 | RETURN_SYNC | Client/mods/deathmatch/logic/CNetAPI.cpp:161 | CNetAPI::ProcessPacket | (inline) | missing |  |
@@ -796,48 +796,48 @@ Desktop ids come from `Shared/sdk/net/Packets.h` (`ePacketID`, 111 ids). Anchors
 | 39 | PROJECTILE | Client/mods/deathmatch/logic/CPacketHandler.cpp:187 | CPacketHandler::ProcessPacket | Packet_ProjectileSync | missing |  |
 | 40 | DETONATE_SATCHELS | Client/mods/deathmatch/logic/CPacketHandler.cpp:215 | CPacketHandler::ProcessPacket | Packet_DetonateSatchels | missing |  |
 | 41 | DESTROY_SATCHELS | Client/mods/deathmatch/logic/CPacketHandler.cpp:219 | CPacketHandler::ProcessPacket | Packet_DestroySatchels | missing |  |
-| 43 | CHAT_ECHO | Client/mods/deathmatch/logic/CPacketHandler.cpp:99 | CPacketHandler::ProcessPacket | Packet_ChatEcho | handled | HandleChatEcho (app/src/main/cpp/shared/PacketHandler.cpp:1420) |
+| 43 | CHAT_ECHO | Client/mods/deathmatch/logic/CPacketHandler.cpp:99 | CPacketHandler::ProcessPacket | Packet_ChatEcho | handled | HandleChatEcho (app/src/main/cpp/shared/PacketHandler.cpp:1032) |
 | 44 | CONSOLE_ECHO | Client/mods/deathmatch/logic/CPacketHandler.cpp:107 | CPacketHandler::ProcessPacket | Packet_ConsoleEcho | missing |  |
 | 45 | DEBUG_ECHO | Client/mods/deathmatch/logic/CPacketHandler.cpp:111 | CPacketHandler::ProcessPacket | Packet_DebugEcho | missing |  |
 | 46 | MAP_INFO | Client/mods/deathmatch/logic/CPacketHandler.cpp:136 | CPacketHandler::ProcessPacket | Packet_MapInfo | missing |  |
-| 50 | ENTITY_ADD | Client/mods/deathmatch/logic/CPacketHandler.cpp:150 | CPacketHandler::ProcessPacket | Packet_EntityAdd | handled | OnEntityAdd (app/src/main/cpp/shared/PacketHandler.cpp:1469) |
-| 51 | ENTITY_REMOVE | Client/mods/deathmatch/logic/CPacketHandler.cpp:155 | CPacketHandler::ProcessPacket | Packet_EntityRemove | handled | OnEntityRemove (app/src/main/cpp/shared/PacketHandler.cpp:1470) |
+| 50 | ENTITY_ADD | Client/mods/deathmatch/logic/CPacketHandler.cpp:150 | CPacketHandler::ProcessPacket | Packet_EntityAdd | handled | OnEntityAdd (app/src/main/cpp/shared/PacketHandler.cpp:1049) |
+| 51 | ENTITY_REMOVE | Client/mods/deathmatch/logic/CPacketHandler.cpp:155 | CPacketHandler::ProcessPacket | Packet_EntityRemove | handled | OnEntityRemove (app/src/main/cpp/shared/PacketHandler.cpp:1050) |
 | 52 | PICKUP_HIDESHOW | Client/mods/deathmatch/logic/CPacketHandler.cpp:160 | CPacketHandler::ProcessPacket | Packet_PickupHideShow | missing |  |
 | 53 | PICKUP_HIT_CONFIRM | Client/mods/deathmatch/logic/CPacketHandler.cpp:165 | CPacketHandler::ProcessPacket | Packet_PickupHitConfirm | missing |  |
-| 54 | UNOCCUPIED_VEHICLE_STARTSYNC | Client/mods/deathmatch/logic/CUnoccupiedVehicleSync.cpp:35 | CUnoccupiedVehicleSync::ProcessPacket | Packet_UnoccupiedVehicleStartSync | handled | HandleVehicleStartSync (app/src/main/cpp/shared/PacketHandler.cpp:1429) |
-| 55 | UNOCCUPIED_VEHICLE_STOPSYNC | Client/mods/deathmatch/logic/CUnoccupiedVehicleSync.cpp:41 | CUnoccupiedVehicleSync::ProcessPacket | Packet_UnoccupiedVehicleStopSync | handled | HandleVehicleStopSync (app/src/main/cpp/shared/PacketHandler.cpp:1430) |
-| 56 | UNOCCUPIED_VEHICLE_SYNC | Client/mods/deathmatch/logic/CUnoccupiedVehicleSync.cpp:47 | CUnoccupiedVehicleSync::ProcessPacket | Packet_UnoccupiedVehicleSync | handled | HandleUnoccupiedVehicleSync (app/src/main/cpp/shared/PacketHandler.cpp:1432) |
+| 54 | UNOCCUPIED_VEHICLE_STARTSYNC | Client/mods/deathmatch/logic/CUnoccupiedVehicleSync.cpp:35 | CUnoccupiedVehicleSync::ProcessPacket | Packet_UnoccupiedVehicleStartSync | handled | HandleVehicleStartSync (app/src/main/cpp/shared/PacketHandler.cpp:1041) |
+| 55 | UNOCCUPIED_VEHICLE_STOPSYNC | Client/mods/deathmatch/logic/CUnoccupiedVehicleSync.cpp:41 | CUnoccupiedVehicleSync::ProcessPacket | Packet_UnoccupiedVehicleStopSync | handled | HandleVehicleStopSync (app/src/main/cpp/shared/PacketHandler.cpp:1042) |
+| 56 | UNOCCUPIED_VEHICLE_SYNC | Client/mods/deathmatch/logic/CUnoccupiedVehicleSync.cpp:47 | CUnoccupiedVehicleSync::ProcessPacket | Packet_UnoccupiedVehicleSync | handled | HandleUnoccupiedVehicleSync (app/src/main/cpp/shared/PacketHandler.cpp:1044) |
 | 57 | VEHICLE_SPAWN | Client/mods/deathmatch/logic/CPacketHandler.cpp:119 | CPacketHandler::ProcessPacket | Packet_VehicleSpawn | missing |  |
-| 58 | VEHICLE_INOUT | Client/mods/deathmatch/logic/CPacketHandler.cpp:123 | CPacketHandler::ProcessPacket | Packet_Vehicle_InOut | handled | HandleVehicleInOut (app/src/main/cpp/shared/PacketHandler.cpp:1433) |
+| 58 | VEHICLE_INOUT | Client/mods/deathmatch/logic/CPacketHandler.cpp:123 | CPacketHandler::ProcessPacket | Packet_Vehicle_InOut | handled | HandleVehicleInOut (app/src/main/cpp/shared/PacketHandler.cpp:1045) |
 | 59 | VEHICLE_DAMAGE_SYNC | Client/mods/deathmatch/logic/CPacketHandler.cpp:127 | CPacketHandler::ProcessPacket | Packet_VehicleDamageSync | missing |  |
 | 60 | VEHICLE_TRAILER | Client/mods/deathmatch/logic/CPacketHandler.cpp:131 | CPacketHandler::ProcessPacket | Packet_VehicleTrailer | missing |  |
-| 61 | PED_STARTSYNC | Client/mods/deathmatch/logic/CPedSync.cpp:103 | CPedSync::ProcessPacket | Packet_PedStartSync | handled | HandlePedStartSync (app/src/main/cpp/shared/PacketHandler.cpp:1427) |
-| 62 | PED_STOPSYNC | Client/mods/deathmatch/logic/CPedSync.cpp:109 | CPedSync::ProcessPacket | Packet_PedStopSync | handled | HandlePedStopSync (app/src/main/cpp/shared/PacketHandler.cpp:1428) |
-| 63 | PED_SYNC | Client/mods/deathmatch/logic/CPedSync.cpp:115 | CPedSync::ProcessPacket | Packet_PedSync | handled | HandlePedSync (app/src/main/cpp/shared/PacketHandler.cpp:1426) |
+| 61 | PED_STARTSYNC | Client/mods/deathmatch/logic/CPedSync.cpp:103 | CPedSync::ProcessPacket | Packet_PedStartSync | handled | HandlePedStartSync (app/src/main/cpp/shared/PacketHandler.cpp:1039) |
+| 62 | PED_STOPSYNC | Client/mods/deathmatch/logic/CPedSync.cpp:109 | CPedSync::ProcessPacket | Packet_PedStopSync | handled | HandlePedStopSync (app/src/main/cpp/shared/PacketHandler.cpp:1040) |
+| 63 | PED_SYNC | Client/mods/deathmatch/logic/CPedSync.cpp:115 | CPedSync::ProcessPacket | Packet_PedSync | handled | HandlePedSync (app/src/main/cpp/shared/PacketHandler.cpp:1038) |
 | 64 | PED_WASTED | Client/mods/deathmatch/logic/CPacketHandler.cpp:87 | CPacketHandler::ProcessPacket | Packet_PlayerWasted | missing |  |
 | 71 | VOICE_DATA | Client/mods/deathmatch/logic/CPacketHandler.cpp:223 | CPacketHandler::ProcessPacket | Packet_VoiceData | missing |  |
 | 76 | LUA | Client/mods/deathmatch/logic/CPacketHandler.cpp:170 | CPacketHandler::ProcessPacket | Packet_Lua | missing |  |
 | 77 | LUA_ELEMENT_RPC | Client/mods/deathmatch/logic/CPacketHandler.cpp:171 | CPacketHandler::ProcessPacket | Packet_Lua | missing |  |
 | 78 | TEXT_ITEM | Client/mods/deathmatch/logic/CPacketHandler.cpp:175 | CPacketHandler::ProcessPacket | Packet_TextItem | missing |  |
-| 81 | LUA_EVENT | Client/mods/deathmatch/logic/CPacketHandler.cpp:199 | CPacketHandler::ProcessPacket | Packet_LuaEvent | handled | ActiveVmOnServerEvent (app/src/main/cpp/shared/PacketHandler.cpp:1434) |
-| 82 | RESOURCE_START | Client/mods/deathmatch/logic/CPacketHandler.cpp:203 | CPacketHandler::ProcessPacket | Packet_ResourceStart | handled | HandleResourceStart (app/src/main/cpp/shared/PacketHandler.cpp:1474) |
-| 83 | RESOURCE_STOP | Client/mods/deathmatch/logic/CPacketHandler.cpp:207 | CPacketHandler::ProcessPacket | Packet_ResourceStop | handled | (block) (app/src/main/cpp/shared/PacketHandler.cpp:1475) |
+| 81 | LUA_EVENT | Client/mods/deathmatch/logic/CPacketHandler.cpp:199 | CPacketHandler::ProcessPacket | Packet_LuaEvent | handled | ActiveVmOnServerEvent (app/src/main/cpp/shared/PacketHandler.cpp:1046) |
+| 82 | RESOURCE_START | Client/mods/deathmatch/logic/CPacketHandler.cpp:203 | CPacketHandler::ProcessPacket | Packet_ResourceStart | handled | HandleResourceStart (app/src/main/cpp/shared/PacketHandler.cpp:1053) |
+| 83 | RESOURCE_STOP | Client/mods/deathmatch/logic/CPacketHandler.cpp:207 | CPacketHandler::ProcessPacket | Packet_ResourceStop | handled | (block) (app/src/main/cpp/shared/PacketHandler.cpp:1054) |
 | 86 | OBJECT_STARTSYNC | Client/mods/deathmatch/logic/CObjectSync.cpp:43 | CObjectSync::ProcessPacket | Packet_ObjectStartSync | missing |  |
 | 87 | OBJECT_STOPSYNC | Client/mods/deathmatch/logic/CObjectSync.cpp:46 | CObjectSync::ProcessPacket | Packet_ObjectStopSync | missing |  |
 | 88 | OBJECT_SYNC | Client/mods/deathmatch/logic/CObjectSync.cpp:49 | CObjectSync::ProcessPacket | Packet_ObjectSync | missing |  |
 | 89 | UPDATE_INFO | Client/mods/deathmatch/logic/CPacketHandler.cpp:227 | CPacketHandler::ProcessPacket | Packet_UpdateInfo | missing |  |
-| 95 | RESOURCE_CLIENT_SCRIPTS | Client/mods/deathmatch/logic/CPacketHandler.cpp:211 | CPacketHandler::ProcessPacket | Packet_ResourceClientScripts | handled | (block) (app/src/main/cpp/shared/PacketHandler.cpp:1479) |
+| 95 | RESOURCE_CLIENT_SCRIPTS | Client/mods/deathmatch/logic/CPacketHandler.cpp:211 | CPacketHandler::ProcessPacket | Packet_ResourceClientScripts | handled | (block) (app/src/main/cpp/shared/PacketHandler.cpp:1058) |
 | 96 | LATENT_TRANSFER | Client/mods/deathmatch/logic/CPacketHandler.cpp:231 | CPacketHandler::ProcessPacket | Packet_LatentTransfer | missing |  |
-| 98 | PLAYER_BULLETSYNC | Client/mods/deathmatch/logic/CNetAPI.cpp:133 | CNetAPI::ProcessPacket | (inline) | handled | HandleBulletSync (app/src/main/cpp/shared/PacketHandler.cpp:1423) |
-| 99 | SYNC_SETTINGS | Client/mods/deathmatch/logic/CPacketHandler.cpp:235 | CPacketHandler::ProcessPacket | Packet_SyncSettings | handled | HandleSyncSettings (app/src/main/cpp/shared/PacketHandler.cpp:1424) |
-| 100 | WEAPON_BULLETSYNC | Client/mods/deathmatch/logic/CNetAPI.cpp:147 | CNetAPI::ProcessPacket | (inline) | handled | HandleWeaponBulletSync (app/src/main/cpp/shared/PacketHandler.cpp:1425) |
+| 98 | PLAYER_BULLETSYNC | Client/mods/deathmatch/logic/CNetAPI.cpp:133 | CNetAPI::ProcessPacket | (inline) | handled | HandleBulletSync (app/src/main/cpp/shared/PacketHandler.cpp:1035) |
+| 99 | SYNC_SETTINGS | Client/mods/deathmatch/logic/CPacketHandler.cpp:235 | CPacketHandler::ProcessPacket | Packet_SyncSettings | handled | HandleSyncSettings (app/src/main/cpp/shared/PacketHandler.cpp:1036) |
+| 100 | WEAPON_BULLETSYNC | Client/mods/deathmatch/logic/CNetAPI.cpp:147 | CNetAPI::ProcessPacket | (inline) | handled | HandleWeaponBulletSync (app/src/main/cpp/shared/PacketHandler.cpp:1037) |
 | 101 | PED_TASK | Client/mods/deathmatch/logic/CPacketHandler.cpp:239 | CPacketHandler::ProcessPacket | Packet_PedTask | missing |  |
 | 103 | PLAYER_NETWORK_STATUS | Client/mods/deathmatch/logic/CPacketHandler.cpp:145 | CPacketHandler::ProcessPacket | Packet_PlayerNetworkStatus | missing |  |
 | 105 | CHAT_CLEAR | Client/mods/deathmatch/logic/CPacketHandler.cpp:103 | CPacketHandler::ProcessPacket | Packet_ChatClear | missing |  |
 | 106 | SERVER_INFO_SYNC | Client/mods/deathmatch/logic/CPacketHandler.cpp:243 | CPacketHandler::ProcessPacket | Packet_ServerInfoSync | missing |  |
 | 110 | DEBUG_EVENT | Client/mods/deathmatch/logic/CPacketHandler.cpp:115 | CPacketHandler::ProcessPacket | Packet_DebugEvent | missing |  |
 
-Port inbound ids with no desktop inbound case: 84 (CUSTOM_DATA)
+Port inbound ids with no desktop inbound case: 84 (CUSTOM_DATA), 68 (PLAYER_RCON_BAN)
 
 ### C2. Outbound (desktop `SendPacket(PACKET_ID_*)` vs port first-write-of-builder)
 
@@ -846,22 +846,22 @@ Port inbound ids with no desktop inbound case: 84 (CUSTOM_DATA)
 | 4 | PLAYER_JOINDATA | Client/mods/deathmatch/logic/CClientGame.cpp:769 | not sent |  |
 | 24 | RPC | Client/mods/deathmatch/logic/CNetAPI.cpp:2102 | not sent |  |
 | 27 | PLAYER_WASTED | Client/mods/deathmatch/logic/CClientGame.cpp:6638 | not sent |  |
-| 31 | PLAYER_KEYSYNC | Client/mods/deathmatch/logic/CNetAPI.cpp:394 | sent | app/src/main/cpp/net/NeonJoinProtocol.cpp:302 |
-| 32 | PLAYER_PURESYNC | Client/mods/deathmatch/logic/CNetAPI.cpp:340 | sent | app/src/main/cpp/net/NeonJoinProtocol.cpp:489 |
-| 33 | PLAYER_VEHICLE_PURESYNC | Client/mods/deathmatch/logic/CNetAPI.cpp:352 | sent | app/src/main/cpp/net/NeonJoinProtocol.cpp:236 |
+| 31 | PLAYER_KEYSYNC | Client/mods/deathmatch/logic/CNetAPI.cpp:394 | sent | app/src/main/cpp/net/NeonJoinProtocol.cpp:301 |
+| 32 | PLAYER_PURESYNC | Client/mods/deathmatch/logic/CNetAPI.cpp:340 | sent | app/src/main/cpp/net/NeonJoinProtocol.cpp:443 |
+| 33 | PLAYER_VEHICLE_PURESYNC | Client/mods/deathmatch/logic/CNetAPI.cpp:352 | sent | app/src/main/cpp/net/NeonJoinProtocol.cpp:235 |
 | 37 | EXPLOSION | Client/mods/deathmatch/logic/CClientGame.cpp:6315 | not sent |  |
 | 39 | PROJECTILE | Client/mods/deathmatch/logic/CClientGame.cpp:6413 | not sent |  |
 | 40 | DETONATE_SATCHELS | Client/mods/deathmatch/logic/CClientGame.cpp:2044 | not sent |  |
 | 41 | DESTROY_SATCHELS | Client/mods/deathmatch/logic/CClientGame.cpp:6515 | not sent |  |
-| 42 | COMMAND | Client/mods/deathmatch/ClientCommands.cpp:91 | sent | app/src/main/cpp/net/NeonJoinProtocol.cpp:1533 |
-| 56 | UNOCCUPIED_VEHICLE_SYNC | Client/mods/deathmatch/logic/CUnoccupiedVehicleSync.cpp:260 | sent | app/src/main/cpp/net/NeonJoinProtocol.cpp:954 |
-| 58 | VEHICLE_INOUT | Client/mods/deathmatch/logic/CClientPed.cpp:10075 | sent | app/src/main/cpp/net/NeonJoinProtocol.cpp:981 |
+| 42 | COMMAND | Client/mods/deathmatch/ClientCommands.cpp:91 | sent | app/src/main/cpp/net/NeonJoinProtocol.cpp:1479 |
+| 56 | UNOCCUPIED_VEHICLE_SYNC | Client/mods/deathmatch/logic/CUnoccupiedVehicleSync.cpp:260 | sent | app/src/main/cpp/net/NeonJoinProtocol.cpp:901 |
+| 58 | VEHICLE_INOUT | Client/mods/deathmatch/logic/CClientPed.cpp:10075 | sent | app/src/main/cpp/net/NeonJoinProtocol.cpp:928 |
 | 59 | VEHICLE_DAMAGE_SYNC | Client/mods/deathmatch/logic/CDeathmatchVehicle.cpp:127 | not sent |  |
-| 63 | PED_SYNC | Client/mods/deathmatch/logic/CPedSync.cpp:632 | sent | app/src/main/cpp/net/NeonJoinProtocol.cpp:745 |
-| 64 | PED_WASTED | Client/mods/deathmatch/logic/CClientGame.cpp:6573 | sent | app/src/main/cpp/net/NeonJoinProtocol.cpp:343 |
+| 63 | PED_SYNC | Client/mods/deathmatch/logic/CPedSync.cpp:632 | sent | app/src/main/cpp/net/NeonJoinProtocol.cpp:692 |
+| 64 | PED_WASTED | Client/mods/deathmatch/logic/CClientGame.cpp:6573 | not sent |  |
 | 71 | VOICE_DATA | Client/mods/deathmatch/CVoiceRecorder.cpp:313 | not sent |  |
 | 72 | VOICE_END | Client/mods/deathmatch/CVoiceRecorder.cpp:335 | not sent |  |
-| 81 | LUA_EVENT | Client/mods/deathmatch/logic/CStaticFunctionDefinitions.cpp:195 | sent | app/src/main/cpp/shared/LuaVMStub.cpp:1208 |
+| 81 | LUA_EVENT | Client/mods/deathmatch/logic/CStaticFunctionDefinitions.cpp:195 | sent | app/src/main/cpp/shared/LuaVMStub.cpp:1231 |
 | 84 | CUSTOM_DATA | Client/mods/deathmatch/logic/CStaticFunctionDefinitions.cpp:1045 | not sent |  |
 | 85 | CAMERA_SYNC | Client/mods/deathmatch/logic/CNetAPI.cpp:454 | not sent |  |
 | 88 | OBJECT_SYNC | Client/mods/deathmatch/logic/CObjectSync.cpp:212 | not sent |  |
@@ -869,13 +869,13 @@ Port inbound ids with no desktop inbound case: 84 (CUSTOM_DATA)
 | 92 | PLAYER_DIAGNOSTIC | Client/mods/deathmatch/logic/CClientGame.cpp:1281 | not sent |  |
 | 94 | PLAYER_SCREENSHOT | Client/mods/deathmatch/logic/CClientGame.cpp:7271 | not sent |  |
 | 97 | VEHICLE_PUSH_SYNC | Client/mods/deathmatch/logic/CClientGame.cpp:4959 | not sent |  |
-| 98 | PLAYER_BULLETSYNC | Client/mods/deathmatch/logic/CNetAPI.cpp:2412 | sent | app/src/main/cpp/net/NeonJoinProtocol.cpp:370 |
+| 98 | PLAYER_BULLETSYNC | Client/mods/deathmatch/logic/CNetAPI.cpp:2412 | sent | app/src/main/cpp/net/NeonJoinProtocol.cpp:330 |
 | 100 | WEAPON_BULLETSYNC | Client/mods/deathmatch/logic/CNetAPI.cpp:2428 | not sent |  |
 | 101 | PED_TASK | Client/mods/deathmatch/logic/CClientGame.cpp:5360 | not sent |  |
 | 108 | PLAYER_RESOURCE_START | Client/mods/deathmatch/logic/CResource.cpp:1636 | not sent |  |
 | 109 | PLAYER_WORLD_SPECIAL_PROPERTY | Client/mods/deathmatch/logic/luadefs/CLuaWorldDefs.cpp:2011 | not sent |  |
 
-Port sends with no desktop SendPacket site: 19 (MTA_RESERVED_13, app/src/main/cpp/net/NeonJoinProtocol.cpp:1019)
+Port sends with no desktop SendPacket site: 19 (MTA_RESERVED_13, app/src/main/cpp/net/NeonJoinProtocol.cpp:966)
 
 Desktop references without a case or send (enum/other uses): `MOD_NAME`, `SERVER_JOIN`, `SERVER_JOIN_DATA`
 
@@ -885,20 +885,20 @@ Desktop: top-level `case CClientGame::*` labels of the `ucEntityTypeID` switch i
 
 | Value | Desktop type | Desktop body | Port case | Port parser | Port parser file | Port site | Status | Desktop case |
 |---|---|---|---|---|---|---|---|---|
-| 1 | PLAYER | no read | no-op | (returns true, reads nothing) | - | app/src/main/cpp/shared/entity/EntityAddCore.cpp:230 | implemented | Client/mods/deathmatch/logic/CPacketHandler.cpp:3134 |
-| 3 | OBJECT | reads | parser | ReadEntityBodyObject | app/src/main/cpp/shared/entity/EntityAddObject.cpp | app/src/main/cpp/shared/entity/EntityAddCore.cpp:237 | implemented | Client/mods/deathmatch/logic/CPacketHandler.cpp:3139 |
-| 18 | WEAPON | reads | parser | ReadEntityBodyObject | app/src/main/cpp/shared/entity/EntityAddObject.cpp | app/src/main/cpp/shared/entity/EntityAddCore.cpp:238 | implemented | Client/mods/deathmatch/logic/CPacketHandler.cpp:3140 |
-| 6 | PICKUP | reads | parser | ReadEntityBodyOther | app/src/main/cpp/shared/entity/EntityAddOther.cpp | app/src/main/cpp/shared/entity/EntityAddCore.cpp:243 | implemented | Client/mods/deathmatch/logic/CPacketHandler.cpp:3358 |
-| 2 | VEHICLE | reads | parser | ReadEntityBodyVehicle | app/src/main/cpp/shared/entity/EntityAddVehicle.cpp | app/src/main/cpp/shared/entity/EntityAddCore.cpp:235 | implemented | Client/mods/deathmatch/logic/CPacketHandler.cpp:3428 |
-| 4 | MARKER | reads | parser | ReadEntityBodyMarker | app/src/main/cpp/shared/entity/EntityAddMarker.cpp | app/src/main/cpp/shared/entity/EntityAddCore.cpp:240 | implemented | Client/mods/deathmatch/logic/CPacketHandler.cpp:3775 |
-| 5 | BLIP | reads | parser | ReadEntityBodyOther | app/src/main/cpp/shared/entity/EntityAddOther.cpp | app/src/main/cpp/shared/entity/EntityAddCore.cpp:242 | implemented | Client/mods/deathmatch/logic/CPacketHandler.cpp:3849 |
-| 7 | RADAR_AREA | reads | parser | ReadEntityBodyOther | app/src/main/cpp/shared/entity/EntityAddOther.cpp | app/src/main/cpp/shared/entity/EntityAddCore.cpp:244 | implemented | Client/mods/deathmatch/logic/CPacketHandler.cpp:3890 |
-| 11 | PATH_NODE | reads | parser | ReadEntityBodyOther | app/src/main/cpp/shared/entity/EntityAddOther.cpp | app/src/main/cpp/shared/entity/EntityAddCore.cpp:245 | implemented | Client/mods/deathmatch/logic/CPacketHandler.cpp:3922 |
-| 12 | WORLD_MESH | no read | parser | ReadEntityBodyOther | app/src/main/cpp/shared/entity/EntityAddOther.cpp | app/src/main/cpp/shared/entity/EntityAddCore.cpp:246 | stub | Client/mods/deathmatch/logic/CPacketHandler.cpp:3949 |
-| 13 | TEAM | reads | parser | ReadEntityBodyOther | app/src/main/cpp/shared/entity/EntityAddOther.cpp | app/src/main/cpp/shared/entity/EntityAddCore.cpp:247 | implemented | Client/mods/deathmatch/logic/CPacketHandler.cpp:3952 |
-| 14 | PED | reads | parser | ReadEntityBodyPed | app/src/main/cpp/shared/entity/EntityAddPed.cpp | app/src/main/cpp/shared/entity/EntityAddCore.cpp:250 | implemented | Client/mods/deathmatch/logic/CPacketHandler.cpp:3997 |
-| 0 | DUMMY | reads | parser | ReadEntityBodyDummy | app/src/main/cpp/shared/entity/EntityAddDummy.cpp | app/src/main/cpp/shared/entity/EntityAddCore.cpp:228 | implemented | Client/mods/deathmatch/logic/CPacketHandler.cpp:4189 |
-| 15 | COLSHAPE | reads | parser | ReadEntityBodyOther | app/src/main/cpp/shared/entity/EntityAddOther.cpp | app/src/main/cpp/shared/entity/EntityAddCore.cpp:248 | implemented | Client/mods/deathmatch/logic/CPacketHandler.cpp:4222 |
+| 1 | PLAYER | no read | no-op | (returns true, reads nothing) | - | app/src/main/cpp/shared/entity/EntityAddCore.cpp:231 | implemented | Client/mods/deathmatch/logic/CPacketHandler.cpp:3134 |
+| 3 | OBJECT | reads | parser | ReadEntityBodyObject | app/src/main/cpp/shared/entity/EntityAddObject.cpp | app/src/main/cpp/shared/entity/EntityAddCore.cpp:238 | implemented | Client/mods/deathmatch/logic/CPacketHandler.cpp:3139 |
+| 18 | WEAPON | reads | parser | ReadEntityBodyObject | app/src/main/cpp/shared/entity/EntityAddObject.cpp | app/src/main/cpp/shared/entity/EntityAddCore.cpp:239 | implemented | Client/mods/deathmatch/logic/CPacketHandler.cpp:3140 |
+| 6 | PICKUP | reads | parser | ReadEntityBodyOther | app/src/main/cpp/shared/entity/EntityAddOther.cpp | app/src/main/cpp/shared/entity/EntityAddCore.cpp:244 | implemented | Client/mods/deathmatch/logic/CPacketHandler.cpp:3358 |
+| 2 | VEHICLE | reads | parser | ReadEntityBodyVehicle | app/src/main/cpp/shared/entity/EntityAddVehicle.cpp | app/src/main/cpp/shared/entity/EntityAddCore.cpp:236 | implemented | Client/mods/deathmatch/logic/CPacketHandler.cpp:3428 |
+| 4 | MARKER | reads | parser | ReadEntityBodyMarker | app/src/main/cpp/shared/entity/EntityAddMarker.cpp | app/src/main/cpp/shared/entity/EntityAddCore.cpp:241 | implemented | Client/mods/deathmatch/logic/CPacketHandler.cpp:3775 |
+| 5 | BLIP | reads | parser | ReadEntityBodyOther | app/src/main/cpp/shared/entity/EntityAddOther.cpp | app/src/main/cpp/shared/entity/EntityAddCore.cpp:243 | implemented | Client/mods/deathmatch/logic/CPacketHandler.cpp:3849 |
+| 7 | RADAR_AREA | reads | parser | ReadEntityBodyOther | app/src/main/cpp/shared/entity/EntityAddOther.cpp | app/src/main/cpp/shared/entity/EntityAddCore.cpp:245 | implemented | Client/mods/deathmatch/logic/CPacketHandler.cpp:3890 |
+| 11 | PATH_NODE | reads | parser | ReadEntityBodyOther | app/src/main/cpp/shared/entity/EntityAddOther.cpp | app/src/main/cpp/shared/entity/EntityAddCore.cpp:246 | implemented | Client/mods/deathmatch/logic/CPacketHandler.cpp:3922 |
+| 12 | WORLD_MESH | no read | parser | ReadEntityBodyOther | app/src/main/cpp/shared/entity/EntityAddOther.cpp | app/src/main/cpp/shared/entity/EntityAddCore.cpp:247 | stub | Client/mods/deathmatch/logic/CPacketHandler.cpp:3949 |
+| 13 | TEAM | reads | parser | ReadEntityBodyOther | app/src/main/cpp/shared/entity/EntityAddOther.cpp | app/src/main/cpp/shared/entity/EntityAddCore.cpp:248 | implemented | Client/mods/deathmatch/logic/CPacketHandler.cpp:3952 |
+| 14 | PED | reads | parser | ReadEntityBodyPed | app/src/main/cpp/shared/entity/EntityAddPed.cpp | app/src/main/cpp/shared/entity/EntityAddCore.cpp:251 | implemented | Client/mods/deathmatch/logic/CPacketHandler.cpp:3997 |
+| 0 | DUMMY | reads | parser | ReadEntityBodyDummy | app/src/main/cpp/shared/entity/EntityAddDummy.cpp | app/src/main/cpp/shared/entity/EntityAddCore.cpp:229 | implemented | Client/mods/deathmatch/logic/CPacketHandler.cpp:4189 |
+| 15 | COLSHAPE | reads | parser | ReadEntityBodyOther | app/src/main/cpp/shared/entity/EntityAddOther.cpp | app/src/main/cpp/shared/entity/EntityAddCore.cpp:249 | implemented | Client/mods/deathmatch/logic/CPacketHandler.cpp:4222 |
 | 16 | SCRIPTFILE | no read | absent | (default: ENTITY_BODY_FAIL) | - | - | missing | Client/mods/deathmatch/logic/CPacketHandler.cpp:4323 |
 | 17 | WATER | reads | absent | (default: ENTITY_BODY_FAIL) | - | - | missing | Client/mods/deathmatch/logic/CPacketHandler.cpp:4328 |
 | 23 | BUILDING | reads | absent | (default: ENTITY_BODY_FAIL) | - | - | missing | Client/mods/deathmatch/logic/CPacketHandler.cpp:4374 |

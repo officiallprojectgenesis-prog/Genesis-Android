@@ -1,4 +1,5 @@
 #include "LuaStoredElementApi.h"
+#include "../gtasa/ProjectileEngine.h"
 
 #include "LuaApiExtra.h"
 #include "LuaVMStub.h"
@@ -280,12 +281,15 @@ bool FoliageElementAlive(uint32_t id) { return FindFoliage(id) != nullptr; }
 bool EffectElementAlive(uint32_t id) { return FindEffect(id) != nullptr; }
 
 const char* StoredElementType(uint32_t id) {
+    Projectiles::Snapshot projectile;
+    if (Projectiles::Copy(id, projectile)) return "projectile";
     if (FindFoliage(id)) return "foliage";
     if (FindEffect(id)) return "effect";
     return nullptr;
 }
 
 bool ReleaseStoredElement(uint32_t id) {
+    if (Projectiles::Release(id)) return true;
     if (Foliage* item = FindFoliage(id)) {
         item->alive = false;
         return true;

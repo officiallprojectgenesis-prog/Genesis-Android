@@ -25,6 +25,7 @@
 #include "ServerWorld.h"
 #include "entity/EntityAddTypes.h"
 #include "net/raknet/RakNetWrapper.h"
+#include "lua.hpp"
 
 #include <zlib.h>
 
@@ -194,6 +195,212 @@ void CheckJson(WorldRPG::Script::LuaVMStub& vm, const char* catalogPath) {
 
 bool Has(const std::string& text, const char* needle) {
     return text.find(needle) != std::string::npos;
+}
+
+// Desktop ENTITY_ADD object/weapon layout at peer 0x0030. A following sentinel
+// detects target sub-field shifts; a one-bit truncation must fail atomically.
+void WriteTestBits(WorldRPG::Net::BitStreamWriter& w, uint32_t value, size_t count) {
+    uint8_t bytes[4] = {static_cast<uint8_t>(value), static_cast<uint8_t>(value >> 8),
+                        static_cast<uint8_t>(value >> 16), static_cast<uint8_t>(value >> 24)};
+    w.WriteBits(bytes, count);
+}
+
+void WriteWeaponBody(WorldRPG::Net::BitStreamWriter& w, uint8_t targetType, int targetKind = -1,
+                     uint32_t owner = 903, bool changed = true) {
+    auto bits = [&](uint32_t v, size_t n) { WriteTestBits(w, v, n); };
+    bits(1024, 24); bits(2048, 24); w.Write(3.f); // SPositionSync
+    bits(0, 16); bits(0, 16); bits(0, 16);       // rotation
+    w.WriteCompressed(355u, 2); w.WriteCompressed(0u, 1); // model and alpha
+    bits(0, 1); bits(0x1FFFF, 17);               // LOD
+    bits(0, 1); bits(1, 1); bits(0, 1); bits(0, 1); // double sided, breakable, all dimensions, moving
+    bits(1, 1); bits(1, 1); bits(1, 1);           // uniform, unit scale, frozen
+    bits(2000, 11); bits(0, 1); bits(1, 1);      // health, broken, respawn
+    bits(targetType, 3);
+    if (targetType == 0) { w.Write(10.f); w.Write(-20.f); w.Write(30.f); }
+    if (targetType == 1) {
+        bits(903, 17);
+        if (targetKind == 1 || targetKind == 14) w.Write(static_cast<uint8_t>(42));
+        else if (targetKind == 2) bits(9, 4);
+    }
+    bits(changed ? 1 : 0, 1);
+    if (changed) { bits(3456, 12); w.Write(0.75f); w.Write(80.f); w.Write(120.f); }
+    for (int i = 0; i < 13; ++i) bits(i % 2, 1);
+    bits(2, 4); w.Write(static_cast<uint16_t>(1234)); w.Write(static_cast<uint16_t>(27));
+    bits(owner, 17);
+}
+
+void WriteWeaponHeader(WorldRPG::Net::BitStreamWriter& w, uint32_t id) {
+    WriteTestBits(w, id, 17); w.Write(static_cast<uint8_t>(18)); WriteTestBits(w, 0, 17);
+    w.Write(static_cast<uint8_t>(0)); w.WriteCompressed(0u, 2);
+    WriteTestBits(w, 0, 1); WriteTestBits(w, 1, 1); // attachment, collisions (no callProp at 0x0030)
+    w.WriteCompressed(0u, 2); w.WriteCompressed(0u, 2); // custom count, name length
+    w.Write(static_cast<uint8_t>(0)); // mobile sync time context
+}
+
+void CheckWeaponSnapshots(WorldRPG::Script::LuaVMStub& vm) {
+    using namespace WorldRPG;
+    RunLua(vm, "projectile-invalid-inputs", R"LUA(
+        assert(type(createProjectile) == 'function', 'projectile bindings installed')
+        assert(createProjectile() == false and createProjectile(localPlayer, 16) == false, 'no creation outside a resource')
+        assert(getProjectileCreator({}) == false and getProjectileForce({}) == false, 'invalid projectile')
+        assert(getProjectileType({}) == false and getProjectileTarget({}) == false, 'invalid projectile type/target')
+        assert(getProjectileCounter({}) == false and setProjectileCounter({}, 10) == false, 'invalid projectile timer')
+    )LUA");
+    for (int targetKind : {-1, 1, 2, 14}) {
+        Net::BitStreamWriter w;
+        WriteWeaponBody(w, 1, targetKind);
+        const auto resolve = +[](uint32_t) -> int { return 1; };
+        // Select a noncapturing resolver for the type-specific width.
+        Entity::ElementKindResolver resolver = resolve;
+        if (targetKind == -1) resolver = +[](uint32_t) -> int { return -1; };
+        if (targetKind == 2) resolver = +[](uint32_t) -> int { return 2; };
+        if (targetKind == 14) resolver = +[](uint32_t) -> int { return 14; };
+        Entity::EntityCommon common;
+        common.id = 1001; common.type = 18;
+        Entity::Visual visual;
+        Net::BitStreamReader reader(w.GetData(), w.GetByteLength(), w.GetBitLength());
+        CHECK(Entity::ReadEntityBodyObject(reader, common, visual, resolver));
+        CHECK(reader.GetReadOffsetBits() == w.GetBitLength());
+        CHECK(visual.weapon && visual.weapon->ammo == 1234 && visual.weapon->clipAmmo == 27);
+        if (visual.weapon) {
+            CHECK(visual.weapon->damage == 3456 && visual.weapon->accuracy == 0.75f);
+            CHECK(visual.weapon->state == 2 && visual.weapon->flags[1] && !visual.weapon->flags[2]);
+            CHECK(visual.weapon->subTarget == (targetKind == 2 ? 9 : (targetKind == 1 || targetKind == 14 ? 42 : 0)));
+            CHECK(visual.weapon->owner == (targetKind == 1 ? 903u : 0xFFFFFFFFu));
+        }
+        // A one-bit-short body must not publish a partially read snapshot.
+        Entity::Visual shortVisual;
+        Net::BitStreamReader shortReader(w.GetData(), w.GetByteLength(), w.GetBitLength() - 1);
+        CHECK(!Entity::ReadEntityBodyObject(shortReader, common, shortVisual, resolver));
+        CHECK(!shortVisual.weapon);
+    }
+    ServerWorld::NotePlayerSkin(903, 7);
+    Net::BitStreamWriter packet;
+    packet.WriteCompressed(4u, 4);
+    WriteWeaponHeader(packet, 1001); WriteWeaponBody(packet, 1, 1);
+    WriteWeaponHeader(packet, 1002); WriteWeaponBody(packet, 0);
+    WriteWeaponHeader(packet, 1003); WriteWeaponBody(packet, 2);
+    WriteWeaponHeader(packet, 1004); WriteWeaponBody(packet, 2, -1, 777, false);
+    ServerWorld::OnEntityAdd(packet.GetData(), packet.GetByteLength(), packet.GetBitLength());
+    RunLua(vm, "weapon-snapshot-queries", R"LUA(
+        local weapon = {id = 1001, element = true}
+        assert(isElement(weapon) and getElementType(weapon) == 'weapon', 'weapon element type')
+        assert(getWeaponAmmo(weapon) == 1234 and getWeaponClipAmmo(weapon) == 27, 'ammo survived the target sub-field')
+        assert(getWeaponState(weapon) == 'reloading' and getWeaponOwner(weapon).id == 903, 'state and owner')
+        assert(getWeaponTarget(weapon).id == 903, 'player target')
+        local x, y, z = getWeaponTarget({id = 1002, element = true})
+        assert(x == 10 and y == -20 and z == 30, 'vector target: following record stays aligned')
+        assert(getWeaponTarget({id = 1003, element = true}) == nil, 'fixed target is nil')
+        local localOwned = {id = 1004, element = true}
+        assert(getWeaponOwner(localOwned).id == 777 and getWeaponAmmo(localOwned) == 1234, 'local owner and unchanged stats')
+        assert(getWeaponAmmo() == false and getWeaponClipAmmo(903) == false, 'invalid weapon')
+        assert(getWeaponState({id = 903}) == false and getWeaponOwner({}) == false, 'player is not a weapon')
+    )LUA");
+    ServerWorld::OnPlayerQuit(903);
+    ServerWorld::NotePlayerSkin(903, 8); // ID reuse must not restore old references.
+    RunLua(vm, "weapon-references-cleared", R"LUA(
+        local weapon = {id = 1001, element = true}
+        assert(getWeaponOwner(weapon) == false and getWeaponTarget(weapon) == nil, 'deleted owner/target stay cleared on reuse')
+    )LUA");
+    Net::BitStreamWriter removed;
+    for (uint32_t id : {1001u, 1002u, 1003u, 1004u}) WriteTestBits(removed, id, 17);
+    ServerWorld::OnEntityRemove(removed.GetData(), removed.GetByteLength(), removed.GetBitLength());
+    RunLua(vm, "weapon-removed", "assert(getWeaponAmmo({id = 1001}) == false and getWeaponTarget({id = 1002}) == false)");
+    ServerWorld::OnPlayerQuit(903);
+}
+
+void CheckAudioQueries(WorldRPG::Script::LuaVMStub& vm) {
+    RunLua(vm, "audio-queries", R"LUA(
+        local stations = {'Radio off', 'Playback FM', 'K-Rose', 'K-DST', 'Bounce FM', 'SF-UR',
+            'Radio Los Santos', 'Radio X', 'CSR 103.9', 'K-Jah West', 'Master Sounds 98.3', 'WCTR', 'User Track Player'}
+        for i, name in ipairs(stations) do assert(getRadioChannelName(i - 1) == name, 'station ' .. i) end
+        assert(getRadioChannelName('2') == 'K-Rose' and getRadioChannelName(12.9) == 'User Track Player', 'number conversion')
+        assert(getRadioChannelName(-0.5) == 'Radio off', 'integer truncation before range check')
+        assert(getRadioChannelName() == false and getRadioChannelName(13) == false and getRadioChannelName(-1) == false, 'station bounds')
+        assert(getRadioChannelName(0/0) == false and getRadioChannelName(math.huge) == false, 'nonfinite')
+        assert(select('#', getSoundLength()) == 0 and getSoundLength({}) == nil, 'bad sound has no results, as on desktop')
+        _G.querySound = playSound('http://example/audio-test.ogg')
+        _G.otherQuerySound = playSound('http://example/other-test.ogg')
+        assert(isElement(querySound) and isElement(otherQuerySound), 'independent sound handles')
+        assert(getSoundLength(querySound) == 0 and getSoundLength(otherQuerySound) == 0, 'duration initially unknown')
+        assert(setSoundPan(querySound, -1) and getSoundPan(querySound) == -1, 'left pan')
+        assert(setSoundVolume(querySound, 0.5) and getSoundPan(querySound) == -1, 'volume preserves pan')
+        assert(setSoundPan(querySound, 1) and getSoundPan(querySound) == 1, 'right pan')
+        assert(setSoundPan(querySound, 2) == false and setSoundPan(querySound, 0/0) == false, 'bad pan')
+        assert(setSoundVolume(querySound, 0/0) == false, 'bad volume')
+    )LUA");
+    lua_State* L = WorldRPG::Script::ActiveVmState();
+    lua_getglobal(L, "querySound"); lua_getfield(L, -1, "id");
+    const uint32_t id = static_cast<uint32_t>(lua_tointeger(L, -1));
+    lua_pop(L, 2);
+    WorldRPG::Script::ActiveVmNoteSoundLength(id, 123.456);
+    WorldRPG::Script::ActiveVmNoteSoundLength(id, -1); // invalid callbacks cannot overwrite metadata.
+    RunLua(vm, "audio-prepared", R"LUA(
+        assert(math.abs(getSoundLength(querySound) - 123.456) < 0.00001, 'prepared duration in seconds')
+        assert(getSoundLength(otherQuerySound) == 0, 'metadata belongs to one sound')
+        assert(stopSound(querySound) and isElement(otherQuerySound), 'stopping one leaves the other')
+        _G.reusedSound = playSound('http://example/reused.ogg')
+        assert(getSoundLength(reusedSound) == 0 and getSoundPan(reusedSound) == 0, 'reused slot has fresh defaults')
+    )LUA");
+    WorldRPG::Script::ActiveVmNoteSoundLength(id, 999); // late completion for the replaced id.
+    RunLua(vm, "audio-late-metadata", R"LUA(
+        assert(getSoundLength(reusedSound) == 0, 'stale callback cannot modify new sound')
+        assert(stopSound(reusedSound) and stopSound(otherQuerySound), 'cleanup')
+    )LUA");
+}
+
+// Stock model lookup and command-key queries need no GTA native or MTA server.
+void CheckLowRiskLuaQueries(WorldRPG::Script::LuaVMStub& vm) {
+    RunLua(vm, "valid-ped-models", R"LUA(
+        local models = getValidPedModels()
+        assert(#models == 310 and models[1] == 0 and models[#models] == 312, 'stock skin range')
+        local present = {}
+        for i, model in ipairs(models) do
+            assert(type(model) == 'number' and not present[model], 'unique numeric models')
+            assert(i == 1 or models[i - 1] < model, 'ascending model IDs')
+            present[model] = true
+        end
+        assert(not present[74] and not present[149] and not present[208], 'missing stock skins')
+        assert(present[73] and present[75] and present[148] and present[150] and present[207] and present[209], 'neighbors remain')
+        for _, arg in ipairs({true, false, 'bad', 1, {}}) do
+            local other = getValidPedModels(arg)
+            assert(#other == #models, 'no allocated custom models')
+            for i, model in ipairs(models) do assert(other[i] == model, 'same stock list') end
+        end
+        assert(#getValidPedModels(nil) == #models, 'nil takes the default')
+        models[1] = -100
+        assert(getValidPedModels()[1] == 0, 'fresh table per call')
+    )LUA");
+
+    RunLua(vm, "bound-keys-query", R"LUA(
+        assert(getBoundKeys() == false and getBoundKeys(false) == false and getBoundKeys({}) == false, 'bad argument')
+        assert(getBoundKeys('unbound-query-command') == false, 'unbound is false, not an empty table')
+        local callback = function() end
+        assert(bindKey('j', 'down', callback), 'function bind')
+        assert(getBoundKeys('j') == false, 'function binds are not commands')
+        assert(bindKey('j', 'down', 'queryCommand', 'one'), 'down bind')
+        assert(bindKey('k', 'up', 'queryCommand', 'two'), 'up bind')
+        local keys = getBoundKeys('QUERYCOMMAND')
+        assert(keys.j == 'down' and keys.k == 'up', 'case-insensitive command and keyed table')
+        keys.j = 'changed'
+        assert(getBoundKeys('queryCommand').j == 'down', 'query does not expose storage')
+        assert(bindKey('l', 'both', 'queryCommand'), 'both bind')
+        assert(getBoundKeys('queryCommand').l == 'up', 'later state wins for both')
+        assert(bindKey('j', 'up', 'queryCommand', 'three'), 'second state on same key')
+        assert(getBoundKeys('queryCommand').j == 'up', 'later bind wins')
+        assert(unbindKey('j', 'up', 'queryCommand'), 'remove later state')
+        assert(getBoundKeys('queryCommand').j == 'down', 'remaining state is visible')
+        assert(bindKey('m', 'down', 'fire'), 'command named like a GTA control')
+        assert(bindKey('fire', 'down', callback), 'script callback for a control')
+        assert(getBoundKeys('FIRE') == false, 'control lookup precedes commands; no physical control mappings')
+        assert(bindKey('n', 'down', '123'), 'numeric command name')
+        assert(getBoundKeys(123).n == 'down', 'ReadString accepts a number')
+        assert(unbindKey('j', 'down', 'queryCommand') and unbindKey('j', 'down', callback), 'cleanup j')
+        assert(unbindKey('k', 'up', 'queryCommand') and unbindKey('l', 'both', 'queryCommand'), 'cleanup k and l')
+        assert(unbindKey('m', 'down', 'fire') and unbindKey('n', 'down', '123'), 'cleanup m and n')
+        assert(unbindKey('fire', 'down', callback), 'cleanup control callback')
+        assert(getBoundKeys('queryCommand') == false and getBoundKeys(123) == false, 'removed binds disappear')
+    )LUA");
 }
 
 // Element, player, bit and vehicle helpers that do not need a GTA native.
@@ -929,12 +1136,16 @@ void CheckStopLifecycle(WorldRPG::Script::LuaVMStub& vm) {
         _G.demoState = getResourceState(res)
         assert(addEvent("onMine") == true, "resource event")
         addCommandHandler("democmd", function(name, args) _G.demoCmd = (getThisResource() == _G.demoRes) and args end)
+        assert(bindKey("F5", "down", "queryLifecycle"), "demo query bind")
+        _G.demoSound = playSound("http://example/demo.ogg")
         addEventHandler("onMine", root, function() _G.demoSource = sourceResource == getThisResource() end)
         triggerEvent("onMine", root)
         setTimer(function() _G.demoTicks = (_G.demoTicks or 0) + 1 end, 1, 0)
         _G.demoWin = guiCreateWindow(0, 0, 50, 50, "demo window", false)
     )LUA";
     const std::string otherScript = R"LUA(
+        assert(bindKey("F6", "up", "queryLifecycle"), "other query bind")
+        _G.otherSound = playSound("http://example/other.ogg")
         addEventHandler("onClientRender", root, function() _G.otherRenders = (_G.otherRenders or 0) + 1 end)
     )LUA";
     const std::vector<uint8_t> demoBody = NoCacheScriptBody(5, demoScript);
@@ -963,6 +1174,9 @@ void CheckStopLifecycle(WorldRPG::Script::LuaVMStub& vm) {
         for _, res in ipairs(getResources()) do names[getResourceName(res)] = true end
         assert(names.demo and names.other, "resource list")
         assert(getThisResource() == false, "core code has no resource")
+        local keys = getBoundKeys("queryLifecycle")
+        assert(keys.F5 == "down" and keys.F6 == "up", "query sees both resources")
+        assert(isElement(_G.demoSound) and isElement(_G.otherSound), "resource sounds are alive")
     )LUA");
 
     WorldRPG::Net::ResourceStartInfo again = demo;
@@ -1008,6 +1222,11 @@ void CheckStopLifecycle(WorldRPG::Script::LuaVMStub& vm) {
            "assert(not isElement(_G.demoGui) and not isElement(_G.demoChild), 'old gui is gone')\n"
            "assert(isCursorShowing() == true, 'the other start still holds the cursor')");
     RunLua(vm, "stop-gui", "assert(not isElement(_G.demoWin), 'stopped resource GUI elements are destroyed')");
+    RunLua(vm, "stop-bound-keys", R"LUA(
+        local keys = getBoundKeys("queryLifecycle")
+        assert(keys.F5 == nil and keys.F6 == "up", "query drops only the stopped resource's binds")
+        assert(not isElement(_G.demoSound) and isElement(_G.otherSound), "only stopped resource audio is released")
+    )LUA");
 
     // The stopped resource's handlers and timers are gone; the other resource still runs.
     std::this_thread::sleep_for(std::chrono::milliseconds(5));
@@ -1655,7 +1874,10 @@ int main(int argc, char** argv) {
     WorldRPG::ServerWorld::NotePlayerNick(777, "Sam");
 
     CheckJson(vm, argc > 1 ? argv[1] : nullptr);
+    CheckLowRiskLuaQueries(vm);
     CheckHelpers(vm);
+    CheckAudioQueries(vm);
+    CheckWeaponSnapshots(vm);
     CheckGui(vm);
     CheckMtaWindow(vm);
     CheckStopLifecycle(vm);

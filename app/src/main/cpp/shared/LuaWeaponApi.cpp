@@ -1,6 +1,9 @@
 #include "LuaWeaponApi.h"
+#include "LuaProjectileApi.h"
 
 #include "LuaVMStub.h"
+#include "LuaApiExtra.h"
+#include "ServerWorld.h"
 
 #include "lua.hpp"
 
@@ -259,9 +262,92 @@ int l_setWeaponProperty(lua_State* L) {
     return 1;
 }
 
+// CLuaWeaponDefs.cpp:288-307,363-415,606-648; CClientWeapon.h:54,82,102,105.
+// These are queries of server-created weapon elements, not ped-held weapons.
+// Until native CClientWeapon firing / RPC updates are ported, values are the
+// last ENTITY_ADD snapshot. No local ammo consumption or weapon is fabricated.
+bool ReadWeapon(lua_State* L, Entity::WeaponSpawn& weapon) {
+    return lua_istable(L, 1) && ServerWorld::CopyWeaponSpawn(ElementIdOf(L, 1), weapon);
+}
+
+int BadWeapon(lua_State* L) {
+    LUA_LOGE("weapon query: expected a live weapon element");
+    lua_pushboolean(L, 0);
+    return 1;
+}
+
+int GetWeaponAmmo(lua_State* L) {
+    Entity::WeaponSpawn weapon;
+    if (!ReadWeapon(L, weapon)) return BadWeapon(L);
+    lua_pushnumber(L, weapon.ammo);
+    return 1;
+}
+
+int GetWeaponClipAmmo(lua_State* L) {
+    Entity::WeaponSpawn weapon;
+    if (!ReadWeapon(L, weapon)) return BadWeapon(L);
+    lua_pushnumber(L, weapon.clipAmmo);
+    return 1;
+}
+
+int GetWeaponState(lua_State* L) {
+    Entity::WeaponSpawn weapon;
+    if (!ReadWeapon(L, weapon)) return BadWeapon(L);
+    // CLuaFunctionParseHelpers.cpp:374-378 has only these three enum strings.
+    static const char* states[] = {"ready", "firing", "reloading"};
+    lua_pushstring(L, weapon.state < 3 ? states[weapon.state] : "");
+    return 1;
+}
+
+int GetWeaponOwner(lua_State* L) {
+    Entity::WeaponSpawn weapon;
+    if (!ReadWeapon(L, weapon)) return BadWeapon(L);
+    if (weapon.owner == 0xFFFFFFFFu ||
+        (weapon.owner != ServerWorld::LocalPlayer() && !ServerWorld::IsKnownPlayer(weapon.owner))) {
+        lua_pushboolean(L, 0);
+    } else {
+        PushElement(L, weapon.owner);
+    }
+    return 1;
+}
+
+int GetWeaponTarget(lua_State* L) {
+    Entity::WeaponSpawn weapon;
+    if (!ReadWeapon(L, weapon)) return BadWeapon(L);
+    switch (weapon.targetType) {
+        case 0:
+            lua_pushnumber(L, weapon.targetX);
+            lua_pushnumber(L, weapon.targetY);
+            lua_pushnumber(L, weapon.targetZ);
+            return 3;
+        case 1:
+            if (weapon.target != 0xFFFFFFFFu) PushElement(L, weapon.target);
+            else lua_pushnil(L);
+            return 1;
+        case 2:
+            lua_pushnil(L);
+            return 1;
+        default:
+            lua_pushboolean(L, 0);
+            return 1;
+    }
+}
+
 }  // namespace
 
 void InstallWeaponLua(lua_State* L) {
+    InstallProjectileLua(L);
+    const struct { const char* name; lua_CFunction fn; } binds[] = {
+        {"getWeaponAmmo", GetWeaponAmmo},
+        {"getWeaponClipAmmo", GetWeaponClipAmmo},
+        {"getWeaponState", GetWeaponState},
+        {"getWeaponOwner", GetWeaponOwner},
+        {"getWeaponTarget", GetWeaponTarget},
+    };
+    for (const auto& bind : binds) {
+        lua_pushcfunction(L, bind.fn);
+        lua_setglobal(L, bind.name);
+    }
     lua_pushcfunction(L, l_getWeaponProperty);
     lua_setglobal(L, "getWeaponProperty");
     lua_pushcfunction(L, l_getOriginalWeaponProperty);

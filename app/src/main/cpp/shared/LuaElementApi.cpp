@@ -205,7 +205,7 @@ bool KnownElement(uint32_t id) {
     if (Find(id)) return true;
     if (id == ServerWorld::LocalPlayer() || id == ServerWorld::LastResourceRoot() || GuiIsElement(id)) return true;
     if (Game::ScriptPedAlive(id) || SoundElementAlive(id) || CameraElementAlive(id) || FoliageElementAlive(id) ||
-        EffectElementAlive(id))
+        EffectElementAlive(id) || StoredElementType(id) != nullptr)
         return true;
     float x = 0, y = 0, z = 0;
     return ServerWorld::ElementPose(id, x, y, z) || Game::CopyRemotePose(id, x, y, z);

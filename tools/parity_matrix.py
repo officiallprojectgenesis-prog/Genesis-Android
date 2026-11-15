@@ -325,6 +325,7 @@ FOLLOW_INSTALLS = {
     "InstallStoredElementLua",
     "InstallClothesLua",
     "InstallWeaponLua",
+    "InstallProjectileLua",
     "InstallResourceLua",
     "InstallMtaWindowLua",
     "InstallKeyBindLua",
