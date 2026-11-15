@@ -8,14 +8,33 @@ completa, que já continha alterações locais de DX, SVG e motor.
 **Geral: 651 de 1.581 funções com implementação no catálogo — 41,2%.**
 Elementos: **54/81 — 66,7%**. GUI/DX: **175/199 — 87,9%**.
 
-Este lote corrigiu **5 de 5 problemas da revisão** em funções já registradas.
-A cobertura de funções permanece igual. A classificação conta handlers com
+O lote anterior corrigiu **5 de 5 problemas da revisão**. O lote atual amplia
+fontes de GUI e layout/medidas de labels em sete funções já registradas.
+A cobertura do catálogo permanece igual: **175/199 em GUI/DX, com 24 ausentes**.
+A classificação conta handlers com
 corpo não constante; não comprova paridade completa nem validação no aparelho.
+
+**Este lote não leva GUI/DX a 100%.** O estado atual é:
+
+| Medida | Estado após a revisão |
+|---|---|
+| Cobertura de funções registradas com corpo não constante | **175/199 — 87,9%** |
+| Funções ausentes | **24/199 — 12,1%**: 7 de desenho 3D, 4 de shaders e 13 de modelo 2DFX |
+| Compatibilidade de comportamento/visual com o desktop | **Parcial; sem percentual auditado.** Há pendências também nas funções registradas. |
+| Validação visual no aparelho deste lote | **Pendente** |
+
+Para chegar a 100% de cobertura é necessário implementar as 24 ausentes.
+Para afirmar compatibilidade completa também é necessário resolver as
+pendências de comportamento e validar o resultado no aparelho.
 
 ## Implementado neste lote
 
 | Área | Alteração | Limite atual |
 |---|---|---|
+| Fontes GUI | `guiCreateFont` cria elementos `gui-font`, resolve arquivos de recursos, valida/carrega o Typeface no Android e aplica o clamp de 5–150 pontos a 96 DPI. A face fica retida até a remoção ordenada do elemento | No host, apenas a assinatura do arquivo é conferida; fontes nativas nomeadas usam faces do sistema Android. O LRU limita versões não retidas; fontes GUI vivas seguem o tempo de vida dos elementos. |
+| Fonte dos controles | `guiSetFont` aceita fonte GUI/nome válido; `guiGetFont` retorna nome e elemento; destruição/stop restaura `default-normal`, inclusive em outro recurso | Geometria dos skins CEGUI e aparência das fontes nativas ainda diferem. |
+| Labels | Alinhamento horizontal/vertical, quebra opcional, clipping, texto literal multilinha e fonte própria | Quebra e métricas Canvas precisam de comparação no aparelho. |
+| Medidas GUI | `guiLabelGetFontHeight` retorna pixels; `guiLabelGetTextExtent` mede a maior linha com a fonte atribuída | A altura usa o espaçamento de linha Android como aproximação; CEGUI mede a altura dos glifos em cache. O host estima medidas; não reproduz glifos Android. |
 | Elementos | `isElementAttached`, `getElementAttachedTo`, `getAttachedElements` e `getElementAttachedOffsets` | Consultam os dados de `ENTITY_ADD`; não criam anexação física. |
 | Referências | Resolvem elementos declarados depois no mesmo pacote e limpam vínculos na remoção | Atualizações posteriores por RPC ainda não são aplicadas. |
 | GUI edit | Inserção e backspace na posição do cursor, contagem por caracteres Unicode, respeito a somente leitura | Seleção de texto e posicionamento pelo toque ainda precisam de implementação. |
@@ -41,17 +60,20 @@ CEGUI exposta como `unsigned int`; um valor Lua negativo segue essa conversão.
 
 ## Validação
 
-- `neon_resource_tests`: **257 verificações, zero falhas**. Inclui referências
+- `neon_resource_tests`: **274 verificações, zero falhas**. Inclui referências
   futuras, ordem dos filhos, remoção/reuso de ID, offsets em graus, Unicode,
   digitação/backspace de emoji, texto somente leitura, limite zero, camadas DX,
   blend capturado, fonte personalizada, render targets, memo/Enter/CRLF,
-  retornos booleanos, geometria inválida e opções de layout de texto.
+  retornos booleanos, geometria inválida e opções de layout de texto. Também
+  cobre fontes GUI, retornos de fonte, medidas, separação de fontes DX/GUI,
+  uso por outro recurso e limpeza ao destruir/parar o dono.
 - `neon_dx_text_tests`: **24 verificações Java, zero falhas** — texto e altura
   total de linha personalizada.
-- `neon_dx_state_tests`: **20 verificações Java, zero falhas** — ordem da fila,
-  destruição de targets, orçamento e cache de fontes.
-- `neon_dx_view_tests`: **12 verificações Java, zero falhas** — executam o
-  renderer real com doubles Android para os cinco problemas da revisão.
+- `neon_dx_state_tests`: **29 verificações Java, zero falhas** — ordem da fila,
+  destruição de targets, orçamento e cache de fontes, inclusive falhas de carga,
+  retenção de fontes vivas e liberação por instância.
+- `neon_dx_view_tests`: **34 verificações Java, zero falhas** — executam o
+  renderer real com doubles Android para os problemas da revisão e os labels/fontes GUI.
   Esses testes não verificam glifos ou GPU reais.
 - Biblioteca Android ARM64: compilou e linkou com o NDK.
 - Classes Java do jogo: compilaram, incluindo o gradiente de linhas.
@@ -61,7 +83,18 @@ Não houve teste visual no aparelho nem geração de APK novo neste lote.
 A compilação nativa usa as alterações anteriores do motor presentes na árvore
 de trabalho; a limitação do checkout isolado está em [REVIEW_LUA_MOBILE.md](REVIEW_LUA_MOBILE.md).
 
-## Correções da revisão — 5/5 concluídas
+## Revisão de fontes GUI e labels — 3/3 corrigidos
+
+| Prioridade | Problema reproduzido | Correção |
+|---|---|---|
+| P2 | Mais de 64 versões podiam expulsar uma fonte GUI viva; substituir o arquivo mudava sua aparência | Fontes GUI vivas ficam retidas; o comando `D` as libera depois dos desenhos anteriores. Instâncias liberadas voltam ao LRU. |
+| P2 | Fonte grande de edit/botão desenhava fora do controle | Texto `T` recebe recorte da própria caixa e restaura o Canvas em `finally`. |
+| P2 | Medidas DX aceitavam uma fonte GUI e mediam a fonte DX padrão silenciosamente | Altura/largura recusam o tipo; `dxGetTextSize` segue erro do argumento tipado, antes de criar strings C++. |
+
+As regressões falharam com o código anterior e passaram após as correções.
+O relatório detalhado está em [REVIEW_ELEMENTS_GUI_DX.md](REVIEW_ELEMENTS_GUI_DX.md).
+
+## Revisão DX anterior — 5/5 corrigidos
 
 | Problema | Estado | Evidência |
 |---|---|---|
@@ -80,9 +113,11 @@ de trabalho; a limitação do checkout isolado está em [REVIEW_LUA_MOBILE.md](R
    Faltam também consultas espaciais, bounding box, raio e integração completa
    das transformações com o corpo nativo.
 2. **GUI:** seleção, posicionamento do cursor pelo toque, propriedades CEGUI,
-   fonte customizada, quebra/rolagem automática de memo e ordenação efetiva
+   quebra/rolagem automática de memo e ordenação efetiva
    de gridlist. Funções registradas podem ter
    comportamento parcial; o catálogo não comprova equivalência visual.
+   Conferir faces nativas, geometria dos controles com fontes grandes e
+   diferenças de quebra/métricas dos labels no aparelho.
 3. **DX:** comparar métricas e quebras de texto no aparelho, ampliar fontes
    nativas e portar desenho 3D com câmera/profundidade, shaders e efeitos de modelo 2DFX.
 4. **Aparelho:** verificar cursor no meio do texto, acentos/emoji, composição

@@ -1,6 +1,7 @@
 #include "LuaGuiApi.h"
 
 #include "LuaApiExtra.h"
+#include "LuaDxApi.h"
 #include "LuaVMStub.h"
 #include "LuaStoredElementApi.h"
 #include "../gtasa/GameEngine.h"
@@ -78,7 +79,9 @@ struct GuiElement {
     bool movable = true, sizable = true;
     int red = 255, green = 255, blue = 255;
     std::string alignH = "left", alignV = "top";
-    std::string font = "default";
+    std::string font = "default-normal";
+    uint32_t fontId = 0;            // only an explicit gui-font element is returned by guiGetFont
+    bool labelWrap = false;
     uint32_t tab = 0;               // selected tab of a tab panel
     std::map<std::string, std::string> props;
     struct GridColumn { std::string title; double width = 0.3; };
@@ -122,6 +125,49 @@ int g_cursorHolds = 0;
 GuiElement* Find(uint32_t id) {
     auto found = g_elements.find(id);
     return found == g_elements.end() ? nullptr : &found->second;
+}
+
+// CGUI_Impl.cpp:130-139. These names are distinct from the DX font names.
+// Android uses its system face for built-ins; resource fonts load the actual file.
+bool BuiltinGuiFont(const std::string& name, DxFont& font) {
+    struct Entry { const char* name; unsigned points; bool bold; bool autoScale; };
+    static constexpr Entry entries[] = {
+        {"default-normal", 9, false, false}, {"default-small", 7, false, false},
+        {"default-bold-small", 8, true, false}, {"clear-normal", 9, false, false},
+        {"sa-header", 26, false, true}, {"sa-gothic", 47, false, true},
+        {"sans", 9, false, false}, {"unifont", 9, false, false},
+    };
+    for (const Entry& entry : entries) {
+        if (name != entry.name) continue;
+        font.pixels = entry.points * (96.0 / 72.0);
+        if (entry.autoScale) {
+            int width = 0, height = 0;
+            ActiveVmScreenSize(width, height);
+            font.pixels *= height / 768.0;
+        }
+        font.bold = entry.bold;
+        font.file = "@gui:" + name;
+        return true;
+    }
+    return false;
+}
+
+DxFont ElementFont(const GuiElement& element) {
+    DxFont font;
+    std::string name;
+    const uint32_t id = element.fontId ? element.fontId : DxGuiFontByName(element.font);
+    if (id && DxGuiFontInfo(id, font, name)) return font;
+    if (!BuiltinGuiFont(element.font, font)) BuiltinGuiFont("default-normal", font);
+    return font;
+}
+
+void AppendGuiFont(std::string& out, const GuiElement& element) {
+    const DxFont font = ElementFont(element);
+    char head[80];
+    std::snprintf(head, sizeof(head), "F %.3f %d ", font.pixels, font.bold ? 1 : 0);
+    out += head;
+    out += font.file;
+    out += '\n';
 }
 
 Box ScreenBox(uint32_t id);
@@ -262,33 +308,6 @@ void EnsureMemoNewline(GuiElement& element) {
     if (element.type == "gui-memo" && (element.text.empty() || element.text.back() != '\n')) element.text += '\n';
 }
 
-int LongestLineChars(const std::string& text) {
-    int best = 0;
-    int line = 0;
-    for (size_t i = 0; i <= text.size();) {
-        if (i == text.size() || text[i] == '\n') {
-            if (line > best) best = line;
-            line = 0;
-            if (i == text.size()) break;
-            ++i;
-            continue;
-        }
-        if (text[i] == '\r') {
-            ++i;
-            continue;
-        }
-        const auto lead = static_cast<unsigned char>(text[i]);
-        size_t step = 1;
-        if ((lead & 0xE0) == 0xC0) step = 2;
-        else if ((lead & 0xF0) == 0xE0) step = 3;
-        else if ((lead & 0xF8) == 0xF0) step = 4;
-        if (i + step > text.size()) step = 1;
-        i += step;
-        ++line;
-    }
-    return best;
-}
-
 bool ParentSegment(const std::string& raw) {
     size_t start = 0;
     while (start <= raw.size()) {
@@ -324,6 +343,26 @@ void AppendText(std::string& out, double left, double top, double right, double 
                   static_cast<unsigned>(WithAlpha(argb, alpha)), 0);
     out += head;
     out += text;
+    out += '\n';
+}
+
+void AppendLabel(std::string& out, const Box& box, const GuiElement& element, uint32_t color, double alpha) {
+    if (element.text.empty()) return;
+    char head[192];
+    const int alignX = element.alignH == "center" ? 1 : element.alignH == "right" ? 2 : 0;
+    const int alignY = element.alignV == "center" ? 1 : element.alignV == "bottom" ? 2 : 0;
+    std::snprintf(head, sizeof(head), "Y %.1f %.1f %.1f %.1f %u %d %d %d ", box.x, box.y, box.x + box.w,
+                  box.y + box.h, static_cast<unsigned>(WithAlpha(color, alpha)), alignX, alignY, element.labelWrap ? 1 : 0);
+    out += head;
+    for (char ch : element.text) {
+        switch (ch) {
+            case '\\': out += "\\\\"; break;
+            case '\n': out += "\\n"; break;
+            case '\r': out += "\\r"; break;
+            case '\t': out += "\\t"; break;
+            default: out += static_cast<unsigned char>(ch) < 32 ? ' ' : ch; break;
+        }
+    }
     out += '\n';
 }
 
@@ -534,13 +573,26 @@ void GuiReset() {
     g_inputMode = InputMode::NoBindsOnEdit;
 }
 
+void GuiDetachFont(uint32_t id) {
+    DxFont font;
+    std::string name;
+    if (!DxGuiFontInfo(id, font, name)) return;
+    for (auto& [elementId, element] : g_elements) {
+        if (element.fontId != id && element.font != name) continue;
+        element.fontId = 0;
+        element.font = "default-normal";
+    }
+}
+
 bool GuiCursorShown() { return AnyCursorHold(); }
 
 static void DrawElement(std::string& out, uint32_t id, const GuiElement& element) {
+    if (element.type == "guiroot") return;
     const Box box = ScreenBox(id);
     const double alpha = EffectiveAlpha(element);
     const uint32_t textColor = element.enabled ? kTextWhite : kTextDisabled;
     const std::string line = OneLine(element.text.c_str(), element.text.size());
+    AppendGuiFont(out, element);
     if (element.type == "gui-window") {
         // Background, then the title in the top bar (desktop title bar height is about 24 px).
         AppendRect(out, box, kWindowBackground, alpha);
@@ -573,6 +625,7 @@ static void DrawElement(std::string& out, uint32_t id, const GuiElement& element
             const std::string title = OneLine(child.text.c_str(), child.text.size());
             const double w = 12.0 + static_cast<double>(title.size()) * 8.0;
             AppendRect(out, Box{x, box.y, w, 18.0}, childId == element.tab ? kButtonBackground : kFieldBackground, alpha);
+            AppendGuiFont(out, child);
             AppendText(out, x + 4, box.y, x + w, box.y + 18.0, textColor, alpha, title);
             x += w;
         }
@@ -584,13 +637,14 @@ static void DrawElement(std::string& out, uint32_t id, const GuiElement& element
         // Wrapping and automatic caret scrolling remain separate renderer work.
         size_t start = 0;
         double y = box.y;
-        while (start < shown.size() && y + 16.0 <= box.y + box.h) {
+        const double lineHeight = DxMeasureFontHeight(ElementFont(element));
+        while (start < shown.size() && y + lineHeight <= box.y + box.h) {
             const size_t end = shown.find('\n', start);
             const size_t size = end == std::string::npos ? shown.size() - start : end - start;
-            AppendText(out, box.x, y, box.x + box.w, y + 16.0, textColor, alpha, OneLine(shown.data() + start, size));
+            AppendText(out, box.x, y, box.x + box.w, y + lineHeight, textColor, alpha, OneLine(shown.data() + start, size));
             if (end == std::string::npos) break;
             start = end + 1;
-            y += 16.0;
+            y += lineHeight;
         }
     } else if (element.type == "gui-progressbar") {
         AppendRect(out, box, kFieldBackground, alpha);
@@ -647,10 +701,11 @@ static void DrawElement(std::string& out, uint32_t id, const GuiElement& element
         const uint32_t color = element.enabled
             ? (0xFF000000u | (static_cast<uint32_t>(element.red) << 16) | (static_cast<uint32_t>(element.green) << 8) | static_cast<uint32_t>(element.blue))
             : kTextDisabled;
-        AppendText(out, box.x, box.y, box.x + box.w, box.y + box.h, color, alpha, line);
+        AppendLabel(out, box, element, color, alpha);
     } else {
         AppendText(out, box.x, box.y, box.x + box.w, box.y + box.h, textColor, alpha, line);
     }
+    out += "F\n";
 }
 
 // Child ids in creation order (the map is ordered by id).
@@ -2206,8 +2261,10 @@ static int GuiLabelSetHorizontalAlign(lua_State* L) {
     if (!args.gui(id, "gui-label") || !args.text(align) || !AlignName(align, "left", "center", "right") ||
         !args.flag(wordWrap, true, false))
         return Reject(L, "guiLabelSetHorizontalAlign", args, false);
-    (void)wordWrap;
-    if (GuiElement* element = Find(id)) element->alignH = align;
+    if (GuiElement* element = Find(id)) {
+        element->alignH = align;
+        element->labelWrap = wordWrap;
+    }
     lua_pushboolean(L, 1);
     return 1;
 }
@@ -2228,7 +2285,7 @@ static int GuiLabelGetFontHeight(lua_State* L) {
     uint32_t id = 0;
     if (!args.gui(id, "gui-label")) return Reject(L, "guiLabelGetFontHeight", args, false);
     const GuiElement* element = Find(id);
-    lua_pushnumber(L, DxFontScale(element ? element->font.c_str() : "default"));
+    lua_pushnumber(L, DxMeasureFontHeight(ElementFont(*element)));
     return 1;
 }
 
@@ -2237,19 +2294,41 @@ static int GuiLabelGetTextExtent(lua_State* L) {
     uint32_t id = 0;
     if (!args.gui(id, "gui-label")) return Reject(L, "guiLabelGetTextExtent", args, false);
     const GuiElement* element = Find(id);
-    // CGUILabel_Impl::GetTextExtent uses the longest line (CGUILabel_Impl.cpp 140-157).
-    // Without the CEGUI font, a Latin character is about half the font height.
-    const double height = DxFontScale(element ? element->font.c_str() : "default");
-    lua_pushnumber(L, element ? static_cast<double>(LongestLineChars(element->text)) * height * 0.5 : 0);
+    // CGUILabel_Impl.cpp:140-157 measures the longest logical line in the assigned font.
+    const DxFont font = ElementFont(*element);
+    double extent = 0;
+    size_t start = 0;
+    do {
+        const size_t end = element->text.find('\n', start);
+        std::string line = element->text.substr(start, end == std::string::npos ? end : end - start);
+        if (!line.empty() && line.back() == '\r') line.pop_back();
+        extent = std::max(extent, DxMeasureLine(line, font));
+        if (end == std::string::npos) break;
+        start = end + 1;
+    } while (start < element->text.size());
+    lua_pushnumber(L, extent);
     return 1;
 }
 
 static int GuiSetFont(lua_State* L) {
     Args args{L};
     uint32_t id = 0;
-    std::string font;
-    if (!args.gui(id, nullptr) || !args.text(font)) return Reject(L, "guiSetFont", args, false);
-    if (GuiElement* element = Find(id)) element->font = std::move(font);
+    if (!args.gui(id, nullptr)) return Reject(L, "guiSetFont", args, false);
+    std::string font = "default-normal";
+    uint32_t fontId = 0;
+    DxFont renderFont;
+    if (lua_istable(L, 2)) {
+        fontId = ElementIdOf(L, 2);
+        if (!DxGuiFontInfo(fontId, renderFont, font)) { lua_pushboolean(L, 0); return 1; }
+    } else if (!lua_isnone(L, 2)) {
+        if (lua_type(L, 2) != LUA_TSTRING || !args.text(font)) return Reject(L, "guiSetFont", args, false);
+        if (font.empty()) font = "default-normal";
+        if (!BuiltinGuiFont(font, renderFont) && !DxGuiFontByName(font)) { lua_pushboolean(L, 0); return 1; }
+    }
+    if (GuiElement* element = Find(id)) {
+        element->font = std::move(font);
+        element->fontId = fontId;
+    }
     lua_pushboolean(L, 1);
     return 1;
 }
@@ -2264,7 +2343,9 @@ static int GuiGetFont(lua_State* L) {
         return 1;
     }
     lua_pushlstring(L, element->font.data(), element->font.size());
-    return 1;
+    if (element->fontId) PushElement(L, element->fontId);
+    else lua_pushnil(L);
+    return 2;
 }
 
 static int GuiGetSelectedTab(lua_State* L) {
@@ -2957,10 +3038,8 @@ static int GuiGridListGetVerticalScrollPosition(lua_State* L) {
     return GridScroll(L, "guiGridListGetVerticalScrollPosition", false, false);
 }
 
-static bool g_diagFont = false;
-
-// CLuaGUIDefs.cpp 4009-4055. FileExists and CreateGuiFont are not hooked, so every path
-// takes the missing-file result. A `..` segment is still rejected.
+// CLuaGUIDefs.cpp:4009-4055. Font lifetime belongs to the calling resource,
+// including when its file comes from another resource.
 static int GuiCreateFont(lua_State* L) {
     Args args{L};
     std::string path;
@@ -2968,12 +3047,9 @@ static int GuiCreateFont(lua_State* L) {
     if (!args.text(path) || path.empty() || ParentSegment(path)) return Reject(L, "guiCreateFont", args, false);
     if (lua_type(L, args.index) != LUA_TNONE && lua_type(L, args.index) != LUA_TNIL && !args.integer(size))
         return Reject(L, "guiCreateFont", args, false);
-    (void)size;
-    if (!g_diagFont) {
-        g_diagFont = true;
-        LUA_LOGE("DIAG guiCreateFont: CreateGuiFont is not hooked, so the call returns false");
-    }
-    lua_pushboolean(L, 0);
+    const uint32_t id = DxCreateGuiFont(path, static_cast<uint32_t>(size));
+    if (id) PushElement(L, id);
+    else lua_pushboolean(L, 0);
     return 1;
 }
 

@@ -3,6 +3,7 @@ public class Typeface {
     public final String version;
     public static int loads;
     private Typeface(String value) { version = value; }
+    public static final Typeface DEFAULT = new Typeface("normal");
     public static final Typeface DEFAULT_BOLD = new Typeface("default");
     public static final int BOLD = 1;
     public static Typeface createFromFile(String path) {

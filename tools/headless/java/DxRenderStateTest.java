@@ -76,6 +76,28 @@ public final class DxRenderStateTest {
             check(DxFontCache.path("@font:4:/tmp/a:b.ttf").equals("/tmp/a:b.ttf"));
             check(DxFontCache.path(file.toString()).equals(file.toString()));
         } finally { Files.deleteIfExists(file); }
+        int[] failedLoads = {0};
+        DxFontCache<String> invalid = new DxFontCache<>(2, (path, bold) -> { failedLoads[0]++; return null; });
+        check(invalid.get("@font:10:/missing.ttf",false) == null);
+        check(invalid.get("@font:10:/missing.ttf",false) == null && failedLoads[0] == 1);
+        check(invalid.get("@font:11:/missing.ttf",false) == null && failedLoads[0] == 2);
+        check(invalid.pin("@font:11:/missing.ttf",false) == null && failedLoads[0] == 2);
+
+        int[] versions = {1};
+        DxFontCache<Integer> liveFonts = new DxFontCache<>(1, (path, bold) -> versions[0]);
+        check(liveFonts.pin("@font:1:/face.ttf",false) == 1);
+        versions[0] = 2;
+        liveFonts.pin("@font:2:/face.ttf",false);
+        liveFonts.get("@font:3:/face.ttf",false);
+        liveFonts.get("@font:4:/face.ttf",false);
+        check(liveFonts.get("@font:1:/face.ttf",false) == 1); // Active faces may exceed the LRU budget.
+        liveFonts.releaseInstance("10");
+        check(liveFonts.get("@font:1:/face.ttf",false) == 1); // Instance 1 is distinct from 10.
+        versions[0] = 3;
+        liveFonts.releaseInstance("1");
+        liveFonts.get("@font:5:/face.ttf",false);
+        check(liveFonts.get("@font:1:/face.ttf",false) == 3);
+        check(liveFonts.get("@font:2:/face.ttf",false) == 2); // Releasing another instance preserves this one.
         System.out.println("DxRenderStateTest: " + checks + " checks, 0 failures");
     }
 }

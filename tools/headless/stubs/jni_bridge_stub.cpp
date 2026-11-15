@@ -13,6 +13,7 @@ void PostGameLine(int kind, const char* text) {
 }
 // No Activity on the host: the caller falls back to its fixed-width estimate.
 float MeasureText(const std::string&, float, const std::string&, bool) { return -1.f; }
+float FontHeight(const std::string&, float, bool) { return -1.f; }
 // No Android bitmap codecs on the host.
 bool LoadPixels(const std::string&, std::vector<uint32_t>&, unsigned&, unsigned&) { return false; }
 bool DecodePixels(const char*, size_t, std::vector<uint32_t>&, unsigned&, unsigned&) { return false; }

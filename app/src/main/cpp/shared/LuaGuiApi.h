@@ -33,6 +33,8 @@ void GuiDropResource(const std::string& owner, uint16_t netId, uint32_t generati
 uint32_t GuiEnsureResourceRoot(const std::string& owner, uint16_t netId, uint32_t generation);
 // Drops every GUI element (new VM or session).
 void GuiReset();
+// CClientGuiFont::Unlink restores default-normal on every widget using that font.
+void GuiDetachFont(uint32_t id);
 // True while any resource still holds the cursor (showCursor). One resource's
 // showCursor(false) leaves it showing if another resource still holds it.
 // The phone then routes touches to onClientClick.

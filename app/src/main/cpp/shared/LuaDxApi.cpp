@@ -7,6 +7,7 @@
 
 #include "lua.hpp"
 
+#include <algorithm>
 #include <cctype>
 #include <cmath>
 #include <cstdint>
@@ -24,6 +25,8 @@ namespace WorldRPG::JniBridge {
 // Width of the text at this pixel size, in the overlay font or in the TTF file given, or a
 // negative value when the Activity is not available.
 float MeasureText(const std::string& utf8, float pixelSize, const std::string& fontFile, bool bold);
+// Positive line spacing after loading the font, 0 for an invalid font, -1 without an Activity.
+float FontHeight(const std::string& source, float pixelSize, bool bold);
 // Bitmap work done by the Activity with Android's codecs. A pixel is 0xAARRGGBB. Every call
 // returns false when the Activity is not available (host build) or the image cannot be handled.
 // The pixels of an image file, or of an overlay bitmap named "tx:<id>" or "rt:<id>".
@@ -384,6 +387,9 @@ struct Font {
     // D3DX font height in pixels: floor(size * 1.75) (CRenderItem.DxFont.cpp:89-94).
     unsigned height = 0;
     bool bold = false;
+    bool gui = false;
+    double guiPixels = 0;
+    std::string guiName;
     std::string owner;
     uint16_t netId = 0;
     uint32_t generation = 0;
@@ -395,6 +401,16 @@ Font* FindFont(uint32_t id) {
     for (Font& font : g_fonts)
         if (font.id == id) return &font;
     return nullptr;
+}
+
+bool IsGuiFontArgument(lua_State* L, int index) {
+    if (!lua_istable(L, index)) return false;
+    const Font* font = FindFont(ElementIdOf(L, index));
+    return font && font->gui;
+}
+
+std::string FontSource(const Font& font) {
+    return "@font:" + std::to_string(font.id) + ":" + font.file;
 }
 
 Texture* FindTexture(uint32_t id) {
@@ -999,6 +1015,7 @@ int DxCreateFont(lua_State* L) {
 int DxGetFontHeight(lua_State* L) {
     double scale = 1;
     if (!ReadNumberOr(L, 1, 1, scale)) return Fail(L, "dxGetFontHeight", "number", 1);
+    if (IsGuiFontArgument(L, 2)) return Fail(L, "dxGetFontHeight", "dx-font or font name", 2);
     lua_pushnumber(L, DxResolveFont(L, 2, scale).pixels);
     return 1;
 }
@@ -1153,6 +1170,7 @@ int DxGetTextWidth(lua_State* L) {
     double scale = 1;
     bool colorCoded = false;
     if (!ReadNumberOr(L, 2, 1, scale)) return Fail(L, "dxGetTextWidth", "number", 2);
+    if (IsGuiFontArgument(L, 3)) return Fail(L, "dxGetTextWidth", "dx-font or font name", 3);
     if (!ReadBoolOr(L, 4, false, colorCoded)) return Fail(L, "dxGetTextWidth", "bool", 4);
     size_t length = 0;
     const char* raw = lua_tolstring(L, 1, &length);
@@ -1185,7 +1203,6 @@ int DxGetTextSize(lua_State* L) {
     }
     size_t length = 0;
     const char* raw = lua_tolstring(L, 1, &length);
-    std::string text(raw ? raw : "", length);
     int index = 2;
     double limit = 0, scaleX = 1, scaleY = 1;
     if (lua_type(L, index) == LUA_TNUMBER) limit = lua_tonumber(L, index++);
@@ -1197,6 +1214,11 @@ int DxGetTextSize(lua_State* L) {
         ++index;
     }
     const int fontIndex = index;
+    // Desktop's typed variant rejects gui-font before entering GetDXTextSize.
+    // Raise the Lua error before constructing any C++ strings (longjmp).
+    if (IsGuiFontArgument(L, fontIndex))
+        return luaL_error(L, "Bad argument @ 'dxGetTextSize' [Expected dx-font or font name at argument %d, got gui-font]", fontIndex);
+    std::string text(raw ? raw : "", length);
     const bool wordBreak = lua_isboolean(L, index + 1) && lua_toboolean(L, index + 1) != 0;
     const bool colorCoded = lua_isboolean(L, index + 2) && lua_toboolean(L, index + 2) != 0;
 
@@ -1248,7 +1270,7 @@ int DxGetTextSize(lua_State* L) {
 
 const char* DxElementType(uint32_t id) {
     if (FindTexture(id)) return "texture";
-    if (FindFont(id)) return "dx-font";
+    if (const Font* font = FindFont(id)) return font->gui ? "gui-font" : "dx-font";
     std::string bitmap;
     unsigned width = 0, height = 0;
     if (SvgInfo(id, bitmap, width, height)) return "svg";
@@ -1276,6 +1298,10 @@ bool DxElementRelease(uint32_t id) {
     }
     for (auto it = g_fonts.begin(); it != g_fonts.end(); ++it) {
         if (it->id != id) continue;
+        if (it->gui) {
+            GuiDetachFont(id);
+            DxFreeOverlayBitmap(id); // D also releases the pinned GUI Typeface after older draws.
+        }
         g_fonts.erase(it);
         return true;
     }
@@ -1295,8 +1321,14 @@ void DxDropResource(const std::string& owner, uint16_t netId, uint32_t generatio
         ForgetTarget(*it);
         it = g_textures.erase(it);
     }
-    for (auto it = g_fonts.begin(); it != g_fonts.end();)
-        it = mine(it->owner, it->netId, it->generation) ? g_fonts.erase(it) : std::next(it);
+    for (auto it = g_fonts.begin(); it != g_fonts.end();) {
+        if (!mine(it->owner, it->netId, it->generation)) { ++it; continue; }
+        if (it->gui) {
+            GuiDetachFont(it->id);
+            DxFreeOverlayBitmap(it->id);
+        }
+        it = g_fonts.erase(it);
+    }
     SvgDropResource(ActiveVmState(), owner, netId, generation);
 }
 
@@ -1305,11 +1337,11 @@ void DxDropResource(const std::string& owner, uint16_t netId, uint32_t generatio
 DxFont DxResolveFont(lua_State* L, int index, double scale) {
     DxFont out;
     if (lua_istable(L, index)) {
-        if (const Font* font = FindFont(ElementIdOf(L, index))) {
+        if (const Font* font = FindFont(ElementIdOf(L, index)); font && !font->gui) {
             out.pixels = font->height * scale;
             // Version the Java Typeface cache and native width cache by font
             // instance. Resource reloads may replace a file at the same path.
-            out.file = "@font:" + std::to_string(font->id) + ":" + font->file;
+            out.file = FontSource(*font);
             out.bold = font->bold;
             return out;
         }
@@ -1317,6 +1349,77 @@ DxFont DxResolveFont(lua_State* L, int index, double scale) {
     const char* name = lua_type(L, index) == LUA_TSTRING ? lua_tostring(L, index) : "default";
     out.pixels = 15.0 * scale * DxFontScale(name);
     return out;
+}
+
+// CLuaGUIDefs.cpp:4009-4055, CRenderItem.GuiFont.cpp:83-107. GUI sizes are
+// points at CEGUI's fixed 96 DPI, not the DX font's floor(size * 1.75) pixels.
+uint32_t DxCreateGuiFont(const std::string& path, uint32_t pointSize) {
+    const std::string file = ActiveVmResourceFile(path);
+    if (file.empty()) return 0;
+    std::FILE* in = std::fopen(file.c_str(), "rb");
+    if (!in) return 0;
+    unsigned char magic[4] = {};
+    const size_t got = std::fread(magic, 1, sizeof(magic), in);
+    std::fclose(in);
+    if (got != 4 || (std::memcmp(magic, "\x00\x01\x00\x00", 4) != 0 && std::memcmp(magic, "true", 4) != 0 &&
+                     std::memcmp(magic, "OTTO", 4) != 0 && std::memcmp(magic, "ttcf", 4) != 0)) return 0;
+    Font font;
+    font.id = g_nextFont++;
+    font.file = file;
+    font.gui = true;
+    const uint32_t size = std::clamp(pointSize, 5u, 150u);
+    font.guiPixels = size * (96.0 / 72.0);
+    font.owner = ActiveVmOwner();
+    font.netId = ActiveVmOwnerNet();
+    font.generation = ActiveVmOwnerGeneration();
+    // Android loads and validates the real font now; queued GUI draws use this
+    // creation identity. The host only checks the header and estimates metrics.
+    const float height = WorldRPG::JniBridge::FontHeight(FontSource(font), static_cast<float>(font.guiPixels), false);
+#ifdef __ANDROID__
+    if (!(height > 0)) return 0;
+#else
+    if (height == 0) return 0;
+#endif
+    std::string meta = path;
+    for (char& ch : meta) if (ch == '\\') ch = '/';
+    std::string fileOwner = font.owner;
+    if (!meta.empty() && meta.front() == ':') {
+        const size_t slash = meta.find('/');
+        fileOwner = meta.substr(1, slash - 1);
+        meta.erase(0, slash + 1);
+    }
+    const std::string base = font.owner + "*" + fileOwner + "*" + meta + "*" + std::to_string(size) + "*";
+    unsigned counter = 0;
+    do { font.guiName = base + std::to_string(counter++); } while (DxGuiFontByName(font.guiName));
+    g_fonts.push_back(font);
+    return font.id;
+}
+
+bool DxGuiFontInfo(uint32_t id, DxFont& renderFont, std::string& name) {
+    const Font* font = FindFont(id);
+    if (!font || !font->gui) return false;
+    renderFont.pixels = font->guiPixels;
+    renderFont.file = FontSource(*font);
+    renderFont.bold = false;
+    name = font->guiName;
+    return true;
+}
+
+uint32_t DxGuiFontByName(const std::string& name) {
+    for (const Font& font : g_fonts) if (font.gui && font.guiName == name) return font.id;
+    return 0;
+}
+
+double DxMeasureFontHeight(const DxFont& font) {
+    static std::unordered_map<std::string, float> cache;
+    const std::string key = font.file + "|" + std::to_string(font.pixels) + (font.bold ? "|b" : "|n");
+    const auto found = cache.find(key);
+    if (found != cache.end()) return found->second;
+    const float height = WorldRPG::JniBridge::FontHeight(font.file, static_cast<float>(font.pixels), font.bold);
+    if (!(height > 0)) return font.pixels * 1.2;
+    if (cache.size() >= 4096) cache.clear();
+    cache.emplace(key, height);
+    return height;
 }
 
 double DxMeasureLine(const std::string& text, const DxFont& font) {
@@ -1368,6 +1471,11 @@ void InstallDxLua(lua_State* L) {
     for (const Texture& texture : g_textures)
         if (texture.renderTarget || texture.memory) g_deadTargets.push_back(texture.id);
     g_textures.clear();
+    for (const Font& font : g_fonts) {
+        if (!font.gui) continue;
+        GuiDetachFont(font.id);
+        DxFreeOverlayBitmap(font.id);
+    }
     g_fonts.clear();
     g_activeTarget = 0;
     static const struct { const char* name; lua_CFunction fn; } binds[] = {

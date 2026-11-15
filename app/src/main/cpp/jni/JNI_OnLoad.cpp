@@ -49,6 +49,7 @@ static jmethodID g_onConnectionStateChangeMethod = nullptr;
 static jmethodID g_onGameLineMethod = nullptr;
 static jmethodID g_onDxFrameMethod = nullptr;
 static jmethodID g_measureTextMethod = nullptr;
+static jmethodID g_fontHeightMethod = nullptr;
 static jmethodID g_loadPixelsMethod = nullptr;
 static jmethodID g_decodePixelsMethod = nullptr;
 static jmethodID g_encodePixelsMethod = nullptr;
@@ -176,6 +177,23 @@ jintArray ToIntArray(JNIEnv* env, const std::vector<uint32_t>& argb) {
     return array;
 }
 }  // namespace
+
+float FontHeight(const std::string& source, float pixelSize, bool bold) {
+    EnvScope scope;
+    JNIEnv* env = scope.env;
+    if (!env || !g_gameActivityRef || !g_fontHeightMethod) return -1.f;
+    const auto wide = WorldRPG::Utf8::ToUtf16(source);
+    jstring jsource = env->NewString(reinterpret_cast<const jchar*>(wide.data()), static_cast<jsize>(wide.size()));
+    if (!jsource) {
+        if (env->ExceptionCheck()) env->ExceptionClear();
+        return 0.f;
+    }
+    float height = env->CallFloatMethod(g_gameActivityRef, g_fontHeightMethod, jsource,
+                                       static_cast<jfloat>(pixelSize), static_cast<jboolean>(bold));
+    if (env->ExceptionCheck()) { env->ExceptionClear(); height = 0.f; }
+    env->DeleteLocalRef(jsource);
+    return height;
+}
 
 // Pixels of an image file or of an overlay bitmap ("tx:<id>", "rt:<id>"). The name is a cache
 // path or a bitmap name, both printable ASCII.
@@ -415,6 +433,8 @@ Java_com_worldrpg_neonlauncher_game_GameActivity_nativeInit(JNIEnv* env, jobject
     if (!g_onDxFrameMethod && env->ExceptionCheck()) env->ExceptionClear();
     g_measureTextMethod = env->GetMethodID(activityClass, "onNativeMeasureText", "(Ljava/lang/String;FLjava/lang/String;Z)F");
     if (!g_measureTextMethod && env->ExceptionCheck()) env->ExceptionClear();
+    g_fontHeightMethod = env->GetMethodID(activityClass, "onNativeFontHeight", "(Ljava/lang/String;FZ)F");
+    if (!g_fontHeightMethod && env->ExceptionCheck()) env->ExceptionClear();
     g_loadPixelsMethod = env->GetMethodID(activityClass, "onNativeLoadPixels", "(Ljava/lang/String;)[I");
     if (!g_loadPixelsMethod && env->ExceptionCheck()) env->ExceptionClear();
     g_decodePixelsMethod = env->GetMethodID(activityClass, "onNativeDecodePixels", "([B)[I");

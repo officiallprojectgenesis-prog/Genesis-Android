@@ -527,7 +527,7 @@ void CheckMemoInput(WorldRPG::Script::LuaVMStub& vm) {
     vm.pumpDx();
     ActiveVmQueueScriptInput("x\r\ny",0,"");
     frame = vm.pumpDx();
-    CHECK(frame.find("T 1100.0 116.0") != std::string::npos && frame.find("T 1100.0 132.0") != std::string::npos);
+    CHECK(frame.find("T 1100.0 114.4") != std::string::npos && frame.find("T 1100.0 128.8") != std::string::npos);
     RunLua(vm,"memo-insert-lines",R"LUA(
         assert(guiGetText(memoInput) == 'é🙂Ω\nx\ny\n' and guiMemoGetCaretIndex(memoInput) == 7, 'memo preserves Unicode and CRLF becomes one newline')
         assert(memoChanged == 3 and memoAccepted == 0 and memoChars == 0, 'memo consumes text and Enter changes text without acceptance')
@@ -1012,7 +1012,7 @@ void CheckGui(WorldRPG::Script::LuaVMStub& vm) {
         assert(guiMoveToBack(btn) == true, 'move back')
         local image = guiCreateStaticImage(0, 0, 10, 10, 'face.png', false)
         assert(isElement(image) == true and guiStaticImageGetNativeSize(image) == false, 'static image')
-        assert(guiSetFont(lab, 'default-bold') == true and guiGetFont(lab) == 'default-bold', 'font')
+        assert(guiSetFont(lab, 'default-bold-small') == true and guiGetFont(lab) == 'default-bold-small', 'font')
         assert(guiGetCursorType() == 'arrow', 'cursor')
         assert(guiCreateFont('../x.ttf') == false and guiCreateFont('face.ttf', 12) == false, 'font file')
         local grid = guiCreateGridList(0, 0, 200, 100, false)
@@ -1060,7 +1060,7 @@ void CheckGui(WorldRPG::Script::LuaVMStub& vm) {
     std::string frame = WorldRPG::Script::ActiveVmPump();
     CHECK(Has(frame, "R 10.0 20.0 300.0 200.0 "));
     CHECK(Has(frame, "Hello Window"));
-    CHECK(Has(frame, "T 15.0 60.0 115.0 80.0 1.00 4294967295 0 Child label"));
+    CHECK(Has(frame, "Y 15.0 60.0 115.0 80.0 4294967295 0 0 0 Child label"));
     CHECK(Has(frame, "R 960.0 540.0 480.0 108.0 "));
 
     // A window hidden by the script is no longer drawn, and neither is its child.
@@ -1075,7 +1075,7 @@ void CheckGui(WorldRPG::Script::LuaVMStub& vm) {
     frame = WorldRPG::Script::ActiveVmPump();
     CHECK(Has(frame, "Hello Window"));
     CHECK(Has(frame, "Child label"));
-    CHECK(Has(frame, "2147483647 0 Child label"));  // white text at alpha 0.5 (127 of 255)
+    CHECK(Has(frame, "2147483647 0 0 0 Child label"));  // white text at alpha 0.5 (127 of 255)
     RunLua(vm, "gui-alpha-reset", "guiSetAlpha(win, 1)");
 
     // Font scale: desktop pricedown is 30 px, so the draw line carries scale 2.
@@ -1809,6 +1809,139 @@ void CheckDxImage(WorldRPG::Script::LuaVMStub& vm) {
     )LUA");
 }
 
+void CheckGuiFonts(WorldRPG::Script::LuaVMStub& vm) {
+    using namespace WorldRPG::Script;
+    // CheckDxImage created this synthetic sfnt-header fixture. The host cannot
+    // decode glyphs; Android validates the file through its real Typeface loader.
+    WorldRPG::Net::ResourceStartInfo producer;
+    producer.name = "guifonts";
+    producer.resourceId = 75;
+    producer.entityId = 0x7500;
+    producer.dynamicEntityId = 0x7501;
+    producer.noClientCacheScripts = 1;
+    producer.startCounter = 1;
+    ActiveVmOnResourceStart(producer);
+    const std::string script = R"LUA(
+        _G.guiFont = guiCreateFont(':radarres/radar/font.ttf',12)
+        _G.guiFont2 = guiCreateFont(':radarres/radar/font.ttf',12)
+        _G.guiFontDefault = guiCreateFont(':radarres/radar/font.ttf')
+        _G.guiFontMin = guiCreateFont(':radarres/radar/font.ttf',0)
+        _G.guiFontMax = guiCreateFont(':radarres/radar/font.ttf',-1)
+        _G.guiFontMissing = guiCreateFont(':radarres/radar/missing.ttf')
+        _G.guiFontBad = guiCreateFont(':radarres/radar/notimage.png')
+        _G.guiFontEscape = guiCreateFont(':radarres/../secret.ttf')
+        _G.guiFontLabel = guiCreateLabel(20,30,120,90,'#ff0000\né🙂\\n',false)
+        _G.guiFontEdit = guiCreateEdit(20,130,120,30,'font-edit',false)
+        _G.guiFontPanel = guiCreateTabPanel(20,180,120,80,false)
+        _G.guiFontTab = guiCreateTab('font-tab',guiFontPanel)
+        assert(guiSetFont(guiFontTab,guiFont))
+        _G.guiFontSet = guiSetFont(guiFontLabel,guiFont) and guiSetFont(guiFontEdit,guiFont)
+        guiLabelSetHorizontalAlign(guiFontLabel,'right',true)
+        guiLabelSetVerticalAlign(guiFontLabel,'bottom')
+        _G.guiFontName, _G.guiFontReturned = guiGetFont(guiFontLabel)
+        _G.guiDxFont = dxCreateFont(':radarres/radar/font.ttf',12)
+        addEventHandler('onClientRender',root,function()
+            _G.guiFontRejectedByDx = dxDrawText('invalid-gui-font',0,0,100,20,-1,1,guiFont)==false
+        end)
+    )LUA";
+    auto body = NoCacheScriptBody(75, script);
+    CHECK(ActiveVmFeedScripts(body.data(),body.size(),body.size()*8));
+    ActiveVmPulseResources();
+    RunLua(vm,"gui-font-create",R"LUA(
+        assert(guiFontSet and isElement(guiFont) and getElementType(guiFont)=='gui-font')
+        assert(guiFontName=='guifonts*radarres*radar/font.ttf*12*0' and guiFontReturned.id==guiFont.id)
+        assert(guiFont2.id~=guiFont.id and guiFontDefault and guiFontMin and guiFontMax)
+        assert(guiFontMissing==false and guiFontBad==false and guiFontEscape==false)
+        assert(guiCreateFont(':radarres/radar/font.ttf')==false, 'creation requires a resource owner')
+    )LUA");
+    RunLua(vm,"gui-font-metrics",R"LUA(
+        assert(math.abs(guiLabelGetFontHeight(guiFontLabel)-19.2)<0.001, 'host estimate at 12 pt / 16 px')
+        assert(guiSetText(guiFontLabel,'ab\nabcdef\nx'))
+        assert(math.abs(guiLabelGetTextExtent(guiFontLabel)-6*7*16/15)<0.001, 'longest line in assigned font')
+        assert(guiSetFont(guiFontLabel,guiFontDefault))
+        local defaultHeight=guiLabelGetFontHeight(guiFontLabel)
+        assert(guiSetFont(guiFontLabel,guiFontMax) and guiLabelGetFontHeight(guiFontLabel)>defaultHeight*10)
+        assert(guiSetFont(guiFontLabel,guiFontMin) and guiLabelGetFontHeight(guiFontLabel)<defaultHeight)
+        assert(guiSetFont(guiFontLabel,guiFont) and guiSetText(guiFontLabel,'#ff0000\né🙂\\n'))
+    )LUA");
+    RunLua(vm,"gui-font-validation",R"LUA(
+        local old=guiGetFont(guiFontLabel)
+        assert(guiSetFont(guiFontLabel,guiDxFont)==false, 'DX font is not a GUI font')
+        assert(guiSetFont(guiFontLabel,localPlayer)==false and guiSetFont(guiFontLabel,'pricedown')==false)
+        assert(guiSetFont(guiFontLabel,nil)==false and guiSetFont(guiFontLabel,123)==false)
+        assert(guiGetFont(guiFontLabel)==old, 'failed assignment preserves font')
+        assert(select('#',guiGetFont(guiFontLabel))==2 and select('#',guiGetFont(localPlayer))==1)
+        assert(guiSetFont(guiFontLabel) and guiGetFont(guiFontLabel)=='default-normal')
+        assert(select(2,guiGetFont(guiFontLabel))==nil)
+        assert(guiSetFont(guiFontLabel,guiFont))
+    )LUA");
+    RunLua(vm,"gui-font-dx-metric-types",R"LUA(
+        assert(dxGetFontHeight(1,guiFont)==false, 'GUI font must not silently measure as DX default')
+        assert(dxGetTextWidth('x',1,guiFont)==false, 'DX text width requires a DX font')
+        assert(not pcall(dxGetTextSize,'x',0,1,guiFont), 'DX size uses a typed font variant')
+        assert(not pcall(dxGetTextSize,'',0,1,guiFont), 'font type is validated even for empty text')
+    )LUA");
+    std::string frame = ActiveVmPump();
+    lua_State* L = ActiveVmState();
+    lua_getglobal(L,"guiFont"); lua_getfield(L,-1,"id");
+    const std::string guiFontId = std::to_string(lua_tointeger(L,-1));
+    const std::string selection = "F 16.000 0 @font:" + guiFontId +
+        ":/tmp/neon-dx-cache/radarres/radar/font.ttf\n";
+    lua_pop(L,2);
+    CHECK(Has(frame,(selection + "Y 20.0 30.0 140.0 120.0 4294967295 2 2 1 #ff0000\\né🙂\\\\n\nF\n").c_str()));
+    CHECK(Has(frame,(selection + "R 20.0 130.0 120.0 30.0 ").c_str()));
+    CHECK(Has(frame,"T 20.0 130.0 140.0 160.0 1.00 4294967295 0 font-edit\nF\n"));
+    CHECK(Has(frame,(selection + "T 24.0 180.0 96.0 198.0 1.00 4294967295 0 font-tab\n").c_str()));
+    RunLua(vm,"gui-font-dx-separation", "assert(guiFontRejectedByDx, 'GUI fonts cannot be passed as DX fonts')");
+
+    WorldRPG::Net::ResourceStartInfo consumer = producer;
+    consumer.name = "guifontconsumer";
+    consumer.resourceId = 76;
+    consumer.entityId = 0x7600;
+    consumer.dynamicEntityId = 0x7601;
+    ActiveVmOnResourceStart(consumer);
+    body = NoCacheScriptBody(76,R"LUA(
+        _G.guiFontConsumer=guiCreateLabel(200,30,120,50,'consumer',false)
+        _G.guiFontNamed=guiCreateLabel(200,90,120,50,'named',false)
+        _G.guiConsumerSet=guiSetFont(guiFontConsumer,guiFont) and guiSetFont(guiFontNamed,guiFontName)
+    )LUA");
+    CHECK(ActiveVmFeedScripts(body.data(),body.size(),body.size()*8));
+    ActiveVmPulseResources();
+    RunLua(vm,"gui-font-cross-resource",R"LUA(
+        assert(guiConsumerSet and select(2,guiGetFont(guiFontConsumer)).id==guiFont.id)
+        assert(guiGetFont(guiFontNamed)==guiFontName and select(2,guiGetFont(guiFontNamed))==nil)
+        assert(guiSetVisible(guiFont, false)==false, 'font is a render element, not a widget')
+    )LUA");
+    // The file's resource does not own a font created by guifonts.
+    WorldRPG::Net::BitStreamWriter fileStop;
+    fileStop.Write(static_cast<uint16_t>(9));
+    ActiveVmOnResourceStop(fileStop.GetData(),fileStop.GetByteLength(),fileStop.GetBitLength());
+    RunLua(vm,"gui-font-file-owner-stop",R"LUA(
+        assert(isElement(guiFont) and guiGetFont(guiFontConsumer)==guiFontName)
+        assert(destroyElement(guiFont) and not isElement(guiFont))
+        assert(guiGetFont(guiFontConsumer)=='default-normal' and select(2,guiGetFont(guiFontConsumer))==nil)
+        assert(guiGetFont(guiFontNamed)=='default-normal', 'named users also release the removed font')
+        assert(guiGetFont(guiFontEdit)=='default-normal' and isElement(guiFont2))
+        assert(guiSetFont(guiFontConsumer,guiFont)==false)
+        assert(guiSetFont(guiFontConsumer,guiFont2))
+    )LUA");
+    WorldRPG::Net::BitStreamWriter ownerStop;
+    ownerStop.Write(static_cast<uint16_t>(75));
+    ActiveVmOnResourceStop(ownerStop.GetData(),ownerStop.GetByteLength(),ownerStop.GetBitLength());
+    RunLua(vm,"gui-font-owner-stop",R"LUA(
+        assert(not isElement(guiFont2) and not isElement(guiFontDefault) and not isElement(guiFontMin) and not isElement(guiFontMax))
+        assert(not isElement(guiFontEdit) and isElement(guiFontConsumer), 'other resource GUI survives')
+        assert(guiGetFont(guiFontConsumer)=='default-normal' and select(2,guiGetFont(guiFontConsumer))==nil)
+    )LUA");
+    frame = ActiveVmPump();
+    CHECK(Has(frame,("D " + guiFontId + "\n").c_str()));
+    CHECK(Has(frame,"F 12.000 0 @gui:default-normal\nY 200.0 30.0"));
+    CHECK(!Has(frame,"/radar/font.ttf"));
+    WorldRPG::Net::BitStreamWriter consumerStop;
+    consumerStop.Write(static_cast<uint16_t>(76));
+    ActiveVmOnResourceStop(consumerStop.GetData(),consumerStop.GetByteLength(),consumerStop.GetBitLength());
+}
+
 // Polls the game pulse that delivers fetchRemote completions. A failed probe is not a
 // recorded check; the final RunLua reports the assertion that is still false.
 bool WaitRemote(WorldRPG::Script::LuaVMStub& vm, const char* name, const std::string& assertCode, int timeoutMs) {
@@ -2378,6 +2511,7 @@ int main(int argc, char** argv) {
     CheckSvg(vm);
     CheckStopLifecycle(vm);
     CheckDxImage(vm);
+    CheckGuiFonts(vm);
     CheckNetworkCalls(vm);
 
     if (argc > 1) {

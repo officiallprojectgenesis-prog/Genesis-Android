@@ -40,19 +40,38 @@ public final class MtaDxView extends View {
     }
 
     // A recreated native font gets a new source identity even at the same path.
-    // Old queued text can retain its own Typeface; unused versions leave this bounded cache.
+    // GUI faces stay pinned until their ordered release; other versions use an LRU cache.
     private static final DxFontCache<Typeface> FONTS = new DxFontCache<>(64, (path, bold) -> {
         try {
             Typeface loaded = Typeface.createFromFile(path);
             return bold ? Typeface.create(loaded, Typeface.BOLD) : loaded;
         } catch (RuntimeException error) {
-            return Typeface.DEFAULT_BOLD;
+            return null;
         }
     });
 
     private static Typeface typefaceFor(String fontFile, boolean bold) {
         if (fontFile == null || fontFile.isEmpty()) return Typeface.DEFAULT_BOLD;
-        return FONTS.get(fontFile, bold);
+        if (fontFile.startsWith("@gui:")) return bold ? Typeface.DEFAULT_BOLD : Typeface.DEFAULT;
+        Typeface loaded = FONTS.get(fontFile, bold);
+        return loaded == null ? Typeface.DEFAULT_BOLD : loaded;
+    }
+
+    /** Load/validate a custom GUI font and measure the line spacing used by the view. */
+    public static float fontHeight(String source, float pixelSize, boolean bold) {
+        if (!(pixelSize > 0f) || !Float.isFinite(pixelSize)) return 0f;
+        boolean custom = source != null && !source.isEmpty() && !source.startsWith("@gui:");
+        Typeface face = custom ? FONTS.get(source, bold) : typefaceFor(source, bold);
+        if (face == null) return 0f;
+        float height;
+        synchronized (MEASURE) {
+            MEASURE.setTypeface(face);
+            MEASURE.setTextSize(pixelSize);
+            height = MEASURE.getFontSpacing();
+        }
+        if (!(height > 0f) || !Float.isFinite(height)) return 0f;
+        if (custom) FONTS.pin(source, bold, face);
+        return height;
     }
 
     /**
@@ -150,6 +169,7 @@ public final class MtaDxView extends View {
             if (line.startsWith("R ")) drawRect(canvas, line.substring(2));
             else if (line.startsWith("T ")) drawText(canvas, line.substring(2));
             else if (line.startsWith("X ")) drawDxText(canvas, line.substring(2));
+            else if (line.startsWith("Y ")) drawGuiLabel(canvas, line.substring(2));
             else if (line.startsWith("I ")) drawImage(canvas, line.substring(2));
             else if (line.startsWith("L ")) drawLine(canvas, line.substring(2));
             else if (line.startsWith("P ")) drawPrimitive(canvas, line.substring(2));
@@ -384,8 +404,9 @@ public final class MtaDxView extends View {
         }
     }
 
-    // "D id": the render target or pixel texture of this id was destroyed.
+    // "D id": a render target, pixel texture or GUI font of this id was destroyed.
     private void freeTarget(String id) {
+        FONTS.releaseInstance(id);
         targetCanvases.remove("rt:" + id);
         synchronized (MEMORY) {
             for (String name : new String[] {"rt:" + id, "tx:" + id}) {
@@ -395,7 +416,7 @@ public final class MtaDxView extends View {
         }
     }
 
-    // "height bold file" selects a dxCreateFont font for the text lines that follow; an empty body
+    // "height bold source" selects a DX/GUI font for the text lines that follow; an empty body
     // returns to the default font.
     private void selectFont(String body) {
         String[] p = body.split(" ", 3);
@@ -600,19 +621,58 @@ public final class MtaDxView extends View {
         float y = (float) Math.floor(f(p[1]));
         float right = (float) Math.floor(f(p[2]));
         float bottom = (float) Math.floor(f(p[3]));
+        if (!(right > x && bottom > y)) return;
         float scale = f(p[4]);
         text.setColor((int) l(p[5]));
         // The draw line is in the pixels that guiGetScreenSize reports (no density factor).
         // Desktop draws the default font at 15 px times the scale (CGraphics fontInfos).
         text.setTextSize(textBase * scale);
         CharSequence shown = "1".equals(p[6]) ? MtaChatView.colorize(p[7]) : p[7];
-        int width = Math.max(1, (int) (right - x));
+        int width = DxTextLayout.width(right - x);
         StaticLayout layout = StaticLayout.Builder.obtain(shown, 0, shown.length(), text, width)
                 .setIncludePad(false).setMaxLines(3).build();
         canvas.save();
-        canvas.translate(x, y + Math.max(0, (bottom - y - layout.getHeight()) / 2f));
-        layout.draw(canvas);
-        canvas.restore();
+        try {
+            canvas.clipRect(x, y, right, bottom);
+            canvas.translate(x, y + Math.max(0, (bottom - y - layout.getHeight()) / 2f));
+            layout.draw(canvas);
+        } finally {
+            canvas.restore();
+        }
+    }
+
+    // GUI labels preserve literal text and logical lines. CEGUI label alignment,
+    // word wrapping and clipping are independent of the DX drawing options.
+    private void drawGuiLabel(Canvas canvas, String body) {
+        String[] p = body.split(" ", 9);
+        if (p.length != 9) return;
+        float x = f(p[0]), y = f(p[1]), right = f(p[2]), bottom = f(p[3]);
+        if (!(right > x && bottom > y)) return;
+        text.setColor((int) l(p[4]));
+        text.setTextSize(textBase);
+        String shown = DxTextLayout.decode(p[8]).replace("\r\n", "\n").replace('\r', '\n');
+        boolean wrap = "1".equals(p[7]);
+        int width = DxTextLayout.width(wrap ? right - x : Layout.getDesiredWidth(shown, text));
+        int alignX = (int) l(p[5]), alignY = (int) l(p[6]);
+        Layout.Alignment alignment = alignX == 1 ? Layout.Alignment.ALIGN_CENTER
+                : alignX == 2 ? Layout.Alignment.ALIGN_OPPOSITE : Layout.Alignment.ALIGN_NORMAL;
+        StaticLayout layout = StaticLayout.Builder.obtain(shown, 0, shown.length(), text, width)
+                .setIncludePad(false).setAlignment(alignment).build();
+        // CEGUI StaticText.cpp:142 counts line spacing for the final line too.
+        float blockHeight = layout.getLineCount() * text.getFontSpacing();
+        if (!Float.isFinite(blockHeight)) return;
+        float dx = x + DxTextLayout.offset(right - x, width, alignX);
+        float offsetY = DxTextLayout.offset(bottom - y, blockHeight, alignY);
+        if (alignY == 1) offsetY = (int) (offsetY + 0.5f); // CEGUI PixelAligned
+        float dy = y + offsetY;
+        canvas.save();
+        try {
+            canvas.clipRect(x, y, right, bottom);
+            canvas.translate(dx, dy);
+            layout.draw(canvas);
+        } finally {
+            canvas.restore();
+        }
     }
 
     // X: box, scales, color/code flag, alignments, clip/wrap/subpixel,

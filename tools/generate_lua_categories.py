@@ -51,7 +51,7 @@ CATEGORIES = OrderedDict([
         "file": "GUI_AND_DX.md",
         "description": "2D screen drawing, fonts, text, rectangles, lines, textures, render targets, GUI windows, buttons, edits, labels, gridlists, and 3D line drawing.",
         "groups": ["CLuaGUIDefs", "CLuaDrawingDefs", "CLuaVectorGraphicDefs", "CLua2DFXDefs"],
-        "subsystem_notes": "Desktop uses CEGUI and Direct3D9. Mobile uses `MtaDxView.java` (Android Canvas) + `LuaGuiApi.cpp`. Edit/memo input and caret count Unicode characters; JNI converts UTF-16/UTF-8. Memo Enter inserts a newline; logical lines render separately. The eight 2D draw calls honor postGUI, capture blend/font state and retain render-target order. DX text supports alignment, clipping, wrapping, independent numeric scales and rotation with a pivot; Canvas font metrics still differ from Direct3D. Primitive lines interpolate vertex colors. Grid sorting, selection, memo wrapping/automatic caret scrolling and HLSL/3D drawing remain pending. `guiCreateFont` returns false because CreateGuiFont is not hooked. Host tests and Android compilation do not verify device rendering."
+        "subsystem_notes": "Desktop uses CEGUI and Direct3D9. Mobile uses `MtaDxView.java` (Android Canvas) + `LuaGuiApi.cpp`. Resource GUI fonts load through Android Typeface, are distinct from DX fonts, and detach from widgets on destruction/resource stop. GUI labels honor alignment, wrapping, clipping and logical lines; label metrics use the assigned font. Built-in GUI font names use Android system faces, so their appearance and CEGUI skin geometry still differ. Edit/memo input and caret count Unicode characters; JNI converts UTF-16/UTF-8. Memo Enter inserts a newline; logical lines render separately. The eight 2D draw calls honor postGUI, capture blend/font state and retain render-target order. DX text supports alignment, clipping, wrapping, independent numeric scales and rotation with a pivot; Canvas font metrics still differ from Direct3D. Primitive lines interpolate vertex colors. Grid sorting, selection, memo wrapping/automatic caret scrolling and HLSL/3D drawing remain pending. Host tests and Android compilation do not verify device rendering."
     }),
     ("ENGINE_AND_MODELS", {
         "title": "Engine & Model Replacement (DFF, TXD, COL)",
@@ -139,7 +139,19 @@ def format_status(status):
         return "Missing"
 
 def guess_conversion_notes(name, group, status, detail):
-    if status == "implemented" and name in {"dxCreateFont", "dxGetTextWidth", "dxGetTextSize"}:
+    if status == "implemented" and name == "guiCreateFont":
+        return "Creates a resource-owned gui-font from a resolved TTF/OTF/TTC file, including cross-resource paths. Android validates/preloads the Typeface; host checks only the sfnt signature. Size follows unsigned conversion and the desktop 5-150 point clamp at 96 DPI. Live GUI faces remain retained beyond LRU pressure; an ordered D command releases them after earlier draws on destruction/stop/reset. Host/Java lifecycle tests pass; not device-verified."
+    if status == "implemented" and name in {"guiSetFont", "guiGetFont"}:
+        return "Accepts a live GUI font element or a present GUI font name; DX fonts and unknown names are rejected without changing the widget. guiGetFont returns name and the explicitly attached font element (nil for a named assignment). Destruction/resource stop restores default-normal for users in other resources too. Built-in GUI names use Android system faces; CEGUI appearance/layout is not identical. Host/Java checks pass; not device-verified."
+    if status == "implemented" and name == "guiLabelGetFontHeight":
+        return "Returns assigned-font Android line spacing in pixels as an approximation. CEGUI returns cached glyph height, which can differ from baseline spacing; exact height parity remains pending. Host builds estimate metrics without Android. Host/Java checks pass; not device-verified."
+    if status == "implemented" and name == "guiLabelGetTextExtent":
+        return "Measures the longest logical line in pixels using the same Typeface source/size as the view. Host builds estimate metrics without Android. Host/Java checks pass; real glyph metrics require device validation."
+    if status == "implemented" and name in {"guiLabelSetHorizontalAlign", "guiLabelSetVerticalAlign", "guiCreateLabel"}:
+        return "GUI label layout honors horizontal/vertical alignment, optional word wrapping and clipping. Escaped literal text preserves newlines, backslashes and Unicode; labels have no three-line limit. The assigned GUI font is captured/reset around each widget. Canvas line breaking differs from CEGUI. Host/Java checks pass; not device-verified."
+    if status == "implemented" and name in {"dxGetFontHeight", "dxGetTextWidth", "dxGetTextSize"}:
+        return "DX metrics resolve the versioned native DX font source; a live GUI font is rejected instead of silently measuring the default. Height/width return false for that wrong type; dxGetTextSize raises its typed argument error before allocating C++ strings, even for empty text. Unknown/destroyed font fallback remains as before. Host type/lifecycle tests pass; real glyph metrics still need device validation."
+    if status == "implemented" and name == "dxCreateFont":
         return "Custom fonts use a native instance identity in both the Typeface cache and measured-width cache; recreating a font at the same path reloads it. Java Typeface cache has an LRU bound. Host lifecycle checks pass; Android compiles; glyph metrics still need device validation."
     if status == "stub" and name in {"attachElements", "detachElements"}:
         return "Returns false until native physical attachment and its lifecycle/events are ported. Server attachment queries are metadata-only; these calls do not mutate that snapshot."

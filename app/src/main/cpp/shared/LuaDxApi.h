@@ -45,7 +45,16 @@ struct DxFont {
 };
 DxFont DxResolveFont(lua_State* L, int index, double scale);
 
-// The overlay frees the bitmaps "rt:<id>" and "tx:<id>" at the start of the next frame.
+// CClientGuiFont render elements use the same font source/cache bridge, but are
+// distinct from dx-font elements. Creation returns 0 for an invalid resource file.
+uint32_t DxCreateGuiFont(const std::string& path, uint32_t pointSize);
+bool DxGuiFontInfo(uint32_t id, DxFont& renderFont, std::string& name);
+uint32_t DxGuiFontByName(const std::string& name);
+// Font line spacing in overlay pixels; host builds estimate it from the pixel size.
+double DxMeasureFontHeight(const DxFont& font);
+
+// Queues an ordered D command: frees "rt:<id>"/"tx:<id>" or unpins a GUI font
+// after any older retained draws. Also used for GUI font destruction/session reset.
 void DxFreeOverlayBitmap(uint32_t id);
 
 // End of the script render events: draws go back to the screen if a script left a render target

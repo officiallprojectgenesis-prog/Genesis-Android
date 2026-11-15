@@ -66,18 +66,59 @@ executam com doubles Android. Elas conferem a fila, bitmap ownership,
 composição opaca, recarga de fontes e posição das linhas; não substituem
 a validação de GPU, rasterização de fontes ou SVG em um aparelho.
 
+## Continuação: fontes GUI e labels
+
+- `guiCreateFont` deixou de falhar incondicionalmente. Cria `gui-font` com
+  arquivo resolvido no recurso, clamp unsigned de 5–150 pontos e conversão a
+  pixels por 96 DPI. No Android, o Typeface é carregado e validado na criação;
+  o host usa uma assinatura sfnt sintética para testar o ciclo de vida.
+- `guiSetFont` distingue fontes GUI e DX, aceita nomes presentes e preserva a
+  fonte anterior diante de argumento inválido. `guiGetFont` retorna nome e
+  elemento, como `CLuaGUIDefs.cpp:1359-1393,1730-1755`.
+- Fontes mantêm o dono que as criou, mesmo com arquivo de outro recurso.
+  Destruição e stop restauram `default-normal` nos controles usuários,
+  incluindo controles de outros recursos (`CClientGuiFont::Unlink`).
+- Labels usam um comando próprio `Y`: texto literal escapado, linhas sem
+  limite artificial de três, alinhamento, quebra opcional e clipping.
+  As medidas usam a mesma fonte/escala da view e retornam pixels, em vez de
+  escala normalizada e estimativa fixa por quantidade de caracteres.
+- A revisão conferiu retorno de erro, separação GUI/DX, reset por controle,
+  título de tab com fonte própria, usuários por nome/elemento e a ordem de
+  destruição entre recursos. Esses casos têm regressões no host/JVM.
+
+Os nomes nativos de GUI usam faces do sistema Android. A aparência CEGUI,
+geometria de skins e controles com fontes grandes ainda precisam de comparação
+no aparelho. A quebra é feita pelo Android; doubles não verificam glifos/GPU.
+`guiLabelGetFontHeight` ainda usa o espaçamento de linha Android como aproximação:
+CEGUI retorna a altura dos glifos no cache (`CEGUIFont.cpp:1031-1037`), que não é
+necessariamente o avanço entre linhas. Essa diferença continua pendente.
+
+## Code review antes do commit de fontes GUI
+
+| Prioridade | Falha confirmada | Correção e regressão |
+|---|---|---|
+| P2 | O LRU de 64 entradas podia expulsar uma fonte GUI ainda viva; uma alteração no arquivo passava a afetar o mesmo elemento | A face validada fica retida enquanto o elemento vive. Destruição/stop/reset emitem `D`, consumido depois dos desenhos anteriores. Testes usam pressão maior que 64 versões, substituição do arquivo e liberação com quadro substituído. |
+| P2 | `T` dos edits/botões não recortava texto grande pela caixa do controle | O renderer aplica `clipRect` e protege `save/restore` com `finally`; a largura usa o limite comum de layout. O teste verifica o recorte e um desenho DX posterior sem deslocamento herdado. |
+| P2 | `dxGetFontHeight`, `dxGetTextWidth` e `dxGetTextSize` recebiam `gui-font` e mediam a fonte padrão sem acusar o tipo | Altura/largura retornam `false`; tamanho gera o erro do argumento tipado, inclusive para texto vazio. A validação antecede strings C++ para não atravessar seus destruidores com `longjmp`. |
+
+As três regressões foram reproduzidas antes da correção. Depois dos ajustes,
+os testes passaram. A revisão final conferiu os caminhos de criação, desenho,
+destruição, stop de recurso e reset, além dos retornos e da ponte JNI.
+
 ## Validação realizada
 
-- `neon_resource_tests`: **257 verificações, zero falhas**.
+- `neon_resource_tests`: **274 verificações, zero falhas**.
 - `neon_dx_text_tests`: **24 verificações Java, zero falhas**.
-- `neon_dx_state_tests`: **20 verificações Java, zero falhas**.
-- `neon_dx_view_tests`: **12 verificações Java, zero falhas**, com doubles Android.
+- `neon_dx_state_tests`: **29 verificações Java, zero falhas**.
+- `neon_dx_view_tests`: **34 verificações Java, zero falhas**, com doubles Android.
 - `WorldRPGNeon` ARM64: compilou e linkou com o NDK.
 - Classes Java de jogo: compilaram; somente avisos de APIs obsoletas e
   bootstrap class path para Java 8.
 - Catálogo de Lua regenerado: 651 handlers não constantes, 136 stubs e
-  794 ausentes. Este lote corrige comportamento de bindings existentes: **5/5 problemas resolvidos**,
-  sem alteração da cobertura geral de funções (**41,2%**).
+  794 ausentes. Este lote amplia comportamento de funções existentes e corrige
+  **3/3 problemas desta revisão**. As **5/5 correções DX anteriores** permanecem.
+  A cobertura geral continua em **41,2%**, e GUI/DX em **87,9% — 175/199**.
+  Os 24 bindings ausentes e os comportamentos parciais impedem marcar 100%.
 - `git diff --check`: sem erros.
 
 Não houve teste no aparelho nem geração de APK novo. A compilação nativa usa

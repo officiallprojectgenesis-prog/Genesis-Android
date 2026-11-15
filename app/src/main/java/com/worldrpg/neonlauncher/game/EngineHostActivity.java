@@ -971,6 +971,10 @@ public final class EngineHostActivity extends GTASA {
         return MtaDxView.measureLine(text, pixelSize, fontFile, bold);
     }
 
+    public float onNativeFontHeight(String source, float pixelSize, boolean bold) {
+        return MtaDxView.fontHeight(source, pixelSize, bold);
+    }
+
     // Bitmap work for the pixel calls (dxGetTexturePixels, dxSetTexturePixels, dxConvertPixels,
     // dxCreateTexture from pixels). Called on the script thread; see MtaDxView.
     @SuppressWarnings("unused")
