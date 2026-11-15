@@ -5,27 +5,27 @@ Core element hierarchy (parent/child), element data (synced/local), collisions, 
 ## Parity Status
 
 - **Total Functions:** 81
-- **Implemented:** 50 (61.7%)
+- **Implemented:** 54 (66.7%)
 - **Stubs:** 8
-- **Missing:** 23
+- **Missing:** 19
 
-> **Technical Requirement:** Implemented via `ElementManager.cpp` and `ServerWorld.cpp`. Gaps relate to spatial octree lookup, element matrix math, and custom attachments.
+> **Technical Requirement:** Implemented via `LuaElementApi.cpp` and `ServerWorld.cpp`. Attachment queries read ENTITY_ADD metadata, resolve references after the batch and clear references on removal. Physical attachment, attachment RPCs, spatial octree lookup and complete element matrix math remain pending.
 
 ## Function List
 
 | Lua Function | Status | Desktop Source Ref | Desktop Handler | Conversion Requirement / Implementation Notes |
 |---|---|---|---|---|
 | `acquireElementStreamingLease` | Missing | `CLuaElementDefs.cpp:96` | `AcquireElementStreamingLease` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `attachElements` | *Stub* | `CLuaElementDefs.cpp:89` | `AttachElements` | Currently stubbed: `DefaultValue(kTrue)`. Needs native engine wiring. |
+| `attachElements` | *Stub* | `CLuaElementDefs.cpp:89` | `AttachElements` | Returns false until native physical attachment and its lifecycle/events are ported. Server attachment queries are metadata-only; these calls do not mutate that snapshot. |
 | `createElement` | **Implemented** | `CLuaElementDefs.cpp:76` | `CreateElement` | Operational on Android. (CreateElement) |
 | `destroyElement` | **Implemented** | `CLuaElementDefs.cpp:77` | `DestroyElement` | Operational on Android. (DestroyElement) |
-| `detachElements` | *Stub* | `CLuaElementDefs.cpp:90` | `DetachElements` | Currently stubbed: `DefaultValue(kTrue)`. Needs native engine wiring. |
+| `detachElements` | *Stub* | `CLuaElementDefs.cpp:90` | `DetachElements` | Returns false until native physical attachment and its lifecycle/events are ported. Server attachment queries are metadata-only; these calls do not mutate that snapshot. |
 | `getAllElementData` | **Implemented** | `CLuaElementDefs.cpp:27` | `ArgumentParserWarn<false, GetAllElementData>` | Operational on Android. (GetAllElementData) |
-| `getAttachedElements` | Missing | `CLuaElementDefs.cpp:50` | `GetAttachedElements` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
+| `getAttachedElements` | **Implemented** | `CLuaElementDefs.cpp:50` | `GetAttachedElements` | Reads server ENTITY_ADD attachment metadata, including forward references in the batch and offsets in degrees. Removal clears references before ID reuse. Physical attachment, local attach/detach and later attachment RPCs remain pending. Host-tested; not device-verified. |
 | `getElementAlpha` | **Implemented** | `CLuaElementDefs.cpp:55` | `GetElementAlpha` | Operational on Android. (l_getElementAlpha) |
 | `getElementAngularVelocity` | *Stub* | `CLuaElementDefs.cpp:32` | `GetElementTurnVelocity` | Currently stubbed: `DefaultValue(kZero3)`. Needs native engine wiring. |
-| `getElementAttachedOffsets` | Missing | `CLuaElementDefs.cpp:54` | `GetElementAttachedOffsets` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `getElementAttachedTo` | Missing | `CLuaElementDefs.cpp:49` | `GetElementAttachedTo` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
+| `getElementAttachedOffsets` | **Implemented** | `CLuaElementDefs.cpp:54` | `GetElementAttachedOffsets` | Reads server ENTITY_ADD attachment metadata, including forward references in the batch and offsets in degrees. Removal clears references before ID reuse. Physical attachment, local attach/detach and later attachment RPCs remain pending. Host-tested; not device-verified. |
+| `getElementAttachedTo` | **Implemented** | `CLuaElementDefs.cpp:49` | `GetElementAttachedTo` | Reads server ENTITY_ADD attachment metadata, including forward references in the batch and offsets in degrees. Removal clears references before ID reuse. Physical attachment, local attach/detach and later attachment RPCs remain pending. Host-tested; not device-verified. |
 | `getElementBoundingBox` | Missing | `CLuaElementDefs.cpp:46` | `GetElementBoundingBox` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
 | `getElementByID` | **Implemented** | `CLuaElementDefs.cpp:24` | `GetElementByID` | Operational on Android. (GetElementByID) |
 | `getElementByIndex` | **Implemented** | `CLuaElementDefs.cpp:25` | `GetElementByIndex` | Operational on Android. (GetElementByIndex) |
@@ -56,7 +56,7 @@ Core element hierarchy (parent/child), element data (synced/local), collisions, 
 | `getRootElement` | **Implemented** | `CLuaElementDefs.cpp:22` | `GetRootElement` | Operational on Android. (GetRootElement) |
 | `hasElementData` | **Implemented** | `CLuaElementDefs.cpp:53` | `HasElementData` | Operational on Android. (HasElementData) |
 | `isElement` | **Implemented** | `CLuaElementDefs.cpp:23` | `IsElement` | Operational on Android. (IsElement) |
-| `isElementAttached` | Missing | `CLuaElementDefs.cpp:48` | `IsElementAttached` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
+| `isElementAttached` | **Implemented** | `CLuaElementDefs.cpp:48` | `IsElementAttached` | Reads server ENTITY_ADD attachment metadata, including forward references in the batch and offsets in degrees. Removal clears references before ID reuse. Physical attachment, local attach/detach and later attachment RPCs remain pending. Host-tested; not device-verified. |
 | `isElementCallPropagationEnabled` | **Implemented** | `CLuaElementDefs.cpp:71` | `IsElementCallPropagationEnabled` | Operational on Android. (IsElementCallPropagationEnabled) |
 | `isElementCollidableWith` | **Implemented** | `CLuaElementDefs.cpp:65` | `IsElementCollidableWith` | Operational on Android. (IsElementCollidableWith) |
 | `isElementDoubleSided` | **Implemented** | `CLuaElementDefs.cpp:66` | `IsElementDoubleSided` | Operational on Android. (l_isElementDoubleSided) |

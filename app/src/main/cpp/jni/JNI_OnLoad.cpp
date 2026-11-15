@@ -1,6 +1,7 @@
 #include <jni.h>
 #include <cstring>
 #include <string>
+#include <vector>
 #include <memory>
 #include <mutex>
 #include <atomic>
@@ -21,6 +22,7 @@
 #include "../shared/SyncManager.h"
 #include "../shared/PacketHandler.h"
 #include "../shared/LuaVMStub.h"
+#include "../shared/Utf8.h"
 #include "../shared/LuaMtaWindowApi.h"
 #include "../shared/LuaKeyBindApi.h"
 #include "../shared/ServerWorld.h"
@@ -46,6 +48,13 @@ static jobject g_gameActivityRef = nullptr;
 static jmethodID g_onConnectionStateChangeMethod = nullptr;
 static jmethodID g_onGameLineMethod = nullptr;
 static jmethodID g_onDxFrameMethod = nullptr;
+static jmethodID g_measureTextMethod = nullptr;
+static jmethodID g_loadPixelsMethod = nullptr;
+static jmethodID g_decodePixelsMethod = nullptr;
+static jmethodID g_encodePixelsMethod = nullptr;
+static jmethodID g_storePixelsMethod = nullptr;
+static jmethodID g_renderSvgMethod = nullptr;
+static jmethodID g_copyScreenMethod = nullptr;
 
 namespace WorldRPG::JniBridge {
 void PostGameLine(int kind, const char* text) {
@@ -75,6 +84,217 @@ void PostGameLine(int kind, const char* text) {
         env->DeleteLocalRef(jtext);
     }
     if (attached) g_jvm->DetachCurrentThread();
+}
+// Width of one line of text in the DX overlay font, or in a TTF file (EngineHostActivity.onNativeMeasureText).
+// The text goes over as UTF-16, because NewStringUTF aborts on bytes that are not modified UTF-8.
+float MeasureText(const std::string& utf8, float pixelSize, const std::string& fontFile, bool bold) {
+    if (!g_jvm || !g_gameActivityRef || !g_measureTextMethod) return -1.f;
+    const auto wide = WorldRPG::Utf8::ToUtf16(utf8);
+    JNIEnv* env = nullptr;
+    bool attached = false;
+    const jint result = g_jvm->GetEnv(reinterpret_cast<void**>(&env), JNI_VERSION_1_6);
+    if (result == JNI_EDETACHED) {
+        if (g_jvm->AttachCurrentThread(&env, nullptr) != JNI_OK) return -1.f;
+        attached = true;
+    } else if (result != JNI_OK) {
+        return -1.f;
+    }
+    float width = -1.f;
+    jstring jtext = env->NewString(reinterpret_cast<const jchar*>(wide.data()), static_cast<jsize>(wide.size()));
+    if (jtext) {
+        // The font file is a cache path made of printable ASCII (LuaVMStub DxImageFile).
+        jstring jfont = fontFile.empty() ? nullptr : env->NewStringUTF(fontFile.c_str());
+        width = env->CallFloatMethod(g_gameActivityRef, g_measureTextMethod, jtext, static_cast<jfloat>(pixelSize), jfont,
+                                     static_cast<jboolean>(bold ? JNI_TRUE : JNI_FALSE));
+        if (jfont) env->DeleteLocalRef(jfont);
+        if (env->ExceptionCheck()) {
+            env->ExceptionClear();
+            width = -1.f;
+        }
+        env->DeleteLocalRef(jtext);
+    } else if (env->ExceptionCheck()) {
+        env->ExceptionClear();
+    }
+    if (attached) g_jvm->DetachCurrentThread();
+    return width;
+}
+namespace {
+// A JNIEnv for the calling thread, attached for the scope when it was not.
+struct EnvScope {
+    JNIEnv* env = nullptr;
+    bool attached = false;
+    EnvScope() {
+        if (!g_jvm) return;
+        const jint result = g_jvm->GetEnv(reinterpret_cast<void**>(&env), JNI_VERSION_1_6);
+        if (result == JNI_EDETACHED) {
+            if (g_jvm->AttachCurrentThread(&env, nullptr) == JNI_OK) attached = true;
+            else env = nullptr;
+        } else if (result != JNI_OK) {
+            env = nullptr;
+        }
+    }
+    ~EnvScope() {
+        if (attached) g_jvm->DetachCurrentThread();
+    }
+    EnvScope(const EnvScope&) = delete;
+    EnvScope& operator=(const EnvScope&) = delete;
+};
+
+// The Activity returns {width, height, pixels...}. Null or a short array is a failure.
+bool TakePixels(JNIEnv* env, jintArray result, std::vector<uint32_t>& argb, unsigned& width, unsigned& height) {
+    if (env->ExceptionCheck()) {
+        env->ExceptionClear();
+        return false;
+    }
+    if (!result) return false;
+    const jsize count = env->GetArrayLength(result);
+    jint head[2] = {0, 0};
+    bool ok = false;
+    if (count >= 2) {
+        env->GetIntArrayRegion(result, 0, 2, head);
+        const jlong pixels = static_cast<jlong>(head[0]) * static_cast<jlong>(head[1]);
+        if (head[0] > 0 && head[1] > 0 && pixels == static_cast<jlong>(count) - 2) {
+            argb.resize(static_cast<size_t>(pixels));
+            env->GetIntArrayRegion(result, 2, static_cast<jsize>(pixels), reinterpret_cast<jint*>(argb.data()));
+            width = static_cast<unsigned>(head[0]);
+            height = static_cast<unsigned>(head[1]);
+            ok = !env->ExceptionCheck();
+            if (!ok) env->ExceptionClear();
+        }
+    }
+    env->DeleteLocalRef(result);
+    return ok;
+}
+
+jintArray ToIntArray(JNIEnv* env, const std::vector<uint32_t>& argb) {
+    jintArray array = env->NewIntArray(static_cast<jsize>(argb.size()));
+    if (!array) {
+        if (env->ExceptionCheck()) env->ExceptionClear();
+        return nullptr;
+    }
+    env->SetIntArrayRegion(array, 0, static_cast<jsize>(argb.size()), reinterpret_cast<const jint*>(argb.data()));
+    return array;
+}
+}  // namespace
+
+// Pixels of an image file or of an overlay bitmap ("tx:<id>", "rt:<id>"). The name is a cache
+// path or a bitmap name, both printable ASCII.
+bool LoadPixels(const std::string& source, std::vector<uint32_t>& argb, unsigned& width, unsigned& height) {
+    if (!g_gameActivityRef || !g_loadPixelsMethod) return false;
+    EnvScope scope;
+    JNIEnv* env = scope.env;
+    if (!env) return false;
+    jstring jsource = env->NewStringUTF(source.c_str());
+    if (!jsource) {
+        if (env->ExceptionCheck()) env->ExceptionClear();
+        return false;
+    }
+    auto result = static_cast<jintArray>(env->CallObjectMethod(g_gameActivityRef, g_loadPixelsMethod, jsource));
+    env->DeleteLocalRef(jsource);
+    return TakePixels(env, result, argb, width, height);
+}
+
+bool DecodePixels(const char* data, size_t size, std::vector<uint32_t>& argb, unsigned& width, unsigned& height) {
+    if (!g_gameActivityRef || !g_decodePixelsMethod || !data || size == 0 || size > 0x7FFFFFFFu) return false;
+    EnvScope scope;
+    JNIEnv* env = scope.env;
+    if (!env) return false;
+    jbyteArray bytes = env->NewByteArray(static_cast<jsize>(size));
+    if (!bytes) {
+        if (env->ExceptionCheck()) env->ExceptionClear();
+        return false;
+    }
+    env->SetByteArrayRegion(bytes, 0, static_cast<jsize>(size), reinterpret_cast<const jbyte*>(data));
+    auto result = static_cast<jintArray>(env->CallObjectMethod(g_gameActivityRef, g_decodePixelsMethod, bytes));
+    env->DeleteLocalRef(bytes);
+    return TakePixels(env, result, argb, width, height);
+}
+
+bool EncodePixels(const std::vector<uint32_t>& argb, unsigned width, unsigned height, bool jpeg, int quality,
+                  std::string& out) {
+    if (!g_gameActivityRef || !g_encodePixelsMethod || argb.empty() || argb.size() > 0x7FFFFFFFu) return false;
+    EnvScope scope;
+    JNIEnv* env = scope.env;
+    if (!env) return false;
+    jintArray pixels = ToIntArray(env, argb);
+    if (!pixels) return false;
+    auto result = static_cast<jbyteArray>(
+        env->CallObjectMethod(g_gameActivityRef, g_encodePixelsMethod, pixels, static_cast<jint>(width),
+                              static_cast<jint>(height), static_cast<jboolean>(jpeg ? JNI_TRUE : JNI_FALSE),
+                              static_cast<jint>(quality)));
+    env->DeleteLocalRef(pixels);
+    if (env->ExceptionCheck()) {
+        env->ExceptionClear();
+        return false;
+    }
+    if (!result) return false;
+    const jsize length = env->GetArrayLength(result);
+    out.resize(static_cast<size_t>(length));
+    if (length > 0) env->GetByteArrayRegion(result, 0, length, reinterpret_cast<jbyte*>(&out[0]));
+    env->DeleteLocalRef(result);
+    return length > 0;
+}
+
+bool StorePixels(const std::string& name, const std::vector<uint32_t>& argb, unsigned width, unsigned height) {
+    if (!g_gameActivityRef || !g_storePixelsMethod || argb.empty() || argb.size() > 0x7FFFFFFFu) return false;
+    EnvScope scope;
+    JNIEnv* env = scope.env;
+    if (!env) return false;
+    jstring jname = env->NewStringUTF(name.c_str());
+    jintArray pixels = jname ? ToIntArray(env, argb) : nullptr;
+    bool stored = false;
+    if (jname && pixels) {
+        stored = env->CallBooleanMethod(g_gameActivityRef, g_storePixelsMethod, jname, pixels, static_cast<jint>(width),
+                                        static_cast<jint>(height)) == JNI_TRUE;
+        if (env->ExceptionCheck()) {
+            env->ExceptionClear();
+            stored = false;
+        }
+    } else if (env->ExceptionCheck()) {
+        env->ExceptionClear();
+    }
+    if (pixels) env->DeleteLocalRef(pixels);
+    if (jname) env->DeleteLocalRef(jname);
+    return stored;
+}
+// dxUpdateScreenSource: the Activity copies the game surface into the bitmap of this name.
+void CopyScreen(const std::string& name, unsigned width, unsigned height) {
+    if (!g_gameActivityRef || !g_copyScreenMethod) return;
+    EnvScope scope;
+    JNIEnv* env = scope.env;
+    if (!env) return;
+    jstring jname = env->NewStringUTF(name.c_str());
+    if (jname) {
+        env->CallVoidMethod(g_gameActivityRef, g_copyScreenMethod, jname, static_cast<jint>(width), static_cast<jint>(height));
+        env->DeleteLocalRef(jname);
+    }
+    if (env->ExceptionCheck()) env->ExceptionClear();
+}
+
+// The overlay draws the SVG document into the bitmap of this name. The document goes over as
+// bytes because it may hold any UTF-8. 1 drawn, 0 not readable as SVG, -1 no Activity.
+int RenderSvg(const std::string& name, const std::string& xml, unsigned width, unsigned height) {
+    if (!g_gameActivityRef || !g_renderSvgMethod || xml.empty() || xml.size() > 0x7FFFFFFFu) return -1;
+    EnvScope scope;
+    JNIEnv* env = scope.env;
+    if (!env) return -1;
+    jstring jname = env->NewStringUTF(name.c_str());
+    jbyteArray bytes = jname ? env->NewByteArray(static_cast<jsize>(xml.size())) : nullptr;
+    int result = -1;
+    if (jname && bytes) {
+        env->SetByteArrayRegion(bytes, 0, static_cast<jsize>(xml.size()), reinterpret_cast<const jbyte*>(xml.data()));
+        result = env->CallIntMethod(g_gameActivityRef, g_renderSvgMethod, jname, bytes, static_cast<jint>(width),
+                                    static_cast<jint>(height));
+        if (env->ExceptionCheck()) {
+            env->ExceptionClear();
+            result = -1;
+        }
+    } else if (env->ExceptionCheck()) {
+        env->ExceptionClear();
+    }
+    if (bytes) env->DeleteLocalRef(bytes);
+    if (jname) env->DeleteLocalRef(jname);
+    return result;
 }
 } // namespace WorldRPG::JniBridge
 
@@ -193,6 +413,20 @@ Java_com_worldrpg_neonlauncher_game_GameActivity_nativeInit(JNIEnv* env, jobject
     if (!g_onGameLineMethod && env->ExceptionCheck()) env->ExceptionClear();
     g_onDxFrameMethod = env->GetMethodID(activityClass, "onNativeDxFrame", "(Ljava/lang/String;)V");
     if (!g_onDxFrameMethod && env->ExceptionCheck()) env->ExceptionClear();
+    g_measureTextMethod = env->GetMethodID(activityClass, "onNativeMeasureText", "(Ljava/lang/String;FLjava/lang/String;Z)F");
+    if (!g_measureTextMethod && env->ExceptionCheck()) env->ExceptionClear();
+    g_loadPixelsMethod = env->GetMethodID(activityClass, "onNativeLoadPixels", "(Ljava/lang/String;)[I");
+    if (!g_loadPixelsMethod && env->ExceptionCheck()) env->ExceptionClear();
+    g_decodePixelsMethod = env->GetMethodID(activityClass, "onNativeDecodePixels", "([B)[I");
+    if (!g_decodePixelsMethod && env->ExceptionCheck()) env->ExceptionClear();
+    g_encodePixelsMethod = env->GetMethodID(activityClass, "onNativeEncodePixels", "([IIIZI)[B");
+    if (!g_encodePixelsMethod && env->ExceptionCheck()) env->ExceptionClear();
+    g_storePixelsMethod = env->GetMethodID(activityClass, "onNativeStorePixels", "(Ljava/lang/String;[III)Z");
+    if (!g_storePixelsMethod && env->ExceptionCheck()) env->ExceptionClear();
+    g_renderSvgMethod = env->GetMethodID(activityClass, "onNativeRenderSvg", "(Ljava/lang/String;[BII)I");
+    if (!g_renderSvgMethod && env->ExceptionCheck()) env->ExceptionClear();
+    g_copyScreenMethod = env->GetMethodID(activityClass, "onNativeCopyScreen", "(Ljava/lang/String;II)V");
+    if (!g_copyScreenMethod && env->ExceptionCheck()) env->ExceptionClear();
     env->DeleteLocalRef(activityClass);
     if (!callback) {
         if (env->ExceptionCheck()) env->ExceptionClear();
@@ -409,7 +643,8 @@ Java_com_worldrpg_neonlauncher_game_GameActivity_nativePulse(JNIEnv* env, jobjec
     static bool lastFrameEmpty = true;
     if (frame.empty() && lastFrameEmpty) return;
     lastFrameEmpty = frame.empty();
-    jstring jtext = env->NewStringUTF(frame.c_str());
+    const auto wide = WorldRPG::Utf8::ToUtf16(frame);
+    jstring jtext = env->NewString(reinterpret_cast<const jchar*>(wide.data()), static_cast<jsize>(wide.size()));
     if (!jtext) return;
     env->CallVoidMethod(g_gameActivityRef, g_onDxFrameMethod, jtext);
     if (env->ExceptionCheck()) env->ExceptionClear();
@@ -446,10 +681,17 @@ Java_com_worldrpg_neonlauncher_game_EngineHostActivity_nativeSoundLength(
 JNIEXPORT void JNICALL
 Java_com_worldrpg_neonlauncher_game_EngineHostActivity_nativeScriptInput(
     JNIEnv* env, jobject, jstring text, jint backspaces, jstring key) {
-    const char* chars = text ? env->GetStringUTFChars(text, nullptr) : nullptr;
+    std::string utf8;
+    if (text) {
+        const jchar* chars = env->GetStringChars(text, nullptr);
+        if (!chars) return;
+        const std::u16string wide(chars, chars + env->GetStringLength(text));
+        utf8 = WorldRPG::Utf8::FromUtf16(wide);
+        env->ReleaseStringChars(text, chars);
+    }
     const char* name = key ? env->GetStringUTFChars(key, nullptr) : nullptr;
-    WorldRPG::Script::ActiveVmQueueScriptInput(chars ? chars : "", backspaces, name ? name : "");
-    if (chars) env->ReleaseStringUTFChars(text, chars);
+    if (key && !name) return;
+    WorldRPG::Script::ActiveVmQueueScriptInput(utf8.c_str(), backspaces, name ? name : "");
     if (name) env->ReleaseStringUTFChars(key, name);
 }
 

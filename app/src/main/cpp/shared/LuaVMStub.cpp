@@ -12,6 +12,8 @@
 #include "LuaMtaWindowApi.h"
 #include "LuaEventRegistry.h"
 #include "LuaKeyBindApi.h"
+#include "LuaDxApi.h"
+#include "LuaSvgApi.h"
 #include "LuaApiExtra.h"
 #include "LuaGuiApi.h"
 #include "ResourceLoader.h"
@@ -39,6 +41,7 @@ extern "C" {
 #include <cstdio>
 #include <cstring>
 #include <cmath>
+#include <limits>
 #include <ctime>
 #include <vector>
 #include <mutex>
@@ -77,6 +80,7 @@ struct DxRuntime {
     struct PendingChat { std::string text; int r = 255, g = 255, b = 255; };
     std::vector<PendingChat> pendingChat;
     std::string frame;
+    std::string postGuiFrame;
     std::string owner;  // resource whose code is running; tags the handlers and timers it registers
     uint16_t ownerNetId = 0;
     uint32_t ownerGeneration = 0;
@@ -337,6 +341,8 @@ static void ApplyScriptInput() {
         if (tab) g_imeDismissed = true;
         if (edit) {
             bool changed = false;
+            const bool memo = GuiFocusedMemo();
+            bool textNewline = false;
             for (int i = 0; i < ev.backspaces; ++i) {
                 if (GuiEditErase()) changed = true;
             }
@@ -344,12 +350,20 @@ static void ApplyScriptInput() {
                 const size_t n = CodePointLength(ev.text, i);
                 if (n == 0) break;
                 const unsigned char lead = static_cast<unsigned char>(ev.text[i]);
-                if (ev.text[i] == '\n' || ev.text[i] == '\r') enter = true;
+                if (ev.text[i] == '\n' || ev.text[i] == '\r') {
+                    if (memo) {
+                        if (ev.text[i] != '\n' || i == 0 || ev.text[i - 1] != '\r') {
+                            if (GuiEditAppend("\n",1)) changed = true;
+                        }
+                        textNewline = true;
+                    } else enter = true;
+                }
                 else if (lead >= 32 && GuiEditAppend(ev.text.data() + i, n)) changed = true;
                 i += n;
             }
+            if (memo && enter && !textNewline && GuiEditAppend("\n",1)) changed = true;
             if (changed) FireElementEvent("onClientGUIChanged", edit, true);
-            if (enter) {
+            if (enter && !memo) {
                 const uint32_t still = GuiFocusedEdit();
                 FireElementEvent("onClientGUIAccepted", still ? still : edit, true);
             }
@@ -406,6 +420,26 @@ bool ActiveVmRunCommand(const char* name, const char* args) {
         handled = true;
     }
     return handled;
+}
+
+// Desktop CClientVectorGraphic::OnUpdate: after an svg's picture changed, its update callback is
+// called with the svg element, as the resource that owns it. It runs here, at the next pump, so
+// the call that changed the svg has already returned.
+static void ApplySvgUpdates() {
+    if (!g_dx.L) return;
+    lua_State* L = g_dx.L;
+    std::vector<SvgUpdate> updates;
+    SvgTakeUpdates(updates);
+    for (const SvgUpdate& update : updates) {
+        if (!SvgCallbackLive(update.id, update.ref)) continue;
+        OwnerScope scope(update.owner, update.netId, update.generation);
+        lua_rawgeti(L, LUA_REGISTRYINDEX, update.ref);
+        PushElement(L, update.id);
+        if (lua_pcall(L, 1, 0, 0) != LUA_OK) {
+            LUA_LOGE("Lua svg update callback: %s", lua_tostring(L, -1));
+            lua_pop(L, 1);
+        }
+    }
 }
 
 static std::mutex g_commandMutex;
@@ -624,32 +658,83 @@ static int l_triggerEvent(lua_State* L) {
     return 1;
 }
 
+// Desktop ReadNumber accepts numbers and numeric strings. The Canvas bridge
+// requires finite floats so one bad call cannot poison a draw command.
+static bool ReadDrawNumber(lua_State* L, int index, double& value) {
+    if (!lua_isnumber(L, index)) return false;
+    value = lua_tonumber(L, index);
+    return std::isfinite(value) && std::abs(value) <= std::numeric_limits<float>::max();
+}
+static bool ReadDrawOptional(lua_State* L, int index, double fallback, double& value) {
+    if (lua_isnoneornil(L, index)) { value = fallback; return true; }
+    return ReadDrawNumber(L, index, value);
+}
+static bool ReadDrawBool(lua_State* L, int index, bool& value) {
+    value = false;
+    if (lua_isnoneornil(L, index)) return true;
+    if (!lua_isboolean(L, index)) return false;
+    value = lua_toboolean(L, index) != 0;
+    return true;
+}
+static unsigned DrawColor(double value) {
+    double wrapped = std::fmod(std::trunc(value), 4294967296.0);
+    if (wrapped < 0) wrapped += 4294967296.0;
+    return static_cast<unsigned>(wrapped);
+}
+static int DrawResult(lua_State* L, bool success) { lua_pushboolean(L, success); return 1; }
+
+// CLuaDrawingDefs.cpp:412-441; CGraphics.cpp:975-991.
 static int l_dxDrawRectangle(lua_State* L) {
-    char line[96];
+    double x, y, w, h, color;
+    bool postGUI, subPixel;
+    if (!ReadDrawNumber(L,1,x) || !ReadDrawNumber(L,2,y) || !ReadDrawNumber(L,3,w) || !ReadDrawNumber(L,4,h) ||
+        !ReadDrawOptional(L,5,4294967295.0,color) || !ReadDrawBool(L,6,postGUI) || !ReadDrawBool(L,7,subPixel))
+        return DrawResult(L,false);
+    char line[256];
     std::snprintf(line, sizeof(line), "R %.1f %.1f %.1f %.1f %u\n",
-        luaL_checknumber(L, 1), luaL_checknumber(L, 2), luaL_checknumber(L, 3),
-        luaL_checknumber(L, 4), static_cast<unsigned>(luaL_optinteger(L, 5, 0xFFFFFFFF)));
-    g_dx.frame += line;
-    return 0;
+        x, y, w, h, DrawColor(color));
+    DxAppendDraw(line,postGUI);
+    return DrawResult(L,true);
 }
 
+// CLuaDrawingDefs.cpp:322-410. The scalar-scale form of the Canvas text bridge.
+// Alignment, clipping, wrapping and rotation still need renderer support.
 static int l_dxDrawText(lua_State* L) {
-    const char* text = luaL_optstring(L, 1, "");
-    std::string safe(text ? text : "");
+    double left, top, right, bottom, color, scale;
+    bool postGUI, colorCoded;
+    if (!lua_isstring(L,1) || !ReadDrawNumber(L,2,left) || !ReadDrawNumber(L,3,top) ||
+        !ReadDrawOptional(L,4,left,right) || !ReadDrawOptional(L,5,top,bottom) ||
+        !ReadDrawOptional(L,6,4294967295.0,color) || !ReadDrawOptional(L,7,1,scale) ||
+        !ReadDrawBool(L,13,postGUI) || !ReadDrawBool(L,14,colorCoded)) return DrawResult(L,false);
+    size_t length = 0;
+    const char* text = lua_tolstring(L,1,&length);
+    std::string safe(text,length);
     for (char& ch : safe) if (ch == '\n' || ch == '\r') ch = ' ';
     // The renderer draws scale * 15 px, so a font taller than the default is scaled here.
     const char* font = lua_type(L, 8) == LUA_TSTRING ? lua_tostring(L, 8) : "default";
-    char head[128];
+    // A dx-font element (dxCreateFont): "F height bold file" selects it for the next text line,
+    // and a bare "F" returns to the default font. The text scale then multiplies the font height.
+    const DxFont custom = DxResolveFont(L, 8, 1.0);
+    if (std::abs(scale * DxFontScale(font)) > std::numeric_limits<float>::max() ||
+        std::abs(scale * custom.pixels) > std::numeric_limits<float>::max()) return DrawResult(L,false);
+    std::string commands;
+    if (!custom.file.empty()) {
+        char select[64];
+        std::snprintf(select, sizeof(select), "F %.1f %d ", custom.pixels, custom.bold ? 1 : 0);
+        commands += select;
+        commands += custom.file;
+        commands += '\n';
+        font = "default";
+    }
+    char head[320];
     std::snprintf(head, sizeof(head), "T %.1f %.1f %.1f %.1f %.2f %u %d ",
-        luaL_optnumber(L, 2, 0), luaL_optnumber(L, 3, 0),
-        luaL_optnumber(L, 4, 0), luaL_optnumber(L, 5, 0),
-        luaL_optnumber(L, 7, 1) * DxFontScale(font),
-        static_cast<unsigned>(luaL_optinteger(L, 6, 0xFFFFFFFF)),
-        lua_toboolean(L, 14));
-    g_dx.frame += head;
-    g_dx.frame += safe;
-    g_dx.frame += '\n';
-    return 0;
+        left, top, right, bottom, scale * DxFontScale(font), DrawColor(color), colorCoded ? 1 : 0);
+    commands += head;
+    commands += safe;
+    commands += '\n';
+    if (!custom.file.empty()) commands += "F\n";
+    DxAppendDraw(commands,postGUI);
+    return DrawResult(L,true);
 }
 
 // Resource file for a dxDrawImage path. "radar/a.png" is the running resource;
@@ -689,47 +774,39 @@ static std::string DxImageFile(const std::string& raw) {
 
 // Desktop CLuaDrawingDefs::DxDrawImage / DxDrawImageSection. One line for MtaDxView:
 //   I dx dy dw dh sx sy sw sh color rot ox oy <cache path>
-// dxDrawImage uses sx=sy=0 and sw=sh=-1 (the whole PNG). A call with no resource
-// (empty owner) appends nothing, so a server that does not send the HUD script
-// does not paint over the native radar.
+// dxDrawImage uses sx=sy=0 and sw=sh=-1 (the whole PNG). File paths need a
+// running resource; an existing texture element is independent of the caller.
 static int AppendImageDraw(lua_State* L, bool section) {
-    if (g_dx.owner.empty()) {
-        lua_pushboolean(L, 0);
-        return 1;
-    }
     const int pathIndex = section ? 9 : 5;
-    if (lua_type(L, pathIndex) != LUA_TSTRING) {
-        lua_pushboolean(L, 0);
-        return 1;
+    // A texture element (dxCreateTexture) or a file path (desktop MixedReadMaterialString).
+    std::string file;
+    if (lua_istable(L, pathIndex)) {
+        if (!DxTextureFile(ElementIdOf(L, pathIndex), file)) {
+            lua_pushboolean(L, 0);
+            return 1;
+        }
+    } else if (lua_type(L, pathIndex) == LUA_TSTRING) {
+        size_t pathLength = 0;
+        const char* path = lua_tolstring(L, pathIndex, &pathLength);
+        file = DxImageFile(std::string(path ? path : "", pathLength));
     }
-    size_t pathLength = 0;
-    const char* path = lua_tolstring(L, pathIndex, &pathLength);
-    const std::string file = DxImageFile(std::string(path ? path : "", pathLength));
     if (file.empty()) {
         lua_pushboolean(L, 0);
         return 1;
     }
     const int rotIndex = pathIndex + 1;
-    const double x = luaL_checknumber(L, 1);
-    const double y = luaL_checknumber(L, 2);
-    const double w = luaL_checknumber(L, 3);
-    const double h = luaL_checknumber(L, 4);
-    const double sx = section ? luaL_checknumber(L, 5) : 0.0;
-    const double sy = section ? luaL_checknumber(L, 6) : 0.0;
-    const double sw = section ? luaL_checknumber(L, 7) : -1.0;
-    const double sh = section ? luaL_checknumber(L, 8) : -1.0;
-    const auto color = static_cast<unsigned>(luaL_optinteger(L, rotIndex + 3, static_cast<lua_Integer>(0xFFFFFFFFu)));
-    const double rotation = luaL_optnumber(L, rotIndex, 0);
-    const double ox = luaL_optnumber(L, rotIndex + 1, 0);
-    const double oy = luaL_optnumber(L, rotIndex + 2, 0);
-    char head[192];
+    double x, y, w, h, sx = 0, sy = 0, sw = -1, sh = -1, color, rotation, ox, oy;
+    bool postGUI;
+    if (!ReadDrawNumber(L,1,x) || !ReadDrawNumber(L,2,y) || !ReadDrawNumber(L,3,w) || !ReadDrawNumber(L,4,h) ||
+        (section && (!ReadDrawNumber(L,5,sx) || !ReadDrawNumber(L,6,sy) || !ReadDrawNumber(L,7,sw) || !ReadDrawNumber(L,8,sh))) ||
+        !ReadDrawOptional(L,rotIndex,0,rotation) || !ReadDrawOptional(L,rotIndex+1,0,ox) ||
+        !ReadDrawOptional(L,rotIndex+2,0,oy) || !ReadDrawOptional(L,rotIndex+3,4294967295.0,color) ||
+        !ReadDrawBool(L,rotIndex+4,postGUI)) return DrawResult(L,false);
+    char head[768];
     std::snprintf(head, sizeof(head), "I %.1f %.1f %.1f %.1f %.1f %.1f %.1f %.1f %u %.1f %.1f %.1f ",
-                  x, y, w, h, sx, sy, sw, sh, color, rotation, ox, oy);
-    g_dx.frame += head;
-    g_dx.frame += file;
-    g_dx.frame += '\n';
-    lua_pushboolean(L, 1);
-    return 1;
+                  x, y, w, h, sx, sy, sw, sh, DrawColor(color), rotation, ox, oy);
+    DxAppendDraw(std::string(head) + file + '\n',postGUI);
+    return DrawResult(L,true);
 }
 
 static int l_dxDrawImage(lua_State* L) { return AppendImageDraw(L, false); }
@@ -2074,6 +2151,8 @@ static void installDxBindings(lua_State* L) {
     InstallResourceLua(L);
     InstallMtaWindowLua(L);
     InstallKeyBindLua(L);
+    InstallDxLua(L);
+    InstallSvgLua(L);
     // These two stay on this file even if extra bindings register the same names.
     lua_pushcfunction(L, l_getNetworkStats);
     lua_setglobal(L, "getNetworkStats");
@@ -2555,26 +2634,36 @@ std::string LuaVMStub::pumpDx() {
     ApplyKeyEvents();
     ApplyChatCommands();
     PumpEndedSounds();
+    ApplySvgUpdates();
     g_dx.frame.clear();
+    g_dx.postGuiFrame.clear();
+    DxBeginFrame(g_dx.frame);
     PulseCamera();
     // login_camera.lua moves the tour in onClientPreRender, before the DX menu.
     fireHandlers("onClientPreRender", 0, ClientRootElement());
     if (!WorldRPG::Debug::Flag("nodx")) fireHandlers("onClientRender", 0, ClientRootElement());
+    DxEndRender(g_dx.frame);
     GuiAppendDraws(g_dx.frame);
+    g_dx.frame += g_dx.postGuiFrame;
     // "C" line: the cursor is showing, so the Android overlay takes touches (MtaDxView).
     // "K" line: a gui-edit has focus, or a script called guiSetInputEnabled(true), so the
     // activity opens the soft keyboard. EngineHostActivity reads that line.
     std::string out = GuiCursorShown() ? "C\n" + g_dx.frame : g_dx.frame;
     const bool wantKeys = !g_imeDismissed && (GuiFocusedEdit() != 0 || (GuiCursorShown() && GuiKeyCapture()));
     if (wantKeys) {
-        if (out.compare(0, 2, "C\n") == 0) out.insert(2, "K\n");
-        else out.insert(0, "K\n");
+        const char* keyboard = GuiFocusedMemo() ? "K multiline\n" : "K\n";
+        if (out.compare(0, 2, "C\n") == 0) out.insert(2, keyboard);
+        else out.insert(0, keyboard);
     }
-    if (out.size() > 24000) out.resize(24000);
+    if (out.size() > 24000) {
+        // Cut at the end of a line, so the overlay never parses half a draw command.
+        const size_t cut = out.rfind('\n', 24000);
+        out.resize(cut == std::string::npos ? 0 : cut + 1);
+    }
     std::string clean;
     clean.reserve(out.size());
     for (unsigned char ch : out) {
-        if (ch == '\n' || (ch >= 32 && ch < 127)) clean.push_back(static_cast<char>(ch));
+        if (ch == '\n' || (ch >= 32 && ch != 127)) clean.push_back(static_cast<char>(ch));
     }
     return clean;
 }
@@ -2755,6 +2844,7 @@ static void DropResourceState(lua_State* L, const std::string& name, uint16_t ne
     Events::DropOwner(name, netId, generation);
     KeyBindsDropResource(L, name, netId, generation);
     CommandHandlersDropResource(L, name, netId, generation);
+    DxDropResource(name, netId, generation);
     for (auto& [event, refs] : g_dx.handlers) {
         refs.erase(std::remove_if(refs.begin(), refs.end(), [&](const DxRuntime::Handler& handler) {
             if (OwnerOfHandler(handler.ref) != name) return false;
@@ -2871,6 +2961,11 @@ void ActiveVmResetSession() {
 bool ActiveVmOnChat(const char* text, int red, int green, int blue) {
     return g_active && g_active->onChatMessage(text, red, green, blue);
 }
+void ActiveVmAppendDraw(const std::string& lines) { g_dx.frame += lines; }
+void ActiveVmAppendPostGuiDraw(const std::string& lines) { g_dx.postGuiFrame += lines; }
+std::string ActiveVmResourceFile(const std::string& path) { return DxImageFile(path); }
+lua_State* ActiveVmState() { return g_dx.L; }
+
 std::string ActiveVmPump() {
     return g_active ? g_active->pumpDx() : std::string();
 }
@@ -2897,8 +2992,6 @@ void ActiveVmNoteSoundEnded(uint32_t id) {
     std::lock_guard<std::mutex> lock(g_soundEndMu);
     if (g_soundEnded.size() < 32) g_soundEnded.push_back(id);
 }
-
-lua_State* ActiveVmState() { return g_dx.L; }
 
 void ActiveVmNoteSoundLength(uint32_t id, double seconds) {
     if (!std::isfinite(seconds) || seconds < 0) return;

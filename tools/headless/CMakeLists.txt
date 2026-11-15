@@ -58,6 +58,8 @@ set(NATIVE_SOURCES
     "${NATIVE_DIR}/shared/LuaMtaWindowApi.cpp"
     "${NATIVE_DIR}/shared/LuaEventRegistry.cpp"
     "${NATIVE_DIR}/shared/LuaKeyBindApi.cpp"
+    "${NATIVE_DIR}/shared/LuaDxApi.cpp"
+    "${NATIVE_DIR}/shared/LuaSvgApi.cpp"
     "${NATIVE_DIR}/net/Checksums.cpp"
     "${NATIVE_DIR}/net/HttpDownloader.cpp"
     "${NATIVE_DIR}/net/RemoteCalls.cpp"

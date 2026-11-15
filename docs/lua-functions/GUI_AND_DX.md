@@ -5,60 +5,60 @@
 ## Parity Status
 
 - **Total Functions:** 199
-- **Implemented:** 146 (73.4%)
-- **Stubs:** 2
-- **Missing:** 51
+- **Implemented:** 175 (87.9%)
+- **Stubs:** 0
+- **Missing:** 24
 
-> **Technical Requirement:** Desktop uses CEGUI and Direct3D9. Mobile uses `MtaDxView.java` (Android Canvas) + `LuaGuiApi.cpp`. Windows, edits, memos, tabs, scroll panes and grid lists are stored and drawn into the DX frame. Grid sorting does not reorder rows. `guiCreateFont` returns false because CreateGuiFont is not hooked. Shaders (HLSL -> GLSL ES) and the browser are still missing.
+> **Technical Requirement:** Desktop uses CEGUI and Direct3D9. Mobile uses `MtaDxView.java` (Android Canvas) + `LuaGuiApi.cpp`. Edit/memo input and caret count Unicode characters; the JNI input/output bridge converts UTF-16/UTF-8. Memo Enter inserts a newline; logical lines render separately, with CEGUI's terminal newline. The eight 2D draw calls honor postGUI on screen, capture blend/font state and retain render-target order. Primitive lines interpolate vertex colors. Grid sorting, selection, memo wrapping/automatic caret scrolling, advanced text layout and HLSL/3D drawing remain pending. `guiCreateFont` returns false because CreateGuiFont is not hooked. Host tests and Android compilation do not verify device rendering.
 
 ## Function List
 
 | Lua Function | Status | Desktop Source Ref | Desktop Handler | Conversion Requirement / Implementation Notes |
 |---|---|---|---|---|
 | `addModel2DFX` | Missing | `CLua2DFXDefs.cpp:568` | `AddModel2DFX` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `dxConvertPixels` | Missing | `CLuaDrawingDefs.cpp:60` | `DxConvertPixels` | Needs Android Canvas / OpenGL ES draw line routing. |
-| `dxCreateFont` | Missing | `CLuaDrawingDefs.cpp:43` | `DxCreateFont` | Needs Android Canvas / OpenGL ES draw line routing. |
-| `dxCreateRenderTarget` | Missing | `CLuaDrawingDefs.cpp:46` | `DxCreateRenderTarget` | Needs Android Canvas / OpenGL ES draw line routing. |
-| `dxCreateScreenSource` | Missing | `CLuaDrawingDefs.cpp:47` | `DxCreateScreenSource` | Needs Android Canvas / OpenGL ES draw line routing. |
+| `dxConvertPixels` | **Implemented** | `CLuaDrawingDefs.cpp:60` | `DxConvertPixels` | Operational on Android. (DxConvertPixels) |
+| `dxCreateFont` | **Implemented** | `CLuaDrawingDefs.cpp:43` | `DxCreateFont` | Operational on Android. (DxCreateFont) |
+| `dxCreateRenderTarget` | **Implemented** | `CLuaDrawingDefs.cpp:46` | `DxCreateRenderTarget` | Operational on Android. (DxCreateRenderTarget) |
+| `dxCreateScreenSource` | **Implemented** | `CLuaDrawingDefs.cpp:47` | `DxCreateScreenSource` | Operational on Android. (DxCreateScreenSource) |
 | `dxCreateShader` | Missing | `CLuaDrawingDefs.cpp:45` | `DxCreateShader` | Needs GLSL ES 3.0 shader pipeline (translating desktop D3DX9 HLSL). |
-| `dxCreateTexture` | Missing | `CLuaDrawingDefs.cpp:44` | `DxCreateTexture` | Needs Android Canvas / OpenGL ES draw line routing. |
-| `dxDrawCircle` | *Stub* | `CLuaDrawingDefs.cpp:31` | `DxDrawCircle` | Currently stubbed: `DefaultValue(kTrue)`. Needs native engine wiring. |
-| `dxDrawImage` | **Implemented** | `CLuaDrawingDefs.cpp:32` | `DxDrawImage` | Operational on Android. (l_dxDrawImage) |
-| `dxDrawImageSection` | **Implemented** | `CLuaDrawingDefs.cpp:33` | `DxDrawImageSection` | Operational on Android. (l_dxDrawImageSection) |
-| `dxDrawLine` | Missing | `CLuaDrawingDefs.cpp:25` | `DxDrawLine` | Needs Android Canvas / OpenGL ES draw line routing. |
+| `dxCreateTexture` | **Implemented** | `CLuaDrawingDefs.cpp:44` | `DxCreateTexture` | Operational on Android. (DxCreateTexture) |
+| `dxDrawCircle` | **Implemented** | `CLuaDrawingDefs.cpp:31` | `DxDrawCircle` | 2D Canvas bridge honors postGUI on screen and retains render-target order; queued calls capture blend mode. Primitive lines interpolate endpoint colors. Nonfinite/out-of-float-range input is rejected. Host-tested; Android compiles; device rendering not verified. |
+| `dxDrawImage` | **Implemented** | `CLuaDrawingDefs.cpp:32` | `DxDrawImage` | Canvas 2D calls return true/false, honor postGUI and capture blend state; custom text font commands stay with their text. Render-target draws keep their original order. Existing texture elements work outside a resource owner; file paths still require one. Finite numeric arguments required. Text supports the common scalar-scale form; advanced alignment/wrapping/clipping/rotation and per-axis scales remain partial or absent. Host-tested; not device-verified. |
+| `dxDrawImageSection` | **Implemented** | `CLuaDrawingDefs.cpp:33` | `DxDrawImageSection` | Canvas 2D calls return true/false, honor postGUI and capture blend state; custom text font commands stay with their text. Render-target draws keep their original order. Existing texture elements work outside a resource owner; file paths still require one. Finite numeric arguments required. Text supports the common scalar-scale form; advanced alignment/wrapping/clipping/rotation and per-axis scales remain partial or absent. Host-tested; not device-verified. |
+| `dxDrawLine` | **Implemented** | `CLuaDrawingDefs.cpp:25` | `DxDrawLine` | 2D Canvas bridge honors postGUI on screen and retains render-target order; queued calls capture blend mode. Primitive lines interpolate endpoint colors. Nonfinite/out-of-float-range input is rejected. Host-tested; Android compiles; device rendering not verified. |
 | `dxDrawLine3D` | Missing | `CLuaDrawingDefs.cpp:28` | `DxDrawLine3D` | Needs Android Canvas / OpenGL ES draw line routing. |
 | `dxDrawMaterialLine3D` | Missing | `CLuaDrawingDefs.cpp:26` | `DxDrawMaterialLine3D` | Needs Android Canvas / OpenGL ES draw line routing. |
-| `dxDrawMaterialPrimitive` | Missing | `CLuaDrawingDefs.cpp:36` | `DxDrawMaterialPrimitive` | Needs Android Canvas / OpenGL ES draw line routing. |
+| `dxDrawMaterialPrimitive` | **Implemented** | `CLuaDrawingDefs.cpp:36` | `DxDrawMaterialPrimitive` | 2D Canvas bridge honors postGUI on screen and retains render-target order; queued calls capture blend mode. Primitive lines interpolate endpoint colors. Nonfinite/out-of-float-range input is rejected. Host-tested; Android compiles; device rendering not verified. |
 | `dxDrawMaterialPrimitive3D` | Missing | `CLuaDrawingDefs.cpp:37` | `DxDrawMaterialPrimitive3D` | Needs Android Canvas / OpenGL ES draw line routing. |
 | `dxDrawMaterialSectionLine3D` | Missing | `CLuaDrawingDefs.cpp:27` | `DxDrawMaterialSectionLine3D` | Needs Android Canvas / OpenGL ES draw line routing. |
 | `dxDrawModel3D` | Missing | `CLuaDrawingDefs.cpp:39` | `ArgumentParser<DxDrawModel3D>` | Needs Android Canvas / OpenGL ES draw line routing. |
-| `dxDrawPrimitive` | *Stub* | `CLuaDrawingDefs.cpp:34` | `DxDrawPrimitive` | Currently stubbed: `DefaultValue(kTrue)`. Needs native engine wiring. |
+| `dxDrawPrimitive` | **Implemented** | `CLuaDrawingDefs.cpp:34` | `DxDrawPrimitive` | 2D Canvas bridge honors postGUI on screen and retains render-target order; queued calls capture blend mode. Primitive lines interpolate endpoint colors. Nonfinite/out-of-float-range input is rejected. Host-tested; Android compiles; device rendering not verified. |
 | `dxDrawPrimitive3D` | Missing | `CLuaDrawingDefs.cpp:35` | `DxDrawPrimitive3D` | Needs Android Canvas / OpenGL ES draw line routing. |
-| `dxDrawRectangle` | **Implemented** | `CLuaDrawingDefs.cpp:30` | `DxDrawRectangle` | Operational on Android. (l_dxDrawRectangle) |
-| `dxDrawText` | **Implemented** | `CLuaDrawingDefs.cpp:29` | `DxDrawText` | Operational on Android. (l_dxDrawText) |
+| `dxDrawRectangle` | **Implemented** | `CLuaDrawingDefs.cpp:30` | `DxDrawRectangle` | Canvas 2D calls return true/false, honor postGUI and capture blend state; custom text font commands stay with their text. Render-target draws keep their original order. Existing texture elements work outside a resource owner; file paths still require one. Finite numeric arguments required. Text supports the common scalar-scale form; advanced alignment/wrapping/clipping/rotation and per-axis scales remain partial or absent. Host-tested; not device-verified. |
+| `dxDrawText` | **Implemented** | `CLuaDrawingDefs.cpp:29` | `DxDrawText` | Canvas 2D calls return true/false, honor postGUI and capture blend state; custom text font commands stay with their text. Render-target draws keep their original order. Existing texture elements work outside a resource owner; file paths still require one. Finite numeric arguments required. Text supports the common scalar-scale form; advanced alignment/wrapping/clipping/rotation and per-axis scales remain partial or absent. Host-tested; not device-verified. |
 | `dxDrawWiredSphere` | Missing | `CLuaDrawingDefs.cpp:38` | `ArgumentParser<DxDrawWiredSphere>` | Needs Android Canvas / OpenGL ES draw line routing. |
-| `dxGetBlendMode` | Missing | `CLuaDrawingDefs.cpp:64` | `DxGetBlendMode` | Needs Android Canvas / OpenGL ES draw line routing. |
+| `dxGetBlendMode` | **Implemented** | `CLuaDrawingDefs.cpp:64` | `DxGetBlendMode` | Operational on Android. (DxGetBlendMode) |
 | `dxGetFontHeight` | **Implemented** | `CLuaDrawingDefs.cpp:42` | `DxGetFontHeight` | Operational on Android. (DxGetFontHeight) |
-| `dxGetMaterialSize` | Missing | `CLuaDrawingDefs.cpp:48` | `DxGetMaterialSize` | Needs Android Canvas / OpenGL ES draw line routing. |
+| `dxGetMaterialSize` | **Implemented** | `CLuaDrawingDefs.cpp:48` | `DxGetMaterialSize` | Operational on Android. (DxGetMaterialSize) |
 | `dxGetPixelColor` | **Implemented** | `CLuaDrawingDefs.cpp:61` | `DxGetPixelColor` | Operational on Android. (DxGetPixelColor) |
 | `dxGetPixelsFormat` | **Implemented** | `CLuaDrawingDefs.cpp:59` | `DxGetPixelsFormat` | Operational on Android. (DxGetPixelsFormat) |
-| `dxGetPixelsSize` | Missing | `CLuaDrawingDefs.cpp:58` | `DxGetPixelsSize` | Needs Android Canvas / OpenGL ES draw line routing. |
-| `dxGetStatus` | Missing | `CLuaDrawingDefs.cpp:54` | `DxGetStatus` | Needs Android Canvas / OpenGL ES draw line routing. |
-| `dxGetTextSize` | Missing | `CLuaDrawingDefs.cpp:41` | `ArgumentParser<DxGetTextSize>` | Needs Android Canvas / OpenGL ES draw line routing. |
+| `dxGetPixelsSize` | **Implemented** | `CLuaDrawingDefs.cpp:58` | `DxGetPixelsSize` | Operational on Android. (DxGetPixelsSize) |
+| `dxGetStatus` | **Implemented** | `CLuaDrawingDefs.cpp:54` | `DxGetStatus` | Operational on Android. (DxGetStatus) |
+| `dxGetTextSize` | **Implemented** | `CLuaDrawingDefs.cpp:41` | `ArgumentParser<DxGetTextSize>` | Operational on Android. (DxGetTextSize) |
 | `dxGetTextWidth` | **Implemented** | `CLuaDrawingDefs.cpp:40` | `DxGetTextWidth` | Operational on Android. (DxGetTextWidth) |
-| `dxGetTexturePixels` | Missing | `CLuaDrawingDefs.cpp:56` | `DxGetTexturePixels` | Needs Android Canvas / OpenGL ES draw line routing. |
-| `dxIsAspectRatioAdjustmentEnabled` | Missing | `CLuaDrawingDefs.cpp:66` | `DxIsAspectRatioAdjustmentEnabled` | Needs Android Canvas / OpenGL ES draw line routing. |
-| `dxSetAspectRatioAdjustmentEnabled` | Missing | `CLuaDrawingDefs.cpp:65` | `DxSetAspectRatioAdjustmentEnabled` | Needs Android Canvas / OpenGL ES draw line routing. |
-| `dxSetBlendMode` | Missing | `CLuaDrawingDefs.cpp:63` | `DxSetBlendMode` | Needs Android Canvas / OpenGL ES draw line routing. |
+| `dxGetTexturePixels` | **Implemented** | `CLuaDrawingDefs.cpp:56` | `DxGetTexturePixels` | Operational on Android. (DxGetTexturePixels) |
+| `dxIsAspectRatioAdjustmentEnabled` | **Implemented** | `CLuaDrawingDefs.cpp:66` | `DxIsAspectRatioAdjustmentEnabled` | Operational on Android. (DxIsAspectRatioAdjustmentEnabled) |
+| `dxSetAspectRatioAdjustmentEnabled` | **Implemented** | `CLuaDrawingDefs.cpp:65` | `DxSetAspectRatioAdjustmentEnabled` | Operational on Android. (DxSetAspectRatioAdjustmentEnabled) |
+| `dxSetBlendMode` | **Implemented** | `CLuaDrawingDefs.cpp:63` | `DxSetBlendMode` | Operational on Android. (DxSetBlendMode) |
 | `dxSetPixelColor` | **Implemented** | `CLuaDrawingDefs.cpp:62` | `DxSetPixelColor` | Operational on Android. (DxSetPixelColor) |
-| `dxSetRenderTarget` | Missing | `CLuaDrawingDefs.cpp:52` | `DxSetRenderTarget` | Needs Android Canvas / OpenGL ES draw line routing. |
+| `dxSetRenderTarget` | **Implemented** | `CLuaDrawingDefs.cpp:52` | `DxSetRenderTarget` | Operational on Android. (DxSetRenderTarget) |
 | `dxSetShaderTessellation` | Missing | `CLuaDrawingDefs.cpp:50` | `DxSetShaderTessellation` | Needs GLSL ES 3.0 shader pipeline (translating desktop D3DX9 HLSL). |
 | `dxSetShaderTransform` | Missing | `CLuaDrawingDefs.cpp:51` | `DxSetShaderTransform` | Needs GLSL ES 3.0 shader pipeline (translating desktop D3DX9 HLSL). |
 | `dxSetShaderValue` | Missing | `CLuaDrawingDefs.cpp:49` | `DxSetShaderValue` | Needs GLSL ES 3.0 shader pipeline (translating desktop D3DX9 HLSL). |
-| `dxSetTestMode` | Missing | `CLuaDrawingDefs.cpp:55` | `DxSetTestMode` | Needs Android Canvas / OpenGL ES draw line routing. |
-| `dxSetTextureEdge` | Missing | `CLuaDrawingDefs.cpp:67` | `DxSetTextureEdge` | Needs Android Canvas / OpenGL ES draw line routing. |
-| `dxSetTexturePixels` | Missing | `CLuaDrawingDefs.cpp:57` | `DxSetTexturePixels` | Needs Android Canvas / OpenGL ES draw line routing. |
-| `dxUpdateScreenSource` | Missing | `CLuaDrawingDefs.cpp:53` | `DxUpdateScreenSource` | Needs Android Canvas / OpenGL ES draw line routing. |
+| `dxSetTestMode` | **Implemented** | `CLuaDrawingDefs.cpp:55` | `DxSetTestMode` | Operational on Android. (DxSetTestMode) |
+| `dxSetTextureEdge` | **Implemented** | `CLuaDrawingDefs.cpp:67` | `DxSetTextureEdge` | Operational on Android. (DxSetTextureEdge) |
+| `dxSetTexturePixels` | **Implemented** | `CLuaDrawingDefs.cpp:57` | `DxSetTexturePixels` | Operational on Android. (DxSetTexturePixels) |
+| `dxUpdateScreenSource` | **Implemented** | `CLuaDrawingDefs.cpp:53` | `DxUpdateScreenSource` | Operational on Android. (DxUpdateScreenSource) |
 | `getChatboxCharacterLimit` | **Implemented** | `CLuaGUIDefs.cpp:54` | `ArgumentParser<GUIGetChatboxCharacterLimit>` | Operational on Android. (GetChatboxCharacterLimit) |
 | `getChatboxLayout` | **Implemented** | `CLuaGUIDefs.cpp:186` | `GUIGetChatboxLayout` | Operational on Android. (GetChatboxLayout) |
 | `getModel2DFXCount` | Missing | `CLua2DFXDefs.cpp:573` | `GetModel2DFXCount` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
@@ -87,7 +87,7 @@
 | `guiCreateFont` | **Implemented** | `CLuaGUIDefs.cpp:71` | `GUICreateFont` | Operational on Android. (GuiCreateFont) |
 | `guiCreateGridList` | **Implemented** | `CLuaGUIDefs.cpp:61` | `GUICreateGridList` | Operational on Android. (GuiCreateGridList) |
 | `guiCreateLabel` | **Implemented** | `CLuaGUIDefs.cpp:57` | `GUICreateLabel` | Operational on Android. (GuiCreateLabel) |
-| `guiCreateMemo` | **Implemented** | `CLuaGUIDefs.cpp:60` | `GUICreateMemo` | Operational on Android. (GuiCreateMemo) |
+| `guiCreateMemo` | **Implemented** | `CLuaGUIDefs.cpp:60` | `GUICreateMemo` | Memo accepts Unicode text, backspace and Enter without onClientGUIAccepted; emits onClientGUIChanged, participates in focus and requests multiline Android input. Terminal newline/caret follow CEGUI. Selection, wrapping and automatic caret scrolling remain pending. Host-tested; Android compiles; not device-verified. |
 | `guiCreateProgressBar` | **Implemented** | `CLuaGUIDefs.cpp:66` | `GUICreateProgressBar` | Operational on Android. (GuiCreateProgressBar) |
 | `guiCreateRadioButton` | **Implemented** | `CLuaGUIDefs.cpp:68` | `GUICreateRadioButton` | Operational on Android. (GuiCreateRadioButton) |
 | `guiCreateScrollBar` | **Implemented** | `CLuaGUIDefs.cpp:63` | `GUICreateScrollBar` | Operational on Android. (GuiCreateScrollBar) |
@@ -97,13 +97,13 @@
 | `guiCreateTabPanel` | **Implemented** | `CLuaGUIDefs.cpp:64` | `GUICreateTabPanel` | Operational on Android. (GuiCreateTabPanel) |
 | `guiCreateWindow` | **Implemented** | `CLuaGUIDefs.cpp:56` | `GUICreateWindow` | Operational on Android. (GuiCreateWindow) |
 | `guiDeleteTab` | **Implemented** | `CLuaGUIDefs.cpp:77` | `GUIDeleteTab` | Operational on Android. (GuiDeleteTab) |
-| `guiEditGetCaretIndex` | **Implemented** | `CLuaGUIDefs.cpp:158` | `GUIEditGetCaretIndex` | Operational on Android. (GuiEditGetCaretIndex) |
-| `guiEditGetMaxLength` | **Implemented** | `CLuaGUIDefs.cpp:162` | `GUIEditGetMaxLength` | Operational on Android. (GuiEditGetMaxLength) |
+| `guiEditGetCaretIndex` | **Implemented** | `CLuaGUIDefs.cpp:158` | `GUIEditGetCaretIndex` | Edit/memo caret uses Unicode characters; insertion/backspace respect the caret and read-only flag. An explicit edit maximum of 0 accepts no text. Memo text preserves CEGUI's terminal newline. Selection editing remains pending. Host-tested; not device-verified. |
+| `guiEditGetMaxLength` | **Implemented** | `CLuaGUIDefs.cpp:162` | `GUIEditGetMaxLength` | Edit/memo caret uses Unicode characters; insertion/backspace respect the caret and read-only flag. An explicit edit maximum of 0 accepts no text. Memo text preserves CEGUI's terminal newline. Selection editing remains pending. Host-tested; not device-verified. |
 | `guiEditIsMasked` | **Implemented** | `CLuaGUIDefs.cpp:160` | `GUIEditIsMasked` | Operational on Android. (GuiEditIsMasked) |
 | `guiEditIsReadOnly` | **Implemented** | `CLuaGUIDefs.cpp:164` | `GUIEditIsReadOnly` | Operational on Android. (GuiEditIsReadOnly) |
-| `guiEditSetCaretIndex` | **Implemented** | `CLuaGUIDefs.cpp:157` | `GUIEditSetCaretIndex` | Operational on Android. (GuiEditSetCaretIndex) |
+| `guiEditSetCaretIndex` | **Implemented** | `CLuaGUIDefs.cpp:157` | `GUIEditSetCaretIndex` | Edit/memo caret uses Unicode characters; insertion/backspace respect the caret and read-only flag. An explicit edit maximum of 0 accepts no text. Memo text preserves CEGUI's terminal newline. Selection editing remains pending. Host-tested; not device-verified. |
 | `guiEditSetMasked` | **Implemented** | `CLuaGUIDefs.cpp:159` | `GUIEditSetMasked` | Operational on Android. (GuiEditSetMasked) |
-| `guiEditSetMaxLength` | **Implemented** | `CLuaGUIDefs.cpp:161` | `GUIEditSetMaxLength` | Operational on Android. (GuiEditSetMaxLength) |
+| `guiEditSetMaxLength` | **Implemented** | `CLuaGUIDefs.cpp:161` | `GUIEditSetMaxLength` | Edit/memo caret uses Unicode characters; insertion/backspace respect the caret and read-only flag. An explicit edit maximum of 0 accepts no text. Memo text preserves CEGUI's terminal newline. Selection editing remains pending. Host-tested; not device-verified. |
 | `guiEditSetReadOnly` | **Implemented** | `CLuaGUIDefs.cpp:163` | `GUIEditSetReadOnly` | Operational on Android. (GuiEditSetReadOnly) |
 | `guiFocus` | **Implemented** | `CLuaGUIDefs.cpp:133` | `GUIFocus` | Operational on Android. (GuiFocus) |
 | `guiGetAlpha` | **Implemented** | `CLuaGUIDefs.cpp:141` | `GUIGetAlpha` | Operational on Android. (GuiGetAlpha) |
@@ -158,11 +158,11 @@
 | `guiLabelSetColor` | **Implemented** | `CLuaGUIDefs.cpp:173` | `GUILabelSetColor` | Operational on Android. (GuiLabelSetColor) |
 | `guiLabelSetHorizontalAlign` | **Implemented** | `CLuaGUIDefs.cpp:176` | `GUILabelSetHorizontalAlign` | Operational on Android. (GuiLabelSetHorizontalAlign) |
 | `guiLabelSetVerticalAlign` | **Implemented** | `CLuaGUIDefs.cpp:175` | `GUILabelSetVerticalAlign` | Operational on Android. (GuiLabelSetVerticalAlign) |
-| `guiMemoGetCaretIndex` | **Implemented** | `CLuaGUIDefs.cpp:167` | `GUIMemoGetCaretIndex` | Operational on Android. (GuiMemoGetCaretIndex) |
+| `guiMemoGetCaretIndex` | **Implemented** | `CLuaGUIDefs.cpp:167` | `GUIMemoGetCaretIndex` | Memo accepts Unicode text, backspace and Enter without onClientGUIAccepted; emits onClientGUIChanged, participates in focus and requests multiline Android input. Terminal newline/caret follow CEGUI. Selection, wrapping and automatic caret scrolling remain pending. Host-tested; Android compiles; not device-verified. |
 | `guiMemoGetVerticalScrollPosition` | **Implemented** | `CLuaGUIDefs.cpp:171` | `GUIMemoGetVerticalScrollPosition` | Operational on Android. (GetMemoScroll) |
-| `guiMemoIsReadOnly` | **Implemented** | `CLuaGUIDefs.cpp:169` | `GUIMemoIsReadOnly` | Operational on Android. (GuiMemoIsReadOnly) |
-| `guiMemoSetCaretIndex` | **Implemented** | `CLuaGUIDefs.cpp:166` | `GUIMemoSetCaretIndex` | Operational on Android. (GuiMemoSetCaretIndex) |
-| `guiMemoSetReadOnly` | **Implemented** | `CLuaGUIDefs.cpp:168` | `GUIMemoSetReadOnly` | Operational on Android. (GuiMemoSetReadOnly) |
+| `guiMemoIsReadOnly` | **Implemented** | `CLuaGUIDefs.cpp:169` | `GUIMemoIsReadOnly` | Memo accepts Unicode text, backspace and Enter without onClientGUIAccepted; emits onClientGUIChanged, participates in focus and requests multiline Android input. Terminal newline/caret follow CEGUI. Selection, wrapping and automatic caret scrolling remain pending. Host-tested; Android compiles; not device-verified. |
+| `guiMemoSetCaretIndex` | **Implemented** | `CLuaGUIDefs.cpp:166` | `GUIMemoSetCaretIndex` | Memo accepts Unicode text, backspace and Enter without onClientGUIAccepted; emits onClientGUIChanged, participates in focus and requests multiline Android input. Terminal newline/caret follow CEGUI. Selection, wrapping and automatic caret scrolling remain pending. Host-tested; Android compiles; not device-verified. |
+| `guiMemoSetReadOnly` | **Implemented** | `CLuaGUIDefs.cpp:168` | `GUIMemoSetReadOnly` | Memo accepts Unicode text, backspace and Enter without onClientGUIAccepted; emits onClientGUIChanged, participates in focus and requests multiline Android input. Terminal newline/caret follow CEGUI. Selection, wrapping and automatic caret scrolling remain pending. Host-tested; Android compiles; not device-verified. |
 | `guiMemoSetVerticalScrollPosition` | **Implemented** | `CLuaGUIDefs.cpp:170` | `GUIMemoSetVerticalScrollPosition` | Operational on Android. (SetMemoScroll) |
 | `guiMoveToBack` | **Implemented** | `CLuaGUIDefs.cpp:131` | `GUIMoveToBack` | Operational on Android. (GuiMoveToBack) |
 | `guiProgressBarGetProgress` | **Implemented** | `CLuaGUIDefs.cpp:153` | `GUIProgressBarGetProgress` | Operational on Android. (GuiProgressBarGetProgress) |
@@ -185,7 +185,7 @@
 | `guiSetProperty` | **Implemented** | `CLuaGUIDefs.cpp:122` | `GUISetProperty` | Operational on Android. (GuiSetProperty) |
 | `guiSetSelectedTab` | **Implemented** | `CLuaGUIDefs.cpp:76` | `GUISetSelectedTab` | Operational on Android. (GuiSetSelectedTab) |
 | `guiSetSize` | **Implemented** | `CLuaGUIDefs.cpp:126` | `GUISetSize` | Operational on Android. (GuiSetSize) |
-| `guiSetText` | **Implemented** | `CLuaGUIDefs.cpp:124` | `GUISetText` | Operational on Android. (GuiSetText) |
+| `guiSetText` | **Implemented** | `CLuaGUIDefs.cpp:124` | `GUISetText` | Edit/memo caret uses Unicode characters; insertion/backspace respect the caret and read-only flag. An explicit edit maximum of 0 accepts no text. Memo text preserves CEGUI's terminal newline. Selection editing remains pending. Host-tested; not device-verified. |
 | `guiSetVisible` | **Implemented** | `CLuaGUIDefs.cpp:128` | `GUISetVisible` | Operational on Android. (GuiSetVisible) |
 | `guiStaticImageGetNativeSize` | **Implemented** | `CLuaGUIDefs.cpp:74` | `GUIStaticImageGetNativeSize` | Operational on Android. (GuiStaticImageGetNativeSize) |
 | `guiStaticImageLoadImage` | **Implemented** | `CLuaGUIDefs.cpp:73` | `GUIStaticImageLoadImage` | Operational on Android. (GuiStaticImageLoadImage) |
@@ -208,9 +208,9 @@
 | `setDebugViewActive` | **Implemented** | `CLuaGUIDefs.cpp:48` | `GUISetDebugViewActive` | Operational on Android. (SetDebugViewActive) |
 | `setModel2DFXPosition` | Missing | `CLua2DFXDefs.cpp:569` | `SetModel2DFXPosition` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
 | `setModel2DFXProperty` | Missing | `CLua2DFXDefs.cpp:570` | `SetModel2DFXProperty` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `svgCreate` | Missing | `CLuaVectorGraphicDefs.cpp:17` | `ArgumentParser<SVGCreate>` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `svgGetDocumentXML` | Missing | `CLuaVectorGraphicDefs.cpp:18` | `ArgumentParser<SVGGetDocumentXML>` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `svgGetSize` | Missing | `CLuaVectorGraphicDefs.cpp:20` | `ArgumentParser<SVGGetSize>` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `svgSetDocumentXML` | Missing | `CLuaVectorGraphicDefs.cpp:19` | `ArgumentParser<SVGSetDocumentXML>` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `svgSetSize` | Missing | `CLuaVectorGraphicDefs.cpp:21` | `ArgumentParser<SVGSetSize>` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `svgSetUpdateCallback` | Missing | `CLuaVectorGraphicDefs.cpp:22` | `ArgumentParser<SVGSetUpdateCallback>` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
+| `svgCreate` | **Implemented** | `CLuaVectorGraphicDefs.cpp:17` | `ArgumentParser<SVGCreate>` | Operational on Android. (SvgCreate) |
+| `svgGetDocumentXML` | **Implemented** | `CLuaVectorGraphicDefs.cpp:18` | `ArgumentParser<SVGGetDocumentXML>` | Operational on Android. (SvgGetDocumentXML) |
+| `svgGetSize` | **Implemented** | `CLuaVectorGraphicDefs.cpp:20` | `ArgumentParser<SVGGetSize>` | Operational on Android. (SvgGetSize) |
+| `svgSetDocumentXML` | **Implemented** | `CLuaVectorGraphicDefs.cpp:19` | `ArgumentParser<SVGSetDocumentXML>` | Operational on Android. (SvgSetDocumentXML) |
+| `svgSetSize` | **Implemented** | `CLuaVectorGraphicDefs.cpp:21` | `ArgumentParser<SVGSetSize>` | Operational on Android. (SvgSetSize) |
+| `svgSetUpdateCallback` | **Implemented** | `CLuaVectorGraphicDefs.cpp:22` | `ArgumentParser<SVGSetUpdateCallback>` | Operational on Android. (SvgSetUpdateCallback) |

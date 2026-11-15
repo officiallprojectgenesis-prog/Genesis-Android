@@ -101,6 +101,14 @@ bool ActiveVmPulseResources();
 void ActiveVmResetSession();
 bool ActiveVmOnChat(const char* text, int red, int green, int blue);
 std::string ActiveVmPump();
+// Appends draw lines ("L ...\n", "P ...\n") to the DX frame being built. VM thread.
+void ActiveVmAppendDraw(const std::string& lines);
+void ActiveVmAppendPostGuiDraw(const std::string& lines);
+// Cache file of a resource path as dxDrawImage resolves it ("img/a.png" in the running
+// resource, ":other/img/a.png" in another). Empty for a bad path or when no resource runs.
+std::string ActiveVmResourceFile(const std::string& path);
+// The Lua state of the running VM, or nullptr. VM thread.
+lua_State* ActiveVmState();
 void ActiveVmSetScreen(int width, int height);
 // Touch on the DX overlay while the cursor is showing. Any thread. action: 0 down, 1 up, 2 move;
 // x and y are in the pixels guiGetScreenSize reports.
@@ -113,8 +121,6 @@ void ActiveVmQueueScriptInput(const char* text, int backspaces, const char* key)
 void ActiveVmNoteSoundEnded(uint32_t id);
 // MediaPlayer prepared a sound. Seconds are zero while duration is unknown (streams).
 void ActiveVmNoteSoundLength(uint32_t id, double seconds);
-// VM-thread introspection used by host callback tests.
-lua_State* ActiveVmState();
 // True while that playSound id still has a player. isElement uses this, because the
 // element-tree isElement binding runs after the sound binding and would otherwise
 // say the login track is already gone.

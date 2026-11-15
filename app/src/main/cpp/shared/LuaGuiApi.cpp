@@ -68,7 +68,8 @@ struct GuiElement {
     std::string caption;            // combobox storedCaption, restored when the selection clears
     std::vector<std::string> items; // combobox rows, index 0 is the first item
     int caret = 0;
-    int maxLength = 0;              // 0: no script limit (the edit still stops at 4096)
+    // CEGUI String::max_size(), exposed as unsigned int by CGUIEdit_Impl::GetMaxLength.
+    uint32_t maxLength = static_cast<uint32_t>(std::numeric_limits<size_t>::max() / sizeof(uint32_t));
     bool readOnly = false;
     double scroll = 0;              // progress bar, scrollbar, and memo/pane vertical, 0-100
     double scrollX = 0;             // scroll pane horizontal, 0-100
@@ -243,6 +244,24 @@ int TextChars(const std::string& text) {
     return count;
 }
 
+size_t ByteAtChar(const std::string& text, size_t index) {
+    size_t offset = 0;
+    for (size_t count = 0; count < index && offset < text.size(); ++count) {
+        ++offset;
+        while (offset < text.size() && (static_cast<unsigned char>(text[offset]) & 0xC0) == 0x80) ++offset;
+    }
+    return offset;
+}
+
+int CaretLimit(const GuiElement& element) {
+    // CEGUI MultiLineEditbox keeps a final newline and places the caret before it.
+    return std::max(0, TextChars(element.text) - (element.type == "gui-memo" ? 1 : 0));
+}
+
+void EnsureMemoNewline(GuiElement& element) {
+    if (element.type == "gui-memo" && (element.text.empty() || element.text.back() != '\n')) element.text += '\n';
+}
+
 int LongestLineChars(const std::string& text) {
     int best = 0;
     int line = 0;
@@ -322,6 +341,7 @@ double Requested(double pixels, double parentSize, bool relative) {
 
 // Puts the element in the map. z is the sibling order (later creates are in front).
 uint32_t Emplace(GuiElement element) {
+    EnsureMemoNewline(element);
     element.owner = ActiveVmOwner();
     element.netId = ActiveVmOwnerNet();
     element.generation = ActiveVmOwnerGeneration();
@@ -541,9 +561,9 @@ static void DrawElement(std::string& out, uint32_t id, const GuiElement& element
         }
     } else if (element.type == "gui-edit") {
         AppendRect(out, box, kFieldBackground, alpha);
-        // Masked edits draw stars (guiEditSetMasked). A focused edit draws a caret at the end.
+        // Cursor indices count Unicode characters, not UTF-8 bytes.
         std::string shown = element.masked ? Masked(line) : line;
-        if (g_focused == id) shown.push_back('|');
+        if (g_focused == id) shown.insert(ByteAtChar(shown, element.caret), "|");
         AppendText(out, box.x, box.y, box.x + box.w, box.y + box.h, textColor, alpha, shown);
     } else if (element.type == "gui-tabpanel") {
         AppendRect(out, box, kWindowBackground, alpha);
@@ -558,7 +578,20 @@ static void DrawElement(std::string& out, uint32_t id, const GuiElement& element
         }
     } else if (element.type == "gui-memo") {
         AppendRect(out, box, kFieldBackground, alpha);
-        AppendText(out, box.x, box.y, box.x + box.w, box.y + box.h, textColor, alpha, line);
+        std::string shown = element.text;
+        if (g_focused == id) shown.insert(ByteAtChar(shown, element.caret), "|");
+        // Draw each logical line without embedding control characters in the DX protocol.
+        // Wrapping and automatic caret scrolling remain separate renderer work.
+        size_t start = 0;
+        double y = box.y;
+        while (start < shown.size() && y + 16.0 <= box.y + box.h) {
+            const size_t end = shown.find('\n', start);
+            const size_t size = end == std::string::npos ? shown.size() - start : end - start;
+            AppendText(out, box.x, y, box.x + box.w, y + 16.0, textColor, alpha, OneLine(shown.data() + start, size));
+            if (end == std::string::npos) break;
+            start = end + 1;
+            y += 16.0;
+        }
     } else if (element.type == "gui-progressbar") {
         AppendRect(out, box, kFieldBackground, alpha);
         const double fill = box.w * std::clamp(element.scroll, 0.0, 100.0) / 100.0;
@@ -656,7 +689,13 @@ static void DrawBranch(std::string& out, uint32_t parent) {
     }
 }
 
-void GuiAppendDraws(std::string& out) { DrawBranch(out, 0); }
+void GuiAppendDraws(std::string& out) {
+    const size_t start = out.size();
+    DrawBranch(out, 0);
+    // CEGUI renders independently of the last DX blend mode. Do not let add or
+    // overwrite from a script change the GUI; post-GUI draws restore their own mode.
+    if (out.size() != start) out.insert(start, "B 0\n");
+}
 
 namespace {
 
@@ -691,7 +730,7 @@ uint32_t PickBranch(uint32_t parent, double x, double y) {
 
 bool EditType(uint32_t id) {
     const GuiElement* element = Find(id);
-    return element && element->type == "gui-edit";
+    return element && (element->type == "gui-edit" || element->type == "gui-memo");
 }
 
 } // namespace
@@ -700,7 +739,12 @@ uint32_t GuiPick(double x, double y) { return PickBranch(0, x, y); }
 
 bool GuiIsEdit(uint32_t id) {
     const GuiElement* element = Find(id);
-    return element && element->type == "gui-edit" && EffectivelyVisible(*element) && EffectivelyEnabled(*element);
+    return EditType(id) && EffectivelyVisible(*element) && EffectivelyEnabled(*element);
+}
+
+bool GuiFocusedMemo() {
+    const GuiElement* element = Find(GuiFocusedEdit());
+    return element && element->type == "gui-memo";
 }
 
 uint32_t GuiFocusedEdit() {
@@ -722,25 +766,25 @@ void GuiSetFocused(uint32_t id) {
 bool GuiEditAppend(const char* bytes, size_t length) {
     GuiElement* element = Find(GuiFocusedEdit());
     if (!element || !bytes || length == 0 || element->readOnly) return false;
-    if (element->maxLength > 0 &&
-        TextChars(element->text) + TextChars(std::string(bytes, length)) > element->maxLength)
+    const int added = TextChars(std::string(bytes, length));
+    if (static_cast<uint64_t>(CaretLimit(*element)) + added > element->maxLength)
         return false;
     if (element->text.size() + length > 4096) return false;
-    element->text.append(bytes, length);
-    element->caret = static_cast<int>(element->text.size());
+    element->caret = std::clamp(element->caret, 0, CaretLimit(*element));
+    element->text.insert(ByteAtChar(element->text, element->caret), bytes, length);
+    element->caret += added;
     return true;
 }
 
 bool GuiEditErase() {
     GuiElement* element = Find(GuiFocusedEdit());
-    if (!element || element->text.empty()) return false;
-    size_t end = element->text.size();
-    do {
-        --end;
-    } while (end > 0 && (static_cast<unsigned char>(element->text[end]) & 0xC0) == 0x80);
-    element->text.resize(end);
-    const int chars = TextChars(element->text);
-    if (element->caret > chars) element->caret = chars;
+    if (!element || element->readOnly || element->text.empty()) return false;
+    element->caret = std::clamp(element->caret, 0, CaretLimit(*element));
+    if (element->caret == 0) return false;
+    const size_t end = ByteAtChar(element->text, element->caret);
+    const size_t start = ByteAtChar(element->text, element->caret - 1);
+    element->text.erase(start, end - start);
+    --element->caret;
     return true;
 }
 
@@ -989,6 +1033,11 @@ static const char* PixelsFormatName(const char* data, size_t size) {
     uint32_t width = 0, height = 0;
     if (size >= 8 && PlainSize(data, size, width, height)) return "plain";
     return nullptr;
+}
+
+const char* DxPixelsFormatName(const char* data, size_t size) { return PixelsFormatName(data, size); }
+bool DxPlainSize(const char* data, size_t size, uint32_t& width, uint32_t& height) {
+    return PlainSize(data, size, width, height);
 }
 
 // (int) position, then the uint parameter of GetPixelColor / SetPixelColor.
@@ -1427,7 +1476,7 @@ static int GuiCreateComboBox(lua_State* L) {
 
 // CLuaGUIDefs.cpp:962-994, CStaticFunctionDefinitions.cpp:5597-5614.
 // A tap focuses the edit (GuiPick) and the soft keyboard writes the text, which fires
-// onClientGUIChanged. Enter fires onClientGUIAccepted. The caret stays at the end.
+// onClientGUIChanged. Enter fires onClientGUIAccepted. Typing respects the caret index.
 static int GuiCreateEdit(lua_State* L) {
     Args args{L};
     GuiElement element;
@@ -1499,11 +1548,10 @@ static int GuiSetText(lua_State* L) {
     std::string text;
     if (!args.gui(id, nullptr) || !args.text(text)) return Reject(L, "guiSetText", args, false);
     if (GuiElement* element = Find(id)) {
-        if (element->maxLength > 0 && text.size() > static_cast<size_t>(element->maxLength))
-            text.resize(static_cast<size_t>(element->maxLength));
+        if (TextChars(text) > element->maxLength) text.resize(ByteAtChar(text, element->maxLength));
         element->text = std::move(text);
-        if (element->caret > static_cast<int>(element->text.size()))
-            element->caret = static_cast<int>(element->text.size());
+        EnsureMemoNewline(*element);
+        element->caret = std::min(element->caret, CaretLimit(*element));
     }
     lua_pushboolean(L, 1);
     return 1;
@@ -1848,14 +1896,14 @@ static int SetCaret(lua_State* L, const char* name, const char* type) {
     Args args{L};
     uint32_t id = 0;
     int index = 0;
-    if (!args.gui(id, type) || !args.integer(index) || index < 0) return Reject(L, name, args, false);
+    if (!args.gui(id, type) || !args.integer(index)) return Reject(L, name, args, false);
     GuiElement* element = Find(id);
     if (!element) {
         lua_pushboolean(L, 0);
         return 1;
     }
-    const int limit = TextChars(element->text);
-    element->caret = index > limit ? limit : index;
+    const uint32_t limit = static_cast<uint32_t>(CaretLimit(*element));
+    element->caret = static_cast<int>(std::min(static_cast<uint32_t>(index), limit));
     lua_pushboolean(L, 1);
     return 1;
 }
@@ -1904,12 +1952,12 @@ static int GuiEditSetMaxLength(lua_State* L) {
     Args args{L};
     uint32_t id = 0;
     int length = 0;
-    if (!args.gui(id, "gui-edit") || !args.integer(length) || length < 0) return Reject(L, "guiEditSetMaxLength", args, false);
+    if (!args.gui(id, "gui-edit") || !args.integer(length)) return Reject(L, "guiEditSetMaxLength", args, false);
     if (GuiElement* element = Find(id)) {
-        element->maxLength = length;
-        if (length > 0 && element->text.size() > static_cast<size_t>(length)) {
-            element->text.resize(static_cast<size_t>(length));
-            if (element->caret > length) element->caret = length;
+        element->maxLength = static_cast<uint32_t>(length); // Desktop passes the signed Lua value to unsigned SetMaxLength.
+        if (static_cast<uint32_t>(TextChars(element->text)) > element->maxLength) {
+            element->text.resize(ByteAtChar(element->text, element->maxLength));
+            element->caret = std::min(element->caret, TextChars(element->text));
         }
     }
     lua_pushboolean(L, 1);

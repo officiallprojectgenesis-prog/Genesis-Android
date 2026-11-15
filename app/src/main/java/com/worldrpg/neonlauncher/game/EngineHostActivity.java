@@ -70,6 +70,7 @@ public final class EngineHostActivity extends GTASA {
     private String scriptCommitted = "";
     private boolean scriptApplying;
     private boolean scriptKeyboardShown;
+    private boolean scriptMultiline;
     // Chat took the keyboard. Cleared the next time the scripts stop asking for it.
     private boolean scriptKeyboardSuppressed;
     private boolean finishingField;
@@ -116,7 +117,6 @@ public final class EngineHostActivity extends GTASA {
     private boolean keyListAvailable;
     private native void nativeDropConnection();
     private native String nativeMapSnapshot();
-
     @Override
     public void onCreate(Bundle savedInstanceState) {
         try {
@@ -430,6 +430,12 @@ public final class EngineHostActivity extends GTASA {
                     public boolean sendKeyEvent(KeyEvent event) {
                         if (event.getAction() == KeyEvent.ACTION_DOWN
                                 && event.getKeyCode() == KeyEvent.KEYCODE_ENTER) {
+                            if (scriptMultiline) {
+                                // Keep the IME's scratch buffer and Lua in the same state,
+                                // so the next composing edit/backspace includes this newline.
+                                scriptInput.append("\n");
+                                return true;
+                            }
                             finishScriptField();
                             return true;
                         }
@@ -473,6 +479,7 @@ public final class EngineHostActivity extends GTASA {
 
     private void deliverScriptText(String next) {
         if (scriptApplying || !scriptKeyboardShown) return;
+        if (scriptMultiline) next = next.replace("\r\n", "\n").replace('\r', '\n');
         String previous = scriptCommitted;
         int i = 0;
         int j = 0;
@@ -489,7 +496,7 @@ public final class EngineHostActivity extends GTASA {
         StringBuilder keep = new StringBuilder();
         for (int k = 0; k < inserted.length();) {
             int cp = inserted.codePointAt(k);
-            if (cp != '\n' && cp != '\r') keep.appendCodePoint(cp);
+            if (scriptMultiline || (cp != '\n' && cp != '\r')) keep.appendCodePoint(cp);
             k += Character.charCount(cp);
         }
         if (removed == 0 && keep.length() == 0) return;
@@ -571,20 +578,37 @@ public final class EngineHostActivity extends GTASA {
         raiseScriptKeyboard();
     }
 
-    /** A "K" line in the DX frame means a gui-edit or guiSetInputEnabled(true) wants the keyboard. */
+    /** "K" requests text input; "K multiline" enables line breaks for a gui-memo. */
     private void syncScriptKeyboard(String frame) {
         boolean want = false;
+        boolean multiline = false;
         if (frame != null) {
             for (String line : frame.split("\n", -1)) {
-                if ("K".equals(line)) {
+                if ("K".equals(line) || "K multiline".equals(line)) {
                     want = true;
+                    multiline = "K multiline".equals(line);
                     break;
                 }
             }
         }
         if (!want) scriptKeyboardSuppressed = false;
         boolean show = want && !scriptKeyboardSuppressed;
-        if (show == scriptKeyboardShown) return;
+        boolean changedMode = show && scriptMultiline != multiline;
+        if (changedMode && scriptInput != null) {
+            scriptApplying = true;
+            scriptMultiline = multiline;
+            scriptInput.setText("");
+            scriptCommitted = "";
+            scriptInput.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
+                    | (multiline ? InputType.TYPE_TEXT_FLAG_MULTI_LINE : 0));
+            scriptInput.setSingleLine(!multiline);
+            scriptInput.setImeOptions(multiline ? EditorInfo.IME_ACTION_NONE | EditorInfo.IME_FLAG_NO_ENTER_ACTION
+                    : EditorInfo.IME_ACTION_NEXT);
+            scriptApplying = false;
+            InputMethodManager keyboard = (InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
+            if (keyboard != null) keyboard.restartInput(scriptInput);
+        }
+        if (show == scriptKeyboardShown && !changedMode) return;
         scriptKeyboardShown = show;
         if (show) showScriptKeyboard();
         else hideScriptKeyboard();
@@ -936,6 +960,49 @@ public final class EngineHostActivity extends GTASA {
             if (percent >= 100 || label.isEmpty()) hideDownload();
             else showDownload(percent, label);
         });
+    }
+
+    /**
+     * Width of one line of text for dxGetTextWidth and dxGetTextSize: in the DX overlay font, or
+     * in the dxCreateFont file when fontFile is not null.
+     */
+    @SuppressWarnings("unused")
+    public float onNativeMeasureText(String text, float pixelSize, String fontFile, boolean bold) {
+        return MtaDxView.measureLine(text, pixelSize, fontFile, bold);
+    }
+
+    // Bitmap work for the pixel calls (dxGetTexturePixels, dxSetTexturePixels, dxConvertPixels,
+    // dxCreateTexture from pixels). Called on the script thread; see MtaDxView.
+    @SuppressWarnings("unused")
+    public int[] onNativeLoadPixels(String source) {
+        return MtaDxView.loadPixels(source);
+    }
+
+    @SuppressWarnings("unused")
+    public int[] onNativeDecodePixels(byte[] data) {
+        return MtaDxView.decodePixels(data);
+    }
+
+    @SuppressWarnings("unused")
+    public byte[] onNativeEncodePixels(int[] argb, int width, int height, boolean jpeg, int quality) {
+        return MtaDxView.encodePixels(argb, width, height, jpeg, quality);
+    }
+
+    @SuppressWarnings("unused")
+    public boolean onNativeStorePixels(String name, int[] argb, int width, int height) {
+        return MtaDxView.storePixels(name, argb, width, height);
+    }
+
+    /** dxUpdateScreenSource: copies the game surface into a script bitmap (see MtaDxView.copyScreen). */
+    @SuppressWarnings("unused")
+    public void onNativeCopyScreen(String name, int width, int height) {
+        runOnUiThread(() -> MtaDxView.copyScreen(view, name, width, height));
+    }
+
+    /** Draws an SVG document into a script bitmap. See MtaDxView.renderSvg for the result codes. */
+    @SuppressWarnings("unused")
+    public int onNativeRenderSvg(String name, byte[] xml, int width, int height) {
+        return MtaDxView.renderSvg(name, xml, width, height);
     }
 
     @SuppressWarnings("unused")

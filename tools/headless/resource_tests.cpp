@@ -13,6 +13,7 @@
 #include "HttpDownloader.h"
 #include "LuaEventRegistry.h"
 #include "LuaKeyBindApi.h"
+#include "LuaGuiApi.h"
 #include "LuaMtaWindowApi.h"
 #include "LuaVMStub.h"
 #include "MtaCipher.h"
@@ -26,6 +27,7 @@
 #include "entity/EntityAddTypes.h"
 #include "net/raknet/RakNetWrapper.h"
 #include "lua.hpp"
+#include "Utf8.h"
 
 #include <zlib.h>
 
@@ -40,6 +42,7 @@
 #include <poll.h>
 #include <string>
 #include <sys/socket.h>
+#include <sys/stat.h>
 #include <thread>
 #include <unistd.h>
 #include <vector>
@@ -229,10 +232,16 @@ void WriteWeaponBody(WorldRPG::Net::BitStreamWriter& w, uint8_t targetType, int 
     bits(owner, 17);
 }
 
-void WriteWeaponHeader(WorldRPG::Net::BitStreamWriter& w, uint32_t id) {
+void WriteWeaponHeader(WorldRPG::Net::BitStreamWriter& w, uint32_t id, uint32_t attachedTo = 0xFFFFFFFFu) {
     WriteTestBits(w, id, 17); w.Write(static_cast<uint8_t>(18)); WriteTestBits(w, 0, 17);
     w.Write(static_cast<uint8_t>(0)); w.WriteCompressed(0u, 2);
-    WriteTestBits(w, 0, 1); WriteTestBits(w, 1, 1); // attachment, collisions (no callProp at 0x0030)
+    WriteTestBits(w, attachedTo != 0xFFFFFFFFu, 1);
+    if (attachedTo != 0xFFFFFFFFu) {
+        WriteTestBits(w, attachedTo, 17);
+        WriteTestBits(w, 1024, 24); WriteTestBits(w, static_cast<uint32_t>(-2048) & 0xFFFFFFu, 24); w.Write(3.f);
+        WriteTestBits(w, 0, 16); WriteTestBits(w, 16384, 16); WriteTestBits(w, 32768, 16);
+    }
+    WriteTestBits(w, 1, 1); // collisions (no callProp at 0x0030)
     w.WriteCompressed(0u, 2); w.WriteCompressed(0u, 2); // custom count, name length
     w.Write(static_cast<uint8_t>(0)); // mobile sync time context
 }
@@ -307,6 +316,212 @@ void CheckWeaponSnapshots(WorldRPG::Script::LuaVMStub& vm) {
     ServerWorld::OnEntityRemove(removed.GetData(), removed.GetByteLength(), removed.GetBitLength());
     RunLua(vm, "weapon-removed", "assert(getWeaponAmmo({id = 1001}) == false and getWeaponTarget({id = 1002}) == false)");
     ServerWorld::OnPlayerQuit(903);
+}
+
+void CheckElementsGuiDx(WorldRPG::Script::LuaVMStub& vm) {
+    using namespace WorldRPG;
+    Net::BitStreamWriter packet;
+    packet.WriteCompressed(4u, 4);
+    WriteWeaponHeader(packet, 2001, 2002); WriteWeaponBody(packet, 2);
+    WriteWeaponHeader(packet, 2002); WriteWeaponBody(packet, 2);
+    WriteWeaponHeader(packet, 2003, 2002); WriteWeaponBody(packet, 2);
+    WriteWeaponHeader(packet, 2004, 9999); WriteWeaponBody(packet, 2);
+    ServerWorld::OnEntityAdd(packet.GetData(), packet.GetByteLength(), packet.GetBitLength());
+    RunLua(vm, "element-attachments", R"LUA(
+        local a, b = {id=2001}, {id=2002}
+        assert(attachElements(a,b) == false and detachElements(a,b) == false, 'missing physical hook must not report a successful mutation')
+        assert(isElementAttached(a) == true and getElementAttachedTo(a).id == 2002, 'forward attachment reference')
+        local list = getAttachedElements(b)
+        assert(#list == 2 and list[1].id == 2001 and list[2].id == 2003, 'attachment order')
+        local x,y,z,rx,ry,rz = getElementAttachedOffsets(a)
+        assert(x == 1 and y == -2 and z == 3 and rx == 0 and ry == 90 and rz == 180, 'six offsets, degrees')
+        assert(isElementAttached(b) == nil and getElementAttachedTo(b) == false, 'unattached return types')
+        assert(getElementAttachedTo({id=2004}) == false, 'unknown target is not a live attachment')
+        assert(isElementAttached({}) == nil and getElementAttachedTo({}) == nil, 'bad argument nil')
+        assert(getAttachedElements({}) == false and getElementAttachedOffsets({}) == false, 'bad argument false')
+        assert(select('#',getElementAttachedOffsets(b)) == 6, 'unattached element also has six offsets')
+    )LUA");
+    Net::BitStreamWriter removed;
+    WriteTestBits(removed, 2002, 17);
+    ServerWorld::OnEntityRemove(removed.GetData(), removed.GetByteLength(), removed.GetBitLength());
+    Net::BitStreamWriter replacement;
+    replacement.WriteCompressed(1u, 4); WriteWeaponHeader(replacement, 2002); WriteWeaponBody(replacement, 2);
+    ServerWorld::OnEntityAdd(replacement.GetData(), replacement.GetByteLength(), replacement.GetBitLength());
+    RunLua(vm, "element-attachment-removal", R"LUA(
+        assert(isElementAttached({id=2001}) == nil and getElementAttachedTo({id=2003}) == false, 'deleted parent clears references')
+        assert(#getAttachedElements({id=2002}) == 0, 'reused ID inherits no children')
+    )LUA");
+    Net::BitStreamWriter cleanup;
+    for (uint32_t id : {2001u,2002u,2003u,2004u}) WriteTestBits(cleanup,id,17);
+    ServerWorld::OnEntityRemove(cleanup.GetData(),cleanup.GetByteLength(),cleanup.GetBitLength());
+
+    RunLua(vm, "gui-unicode-caret-setup", R"LUA(
+        _G.editUtf = guiCreateEdit(100,100,120,20,'aé🙂z',false)
+        assert(guiEditGetCaretIndex(editUtf) == 0, 'initial caret matches CEGUI')
+        assert(guiEditGetMaxLength(editUtf) == 4294967295, '64-bit CEGUI default capacity')
+        assert(guiEditSetCaretIndex(editUtf, 100) and guiEditGetCaretIndex(editUtf) == 4, 'caret clamps by characters')
+        assert(guiEditSetCaretIndex(editUtf, 2), 'move caret inside text')
+    )LUA");
+    lua_State* L = Script::ActiveVmState();
+    lua_getglobal(L,"editUtf"); lua_getfield(L,-1,"id");
+    const auto edit = static_cast<uint32_t>(lua_tointeger(L,-1)); lua_pop(L,2);
+    Script::GuiSetFocused(edit);
+    CHECK(Script::GuiEditAppend("Ω",2));
+    RunLua(vm,"gui-caret-insert",R"LUA(
+        assert(guiGetText(editUtf) == 'aéΩ🙂z' and guiEditGetCaretIndex(editUtf) == 3, 'insert at Unicode caret')
+    )LUA");
+    CHECK(Script::GuiEditErase());
+    RunLua(vm,"gui-caret-erase",R"LUA(
+        assert(guiGetText(editUtf) == 'aé🙂z' and guiEditGetCaretIndex(editUtf) == 2, 'erase before caret')
+        assert(guiEditSetReadOnly(editUtf,true))
+    )LUA");
+    CHECK(!Script::GuiEditErase() && !Script::GuiEditAppend("x",1));
+    RunLua(vm,"gui-unicode-limits",R"LUA(
+        assert(guiGetText(editUtf) == 'aé🙂z', 'readonly blocks insertion and backspace')
+        assert(guiEditSetReadOnly(editUtf,false) and guiEditSetMaxLength(editUtf,2))
+        assert(guiGetText(editUtf) == 'aé', 'length cap does not cut UTF-8 bytes')
+        assert(guiSetText(editUtf,'é🙂x') and guiGetText(editUtf) == 'é🙂', 'setText respects Unicode length')
+        assert(guiEditSetMaxLength(editUtf,0) and guiGetText(editUtf) == '', 'zero length means empty')
+    )LUA");
+    CHECK(!Script::GuiEditAppend("x",1));
+    RunLua(vm,"gui-unsigned-length",R"LUA(
+        assert(guiEditSetMaxLength(editUtf,-1) and guiEditGetMaxLength(editUtf) == 4294967295, 'signed Lua length converts to desktop unsigned length')
+    )LUA");
+    const std::string typed = Utf8::FromUtf16(u"é🙂");
+    Script::ActiveVmQueueScriptInput(typed.c_str(),0,"");
+    vm.pumpDx();
+    RunLua(vm,"gui-android-unicode-input",R"LUA(
+        assert(guiGetText(editUtf) == 'é🙂' and guiEditGetCaretIndex(editUtf) == 2, 'UTF-16 input becomes UTF-8 characters')
+    )LUA");
+    Script::ActiveVmQueueScriptInput("",1,"");
+    vm.pumpDx();
+    RunLua(vm,"gui-android-unicode-backspace",R"LUA(
+        assert(guiGetText(editUtf) == 'é' and guiEditGetCaretIndex(editUtf) == 1, 'one backspace erases the whole emoji')
+    )LUA");
+    RunLua(vm,"dx-gui-layers-setup",R"LUA(
+        assert(guiEditSetMaxLength(editUtf,10) and guiSetText(editUtf,'é🙂x') and guiEditSetCaretIndex(editUtf,1))
+        _G.layerLabel = guiCreateLabel(500,500,150,30,'camada-é🙂',false)
+        _G.layerTarget = dxCreateRenderTarget(16,16,true)
+        _G.layerTarget2 = dxCreateRenderTarget(16,16,true)
+        assert(getElementAttachedTo(layerTarget) == false and #getAttachedElements(layerTarget) == 0, 'DX elements are valid attachment-query arguments')
+        assert(select('#',getElementAttachedOffsets(layerTarget)) == 6, 'unattached DX element has offsets')
+        _G.layerDraw = function()
+            assert(dxDrawRectangle(301,302,3,4,4294967295,false) == true, 'rectangle success returns boolean')
+            assert(dxDrawText('before-gui',310,311) == true, 'text success returns boolean')
+            dxDrawLine(321,322,323,324,4294967295,1,false)
+            dxSetBlendMode('add')
+            dxDrawLine(421,422,423,424,4294967295,1,true)
+            dxDrawCircle(450,450,10,0,90,4294967295,4294967295,3,1,true)
+            dxDrawPrimitive('linelist',true,{550,550,4294967295},{560,560,4278190080})
+            dxSetRenderTarget(layerTarget,true)
+            dxDrawLine(1,2,3,4,4294967295,1,true)
+            dxSetRenderTarget()
+            dxDrawMaterialPrimitive('trianglelist',layerTarget,true,{650,650,0,0},{660,650,1,0},{650,660,0,1})
+            assert(dxDrawRectangle(701,702,3,4,4294967295,true))
+            assert(dxDrawText('after-gui-é🙂',710,711,720,730,4294967295,1,'default','left','top',false,false,true))
+            assert(dxDrawImage(740,741,10,10,layerTarget,0,0,0,4294967295,true), 'live texture works outside resource scope')
+            assert(dxDrawImageSection(750,751,10,10,0,0,4,4,layerTarget,0,0,0,4294967295,true))
+            dxSetRenderTarget(layerTarget2,true)
+            assert(dxDrawRectangle(801,802,3,4,4294967295,true))
+            assert(dxDrawText('target-only',810,811,820,830,4294967295,1,'default','left','top',false,false,true))
+            assert(dxDrawImage(840,841,10,10,layerTarget,0,0,0,4294967295,true))
+            assert(dxDrawImageSection(850,851,10,10,0,0,4,4,layerTarget,0,0,0,4294967295,true))
+            dxSetRenderTarget()
+            dxSetBlendMode('overwrite')
+        end
+        assert(addEventHandler('onClientRender',root,layerDraw))
+        assert(dxDrawLine(math.huge,0,1,1) == false and dxDrawCircle(0,0,math.huge) == false, 'infinite geometry rejected')
+        assert(dxDrawCircle(0,0,3e38,0,90,4294967295,4294967295,3,100) == false, 'circle overflow rejected')
+        assert(not pcall(dxDrawPrimitive,'linelist',false,{math.huge,0},{1,1}), 'infinite vertex rejected')
+        assert(not pcall(dxDrawMaterialPrimitive,'linelist',layerTarget,false,{math.huge,0,0,0},{1,1,1,1}), 'infinite material vertex rejected')
+        assert(not pcall(dxDrawPrimitive,'linelist',false,{0,0},{1}), 'malformed vertex after an allocated vertex is an error')
+        assert(not pcall(dxDrawMaterialPrimitive,'trianglelist',layerTarget,false,{0,0,0,0},{1}), 'malformed material vertex after a valid vertex is an error')
+        assert(dxDrawPrimitive('linelist',false,{0,0,'ignored'},{1,1,'2'}) == true, 'ReadNumberTable ignores strings as desktop does')
+        assert(not pcall(dxDrawPrimitive,'linelist',false,{'0','0'},{1,1}), 'numeric strings are not vertex numbers')
+        assert(dxDrawRectangle('bad',0,1,1) == false and dxDrawRectangle(math.huge,0,1,1) == false, 'bad rectangle returns false')
+        assert(dxDrawText({},0,0) == false and dxDrawText('bad',math.huge,0) == false, 'bad text returns false')
+        assert(dxDrawText('bad',0,0,0,0,4294967295,1,'default','left','top',false,false,'yes') == false, 'postGUI must be boolean')
+        assert(dxDrawImage(math.huge,0,1,1,layerTarget) == false, 'bad image coordinates')
+        assert(dxDrawImageSection(0,0,1,1,0,0,1,1,layerTarget,0,0,0,4294967295,'yes') == false, 'bad section postGUI')
+    )LUA");
+    const std::string frame = vm.pumpDx();
+    const size_t pre = frame.find("L 321.0 322.0"), gui = frame.find("camada-é🙂"), post = frame.find("L 421.0 422.0");
+    CHECK(pre != std::string::npos && gui != std::string::npos && post != std::string::npos && pre < gui && gui < post);
+    for (const char* command : {"R 701.0 702.0", "after-gui-é🙂", "I 740.0 741.0", "I 750.0 751.0"}) {
+        const size_t draw = frame.find(command);
+        CHECK(draw != std::string::npos && draw > gui);
+    }
+    for (const char* command : {"R 801.0 802.0", "target-only", "I 840.0 841.0", "I 850.0 851.0", "before-gui"}) {
+        const size_t draw = frame.find(command);
+        CHECK(draw != std::string::npos && draw < gui);
+    }
+    CHECK(frame.find("B 1\nL 421.0 422.0") != std::string::npos);
+    const size_t overwrite = frame.find("B 3\n");
+    const size_t guiBlend = frame.find("B 0\n", overwrite);
+    CHECK(overwrite != std::string::npos && guiBlend != std::string::npos && guiBlend < gui);
+    CHECK(frame.find("L 1.0 2.0 3.0 4.0") < gui); // RT draws cannot escape to the screen's post-GUI queue.
+    const size_t material = frame.find("M 4 3 650.0 650.0");
+    CHECK(material != std::string::npos && material > gui);
+    CHECK(frame.find("é|🙂x") != std::string::npos);
+    CHECK(Utf8::ToUtf16("é🙂") == u"é🙂");
+    CHECK(Utf8::FromUtf16(Utf8::ToUtf16("é🙂")) == "é🙂");
+    CHECK(Utf8::FromUtf16(std::u16string{0xD800,u'x',0xDC00}) == "\xEF\xBF\xBDx\xEF\xBF\xBD");
+    CHECK(Utf8::ToUtf16(std::string("\xC0\xAF",2)) == u"\uFFFD\uFFFD");
+    CHECK(Utf8::ToUtf16(std::string("\xED\xA0\x80",3)) == u"\uFFFD\uFFFD\uFFFD");
+    RunLua(vm,"dx-gui-layers-cleanup",R"LUA(
+        assert(removeEventHandler('onClientRender',root,layerDraw))
+        dxSetBlendMode('blend')
+        assert(destroyElement(editUtf) and destroyElement(layerLabel) and destroyElement(layerTarget) and destroyElement(layerTarget2))
+    )LUA");
+}
+
+void CheckMemoInput(WorldRPG::Script::LuaVMStub& vm) {
+    using namespace WorldRPG::Script;
+    RunLua(vm,"memo-input-setup",R"LUA(
+        _G.memoInput = guiCreateMemo(1100,100,160,80,'é🙂',false)
+        _G.memoChanged, _G.memoAccepted, _G.memoFocused, _G.memoChars = 0,0,0,0
+        assert(guiGetText(memoInput) == 'é🙂\n' and guiMemoGetCaretIndex(memoInput) == 0, 'CEGUI trailing newline and initial caret')
+        assert(guiMemoSetCaretIndex(memoInput,-1) and guiMemoGetCaretIndex(memoInput) == 2, 'unsigned index clamps before final newline')
+        assert(addEventHandler('onClientGUIChanged',memoInput,function() memoChanged = memoChanged + 1 end))
+        assert(addEventHandler('onClientGUIAccepted',memoInput,function() memoAccepted = memoAccepted + 1 end))
+        assert(addEventHandler('onClientGUIFocus',memoInput,function() memoFocused = memoFocused + 1 end))
+        _G.memoCharHandler = function() memoChars = memoChars + 1 end
+        assert(addEventHandler('onClientCharacter',root,memoCharHandler))
+        assert(guiFocus(memoInput) and memoFocused == 1, 'memo focus event')
+    )LUA");
+    std::string frame = vm.pumpDx();
+    CHECK(frame.find("K multiline\n") != std::string::npos);
+    ActiveVmQueueScriptInput("Ω",0,"");
+    vm.pumpDx();
+    ActiveVmQueueScriptInput("",0,"enter");
+    vm.pumpDx();
+    ActiveVmQueueScriptInput("x\r\ny",0,"");
+    frame = vm.pumpDx();
+    CHECK(frame.find("T 1100.0 116.0") != std::string::npos && frame.find("T 1100.0 132.0") != std::string::npos);
+    RunLua(vm,"memo-insert-lines",R"LUA(
+        assert(guiGetText(memoInput) == 'é🙂Ω\nx\ny\n' and guiMemoGetCaretIndex(memoInput) == 7, 'memo preserves Unicode and CRLF becomes one newline')
+        assert(memoChanged == 3 and memoAccepted == 0 and memoChars == 0, 'memo consumes text and Enter changes text without acceptance')
+        assert(guiMemoSetReadOnly(memoInput,true))
+    )LUA");
+    ActiveVmQueueScriptInput("Z",1,"enter");
+    vm.pumpDx();
+    RunLua(vm,"memo-readonly",R"LUA(
+        assert(guiGetText(memoInput) == 'é🙂Ω\nx\ny\n' and memoChanged == 3, 'readonly rejects insertion, backspace and Enter')
+        assert(guiMemoSetReadOnly(memoInput,false) and guiMemoSetCaretIndex(memoInput,6))
+    )LUA");
+    ActiveVmQueueScriptInput("",1,"");
+    vm.pumpDx();
+    RunLua(vm,"memo-erase-line",R"LUA(
+        assert(guiGetText(memoInput) == 'é🙂Ω\nxy\n' and guiMemoGetCaretIndex(memoInput) == 5, 'backspace joins lines at the caret')
+        assert(guiSetText(memoInput,'') and guiGetText(memoInput) == '\n' and guiMemoGetCaretIndex(memoInput) == 0, 'empty memo keeps terminal newline')
+        assert(guiSetVisible(memoInput,false))
+    )LUA");
+    frame = vm.pumpDx();
+    CHECK(frame.find("K multiline\n") == std::string::npos);
+    RunLua(vm,"memo-input-cleanup",R"LUA(
+        assert(removeEventHandler('onClientCharacter',root,memoCharHandler))
+        assert(destroyElement(memoInput))
+    )LUA");
 }
 
 void CheckAudioQueries(WorldRPG::Script::LuaVMStub& vm) {
@@ -1077,6 +1292,136 @@ void CheckMtaWindow(WorldRPG::Script::LuaVMStub& vm) {
     RunLua(vm, "chatbox-limit-session", "assert(getChatboxCharacterLimit() == 96, 'a new session resets the limit')");
 }
 
+// 2D drawing calls (desktop CLuaDrawingDefs.cpp 159-187, 443-509, 706-753, 800-923, 2044-2109).
+void CheckDxDrawing(WorldRPG::Script::LuaVMStub& vm) {
+    RunLua(vm, "dx-draw-arguments", R"LUA(
+        assert(dxDrawLine() == false and dxDrawLine(1, 2, 3) == false, 'line needs four numbers')
+        assert(dxDrawLine(1, 2, 3, 4, 5, 'x') == false and dxDrawLine(1, 2, 3, 4, 5, 2, 1) == false, 'line bad width or postGUI')
+        assert(dxDrawCircle(10, 10, 0) == false and dxDrawCircle(10, 10, 5, 90, 90) == false, 'empty circle')
+        assert(dxDrawCircle(10, 10, 5, 0, 360, 1, 1, 2) == false, 'too few segments')
+        assert(dxDrawCircle(10, 10, 5, 0, 360, 1, 1, 32, 0) == false, 'ratio 0')
+        assert(dxDrawPrimitive('trianglelist', false, {0, 0}, {1, 1}) == false, 'two vertices are not a triangle')
+        assert(dxDrawPrimitive('linelist', false, {0, 0}, {1, 1}, {2, 2}) == false, 'odd line list')
+        assert(not pcall(dxDrawPrimitive, 'nope', false, {0, 0}) and not pcall(dxDrawPrimitive, 'pointlist'), 'primitive errors')
+        assert(not pcall(dxDrawPrimitive, 'pointlist', false, {1}), 'vertex needs 2 or 3 numbers')
+        assert(dxGetBlendMode() == 'blend' and dxSetBlendMode('nope') == false, 'blend mode default')
+        assert(dxSetTestMode('no_mem') == true and dxSetTestMode('x') == false and dxSetTestMode() == true, 'test mode')
+        local on, ratio = dxIsAspectRatioAdjustmentEnabled()
+        assert(on == false and math.abs(ratio - 4 / 3) < 0.001, 'aspect ratio adjustment is off')
+        assert(dxSetAspectRatioAdjustmentEnabled(true) == false, 'only inside onClientHUDRender')
+        -- Host font: 7 px per byte at the 15 px default size.
+        assert(dxGetTextWidth('abcd') == 28 and dxGetTextWidth('abcd', 2) == 56, 'text width')
+        assert(dxGetTextWidth('ab\nabcdef') == 42, 'the longest line')
+        assert(dxGetTextWidth('#FF0000ab', 1, 'default', true) == 14 and dxGetTextWidth('#FF0000ab') == 63, 'colour codes')
+        assert(dxGetTextWidth() == false, 'text width needs a text')
+        local w, h = dxGetTextSize('abcd')
+        assert(w == 28 and h == 15, 'one line: ' .. w .. ' ' .. h)
+        w, h = dxGetTextSize('ab\nabcdef', 0, 2)
+        assert(w == 84 and h == 60, 'two lines at scale 2: ' .. w .. ' ' .. h)
+        w, h = dxGetTextSize('aa bb cc', 40, 1, 1, 'default', true)
+        assert(w == 35 and h == 30, 'word break at 40 px: ' .. w .. ' ' .. h)
+        w, h = dxGetTextSize('aa bb cc', 40, 1, 1, 'default', false)
+        assert(w == 56 and h == 15, 'no word break: ' .. w .. ' ' .. h)
+        w, h = dxGetTextSize('ab', 0, 1, 3)
+        assert(w == 14 and h == 45, 'separate scales: ' .. w .. ' ' .. h)
+        w, h = dxGetTextSize('')
+        assert(w == 0 and h == 0, 'empty text')
+        -- Plain pixels: B, G, R, A per pixel, then width and height as 16-bit values.
+        local plain = string.rep(string.char(1, 2, 3, 4), 6) .. string.char(3, 0, 2, 0)
+        local pw, ph = dxGetPixelsSize(plain)
+        assert(pw == 3 and ph == 2, 'plain pixels are 3 x 2')
+        local png = string.char(0x89) .. 'PNG\r\n' .. string.char(0x1a) .. '\n' .. string.char(0, 0, 0, 13) .. 'IHDR'
+            .. string.char(0, 0, 1, 0x2c, 0, 0, 0, 120, 8, 6, 0, 0, 0) .. string.rep('x', 8) .. string.char(0xAE, 0x42, 0x60, 0x82)
+        pw, ph = dxGetPixelsSize(png)
+        assert(dxGetPixelsFormat(png) == 'png' and pw == 300 and ph == 120, 'PNG size from the header')
+        assert(dxGetPixelsSize('junk') == false and dxGetPixelsSize() == false, 'not pixels')
+        assert(dxConvertPixels(plain, 'plain') == plain and dxConvertPixels(png, 'png') == png, 'same format is a copy')
+        assert(dxConvertPixels('junk', 'png') == false and dxConvertPixels(plain, 'nope') == false, 'bad pixels or format')
+        -- The host has no image codec, so a real conversion fails the way a codec error does.
+        assert(dxConvertPixels(plain, 'png') == false and dxConvertPixels(plain, 'dds') == false, 'no codec on the host')
+        assert(dxGetTexturePixels(localPlayer) == false and dxSetTexturePixels(localPlayer, plain) == false, 'needs a texture')
+        _G.dxTest = function()
+            dxDrawLine(1, 2, 30, 40, tocolor(255, 0, 0, 255), 3)
+            dxSetBlendMode('add')
+            dxDrawPrimitive('trianglelist', false, {0, 0, 4278190335}, {10, 0}, {0, 10, 4294901760})
+            dxDrawCircle(100, 100, 10, 0, 360, 4294967295, 4278190080, 4)
+            -- Left selected on purpose: the frame must return to the screen by itself.
+            _G.leftRt = _G.leftRt or dxCreateRenderTarget(8, 8)
+            dxSetRenderTarget(_G.leftRt)
+        end
+        addEventHandler('onClientRender', root, dxTest)
+    )LUA");
+    std::string frame = WorldRPG::Script::ActiveVmPump();
+    CHECK(Has(frame, "L 1.0 2.0 30.0 40.0 4294901760 3.00\n"));
+    CHECK(Has(frame, "B 1\n"));
+    CHECK(Has(frame, " 8 8 0 0\nG\n"));
+    CHECK(Has(frame, "P 4 3 0.0 0.0 4278190335 10.0 0.0 4294967295 0.0 10.0 4294901760\n"));
+    // Centre, then segments + 1 points: right, down, left, up, right again.
+    CHECK(Has(frame, "P 6 6 100.0 100.0 4278190080 110.0 100.0 4294967295 100.0 110.0 4294967295 90.0 100.0 4294967295"));
+    // The mode set in one frame is still active at the start of the next (desktop m_ActiveBlendMode).
+    RunLua(vm, "dx-draw-stop", "removeEventHandler('onClientRender', root, dxTest); assert(dxGetBlendMode() == 'add')");
+    frame = WorldRPG::Script::ActiveVmPump();
+    CHECK(Has(frame, "B 1\n") && !Has(frame, "L 1.0"));
+    RunLua(vm, "dx-blend-reset", "assert(dxSetBlendMode() == true and dxGetBlendMode() == 'blend')");
+    frame = WorldRPG::Script::ActiveVmPump();
+    CHECK(!Has(frame, "B 1\n"));
+}
+
+// Vector graphics (desktop CLuaVectorGraphicDefs.cpp). The host has no SVG renderer, so the
+// element, its document, size and callback are checked, not the picture.
+void CheckSvg(WorldRPG::Script::LuaVMStub& vm) {
+    RunLua(vm, "svg", R"LUA(
+        local doc = '<?xml version="1.0"?>\n<!-- a comment -->\n<svg width="10" height="10"><rect x="1" y="1" width="8" height="8" fill="red"/></svg>'
+        _G.svgCalls = 0
+        _G.svg = svgCreate(64, 32, doc, function(element) _G.svgCalls = _G.svgCalls + 1; _G.svgSeen = element end)
+        assert(svg and getElementType(svg) == 'svg' and isElement(svg), 'svg element')
+        assert(_G.svgCalls == 0, 'the callback does not run inside svgCreate')
+        local w, h = svgGetSize(svg)
+        assert(w == 64 and h == 32, 'svg size')
+        local mw, mh = dxGetMaterialSize(svg)
+        assert(mw == 64 and mh == 32, 'an svg is a material')
+        local node = svgGetDocumentXML(svg)
+        assert(node and xmlNodeGetName(node) == 'svg' and xmlNodeGetAttribute(node, 'width') == '10', 'document root')
+        assert(xmlNodeGetName(xmlNodeGetChildren(node, 0)) == 'rect', 'document child')
+        assert(svgCreate(8, 8, '<svg><broken') == false, 'bad XML does not load')
+        assert(svgCreate(8, 8, 'radar/none.svg') == false, 'missing file does not load')
+        local blank = svgCreate(8, 8)
+        assert(blank and svgGetDocumentXML(blank) == false, 'an svg without a document')
+        assert(not pcall(svgCreate, 0, 8) and not pcall(svgCreate, 5000, 8) and not pcall(svgCreate), 'size errors')
+        assert(not pcall(svgCreate, 0/0, 8) and not pcall(svgCreate, 0.5, 8), 'finite SVG sizes cannot truncate to zero')
+        assert(not pcall(svgSetSize, svg, math.huge, 8) and not pcall(svgSetSize, svg, 0/0, 8), 'invalid resize preserves old size')
+        local before = xmlCreateFile('svg-probe-before.xml','probe')
+        local temporary = svgCreate(8,8,'<svg><g/></svg>')
+        assert(temporary and destroyElement(temporary))
+        local after = xmlCreateFile('svg-probe-after.xml','probe')
+        for id = before + 1, after - 1 do assert(xmlNodeGetName(id) == false, 'SVG validation must not retain XML handles') end
+        assert(xmlUnloadFile(before) and xmlUnloadFile(after))
+        assert(not pcall(svgGetSize, localPlayer) and not pcall(svgSetSize, svg, 0, 0), 'argument errors')
+        assert(svgSetSize(svg, 128, 96) == true, 'resize')
+        w, h = svgGetSize(svg)
+        assert(w == 128 and h == 96, 'new size')
+        xmlNodeSetAttribute(node, 'width', '20')
+        assert(svgSetDocumentXML(svg, node) == true, 'set document')
+        assert(xmlNodeGetAttribute(svgGetDocumentXML(svg), 'width') == '20', 'document was replaced')
+        assert(not pcall(svgSetDocumentXML, svg, 'text'), 'document must be an xml node')
+    )LUA");
+    WorldRPG::Script::ActiveVmPump();
+    RunLua(vm, "svg-callback", R"LUA(
+        assert(_G.svgCalls == 1 and _G.svgSeen and _G.svgSeen.id == svg.id, 'one callback for the changes of one frame')
+        assert(svgSetUpdateCallback(svg, false) == true and svgSetUpdateCallback(svg, true) == false, 'callback removed')
+        assert(not pcall(svgSetUpdateCallback, svg, 5), 'callback must be a function or false')
+        assert(svgSetSize(svg, 16, 16) == true, 'resize without a callback')
+    )LUA");
+    WorldRPG::Script::ActiveVmPump();
+    RunLua(vm, "svg-destroy", R"LUA(
+        assert(_G.svgCalls == 1, 'a removed callback is not called')
+        assert(destroyElement(svg) == true and not isElement(svg), 'svg destroyed')
+        assert(not pcall(svgGetSize, svg), 'destroyed svg is not an svg')
+    )LUA");
+    // The overlay is told to free the bitmap of the destroyed svg.
+    CHECK(Has(WorldRPG::Script::ActiveVmPump(), "D "));
+}
+
 void CheckStopLifecycle(WorldRPG::Script::LuaVMStub& vm) {
     // Resource "demo" (net id 5, root 0x1234) and "other" (net id 6, root 0x2222). Both start
     // from one no-cache script each (packet 95).
@@ -1295,11 +1640,81 @@ void CheckDxImage(WorldRPG::Script::LuaVMStub& vm) {
             _G.fullImage = dxDrawImage(1, 2, 3, 4, "radar/radar00.png", 0, 0, 0, tocolor(255, 255, 255, 255))
             _G.sectionImage = dxDrawImageSection(5, 6, 7, 8, 9, 10, 11, 12, "radar/radar01.png", 90, 1, 2, tocolor(255, 0, 0, 255))
             _G.escapedImage = dxDrawImage(1, 2, 3, 4, "../secret.png")
+            -- dxCreateTexture reads the size from the file; dxDrawImage accepts the element.
+            _G.tex = dxCreateTexture("radar/tex.png", "argb", true, "clamp")
+            _G.texType = _G.tex and getElementType(_G.tex)
+            _G.texW, _G.texH = dxGetMaterialSize(_G.tex)
+            _G.texDraw = dxDrawImage(20, 21, 22, 23, _G.tex)
+            _G.texEdge = dxSetTextureEdge(_G.tex, "border", 255) and dxSetTextureEdge(_G.tex, "nope") == false
+            _G.texMissing = dxCreateTexture("radar/none.png")
+            _G.texBad = dxCreateTexture("radar/notimage.png")
+            _G.texBlank = dxCreateTexture(64, 64)
+            _G.texNoSize = dxGetMaterialSize(localPlayer)
+            -- dxCreateFont: size 10 is 17 px high (floor(10 * 1.75)); scale multiplies it.
+            _G.font = dxCreateFont("radar/font.ttf", 10, true)
+            _G.fontType = _G.font and getElementType(_G.font)
+            _G.fontH, _G.fontH2 = dxGetFontHeight(1, _G.font), dxGetFontHeight(2, _G.font)
+            _G.fontW = dxGetTextWidth("abcd", 1, _G.font)
+            _G.fontBad = dxCreateFont("radar/notimage.png")
+            _G.fontMissing = dxCreateFont("radar/none.ttf")
+            dxDrawText("styled", 0, 0, 50, 20, tocolor(255, 255, 255, 255), 2, _G.font)
+            _G.fontLayerLabel = guiCreateLabel(0,100,100,20,'font-layer-gui',false)
+            assert(dxDrawText('styled-post',0,0,50,20,4294967295,2,_G.font,'left','top',false,false,true))
+            _G.matDraw = dxDrawMaterialPrimitive("trianglelist", _G.tex, false, {0, 0, 0, 0}, {10, 0, 4294901760, 1, 0}, {0, 10, 0, 1})
+            _G.matShort = dxDrawMaterialPrimitive("trianglelist", "radar/tex.png", false, {0, 0, 0, 0})
+            _G.matError = not pcall(dxDrawMaterialPrimitive, "trianglelist", localPlayer, false, {0, 0, 0, 0})
+            -- Render target: a texture the next draw lines go into, then drawn like an image.
+            _G.rt = dxCreateRenderTarget(64, 32, true)
+            _G.rtType = _G.rt and getElementType(_G.rt)
+            _G.rtW, _G.rtH = dxGetMaterialSize(_G.rt)
+            _G.rtSet = dxSetRenderTarget(_G.rt, true)
+            dxDrawRectangle(1, 1, 2, 2, tocolor(255, 255, 255, 255))
+            _G.rtBack = dxSetRenderTarget()
+            _G.rtDraw = dxDrawImage(40, 41, 64, 32, _G.rt)
+            _G.rtBad = dxSetRenderTarget(_G.tex) == false and dxCreateRenderTarget(0, 10) == false
+                and dxCreateRenderTarget(5000, 10) == false and dxCreateRenderTarget(8, 8, "argb") == false
+            local plain = string.rep(string.char(1, 2, 3, 4), 6) .. string.char(3, 0, 2, 0)
+            _G.pixBadSize = dxSetTexturePixels(_G.tex, plain) == false and dxSetTexturePixels(_G.tex, plain, 0, 0, 3, 3) == false
+                and dxSetTexturePixels(_G.tex, plain, 299, 0, 3, 2) == false and dxSetTexturePixels(_G.tex, 'junk') == false
+            _G.pixNoCodec = dxGetTexturePixels(_G.tex) == false and dxCreateTexture(plain) == nil
+            -- An svg is drawn like any other texture.
+            _G.svg2 = svgCreate(16, 16, '<svg width="4" height="4"/>')
+            _G.svgDrew = dxDrawImage(50, 51, 16, 16, _G.svg2)
+            -- Screen source: a texture; the copy of the game picture needs the phone.
+            _G.screen = dxCreateScreenSource(320, 180)
+            _G.screenOk = getElementType(_G.screen) == 'texture' and dxUpdateScreenSource(_G.screen) == true
+                and dxUpdateScreenSource(_G.screen, true) == true and dxUpdateScreenSource(_G.tex) == false
+                and dxCreateScreenSource(0, 1) == false and dxUpdateScreenSource() == false
+            _G.screenDraw = dxDrawImage(60, 61, 320, 180, _G.screen)
+            local status = dxGetStatus()
+            _G.statusOk = status.TestMode == "none" and status.VideoCardName == "Android" and status.TotalPhysicalMemory > 0
+                and status.SettingWindowed == false and status.SettingFOV == 70
             _G.pedRotation = getPedRotation(localPlayer)
             _G.velX, _G.velY, _G.velZ = getElementVelocity(localPlayer)
             _G.pedArmor = getPedArmor(localPlayer)
         end)
     )LUA";
+    {
+        // A PNG header for a 300 x 120 image, and a file that is not an image.
+        ::mkdir("/tmp/neon-dx-cache", 0755);
+        ::mkdir("/tmp/neon-dx-cache/radarres", 0755);
+        ::mkdir("/tmp/neon-dx-cache/radarres/radar", 0755);
+        const unsigned char png[] = {0x89, 'P', 'N', 'G', '\r', '\n', 0x1a, '\n', 0, 0, 0, 13, 'I', 'H', 'D', 'R',
+                                     0, 0, 1, 0x2c, 0, 0, 0, 120, 8, 6, 0, 0, 0};
+        if (std::FILE* out = std::fopen("/tmp/neon-dx-cache/radarres/radar/tex.png", "wb")) {
+            std::fwrite(png, 1, sizeof(png), out);
+            std::fclose(out);
+        }
+        if (std::FILE* out = std::fopen("/tmp/neon-dx-cache/radarres/radar/font.ttf", "wb")) {
+            const unsigned char ttf[] = {0, 1, 0, 0, 0, 0};
+            std::fwrite(ttf, 1, sizeof(ttf), out);
+            std::fclose(out);
+        }
+        if (std::FILE* out = std::fopen("/tmp/neon-dx-cache/radarres/radar/notimage.png", "wb")) {
+            std::fputs("not an image", out);
+            std::fclose(out);
+        }
+    }
     const std::vector<uint8_t> body = NoCacheScriptBody(9, script);
     CHECK(WorldRPG::Script::ActiveVmFeedScripts(body.data(), body.size(), body.size() * 8));
     WorldRPG::Script::ActiveVmPulseResources();
@@ -1309,9 +1724,51 @@ void CheckDxImage(WorldRPG::Script::LuaVMStub& vm) {
     CHECK(Has(frame, "I 1.0 2.0 3.0 4.0 0.0 0.0 -1.0 -1.0 4294967295 0.0 0.0 0.0 /tmp/neon-dx-cache/radarres/radar/radar00.png"));
     CHECK(Has(frame, "I 5.0 6.0 7.0 8.0 9.0 10.0 11.0 12.0 4294901760 90.0 1.0 2.0 /tmp/neon-dx-cache/radarres/radar/radar01.png"));
     CHECK(!Has(frame, "secret"));
+    {
+        // "G id 64 32 1 1", the rectangle, "G", then the target drawn as image "rt:<id>".
+        const size_t select = frame.find(" 64 32 1 1\nR 1.0 1.0 2.0 2.0 4294967295\nG\n");
+        CHECK(select != std::string::npos && frame.rfind("G ", select) != std::string::npos);
+        CHECK(Has(frame, "I 40.0 41.0 64.0 32.0 0.0 0.0 -1.0 -1.0 4294967295 0.0 0.0 0.0 rt:"));
+    }
+    CHECK(Has(frame, "I 50.0 51.0 16.0 16.0 0.0 0.0 -1.0 -1.0 4294967295 0.0 0.0 0.0 tx:"));
+    CHECK(Has(frame, "F 17.0 1 /tmp/neon-dx-cache/radarres/radar/font.ttf\nT 0.0 0.0 50.0 20.0 2.00 4294967295 0 styled\nF\n"));
+    const size_t fontGui = frame.find("font-layer-gui");
+    const size_t fontPost = frame.find("F 17.0 1 /tmp/neon-dx-cache/radarres/radar/font.ttf\nT 0.0 0.0 50.0 20.0 2.00 4294967295 0 styled-post\nF\n");
+    CHECK(fontGui != std::string::npos && fontPost != std::string::npos && fontGui < fontPost);
+    CHECK(Has(frame, "M 4 3 0.0 0.0 4294967295 0.0000 0.0000 10.0 0.0 4294901760 1.0000 0.0000 0.0 10.0 4294967295 0.0000 1.0000 "
+                     "/tmp/neon-dx-cache/radarres/radar/tex.png\n"));
+    CHECK(Has(frame, "I 20.0 21.0 22.0 23.0 0.0 0.0 -1.0 -1.0 4294967295 0.0 0.0 0.0 /tmp/neon-dx-cache/radarres/radar/tex.png"));
     RunLua(vm, "dx-image-resource", R"LUA(
+        assert(destroyElement(fontLayerLabel))
         assert(_G.fullImage == true and _G.sectionImage == true, 'resource image calls draw')
         assert(_G.escapedImage == false, 'parent path is rejected')
+        assert(_G.texType == 'texture' and isElement(_G.tex), 'texture element: ' .. tostring(_G.texType))
+        assert(_G.texW == 300 and _G.texH == 120, 'texture size from the PNG header')
+        assert(_G.texDraw == true and _G.texEdge == true, 'texture draws and takes an edge')
+        assert(_G.texMissing == false and _G.texBad == nil and _G.texBlank == nil, 'missing, bad and blank textures')
+        assert(_G.texNoSize == false, 'material size needs a material')
+        assert(_G.fontType == 'dx-font' and _G.fontH == 17 and _G.fontH2 == 34, 'font height: ' .. tostring(_G.fontH))
+        assert(math.abs(_G.fontW - 4 * 7 * 17 / 15) < 0.01, 'font width on the host: ' .. tostring(_G.fontW))
+        assert(_G.fontBad == false and _G.fontMissing == false, 'bad and missing fonts')
+        assert(dxGetFontHeight() == 15 and dxGetFontHeight(2) == 30 and dxGetFontHeight('x') == false, 'default font height')
+        assert(_G.matDraw == true and _G.matShort == false and _G.matError == true, 'material primitive')
+        assert(_G.statusOk == true, 'dxGetStatus')
+        assert(_G.screenOk == true and _G.screenDraw == true, 'screen source')
+        assert(_G.svg2 and _G.svgDrew == true, 'an svg draws as an image')
+        assert(_G.pixBadSize == true and _G.pixNoCodec == true, 'texture pixel calls: sizes checked, no codec on the host')
+        assert(_G.rtType == 'texture' and _G.rtW == 64 and _G.rtH == 32, 'render target is a 64 x 32 texture')
+        assert(_G.rtSet == true and _G.rtBack == true and _G.rtDraw == true and _G.rtBad == true, 'render target calls')
+        _G.rtId = _G.rt.id
+        assert(destroyElement(_G.rt) == true and dxSetRenderTarget(_G.rt) == false, 'destroyed render target')
+        assert(destroyElement(_G.font) == true and dxGetFontHeight(1, _G.font) == 15, 'destroyed font is the default font')
+        assert(destroyElement(_G.tex) == true and not isElement(_G.tex), 'texture destroyed')
+        assert(dxGetMaterialSize(_G.tex) == false, 'destroyed texture has no size')
+    )LUA");
+    // The overlay is told to free the destroyed target's bitmap at the start of the next frame.
+    frame = WorldRPG::Script::ActiveVmPump();
+    CHECK(frame.rfind("D ", 0) == 0 || Has(frame, "\nD "));
+    RunLua(vm, "dx-image-resource-done", R"LUA(
+        assert(_G.rtId ~= nil, 'render target id kept for the check above')
         assert(type(_G.pedRotation) == 'number' and _G.pedRotation >= 0 and _G.pedRotation < 360, 'heading in degrees')
         assert(_G.velX == 0 and _G.velY == 0 and _G.velZ == 0, 'local velocity')
         assert(_G.pedArmor == 0, 'armor sample')
@@ -1879,7 +2336,11 @@ int main(int argc, char** argv) {
     CheckAudioQueries(vm);
     CheckWeaponSnapshots(vm);
     CheckGui(vm);
+    CheckElementsGuiDx(vm);
+    CheckMemoInput(vm);
     CheckMtaWindow(vm);
+    CheckDxDrawing(vm);
+    CheckSvg(vm);
     CheckStopLifecycle(vm);
     CheckDxImage(vm);
     CheckNetworkCalls(vm);

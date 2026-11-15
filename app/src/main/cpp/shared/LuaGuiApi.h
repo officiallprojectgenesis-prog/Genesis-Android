@@ -40,19 +40,27 @@ bool GuiCursorShown();
 // Appends the R/T draw lines of the visible elements (Android MtaDxView format).
 void GuiAppendDraws(std::string& out);
 
+// Pixels format of a pixel string as dxGetPixelsFormat names it ("plain", "png", "jpeg", "dds"),
+// or nullptr (desktop CPixelsManager::GetPixelsFormat).
+const char* DxPixelsFormatName(const char* data, size_t size);
+// Width and height of plain pixels, from the 4-byte tail. False when the size does not match.
+bool DxPlainSize(const char* data, size_t size, uint32_t& width, uint32_t& height);
+
 // Topmost visible, enabled GUI element under this screen point, or 0.
 uint32_t GuiPick(double x, double y);
-// True when id is a visible, enabled gui-edit (the soft keyboard types into it).
+// True when id is a visible, enabled gui-edit or gui-memo (accepts keyboard input).
 bool GuiIsEdit(uint32_t id);
-// The focused gui-edit when it is still visible and enabled, otherwise 0.
+// The focused edit/memo when it is still visible and enabled, otherwise 0.
 uint32_t GuiFocusedEdit();
+// The focused input accepts line breaks (gui-memo).
+bool GuiFocusedMemo();
 // Activates id, or clears the focus when id is 0. A change of gui-edit focus
 // notifies the hook (onClientGUIFocus / onClientGUIBlur).
 void GuiSetFocused(uint32_t id);
-// Appends one UTF-8 character to the focused edit. False when no edit has focus
+// Inserts UTF-8 text at the focused edit's Unicode caret. False when no edit has focus
 // or the text is already at the 4096-byte cap.
 bool GuiEditAppend(const char* bytes, size_t length);
-// Deletes the last Unicode character of the focused edit.
+// Deletes the Unicode character before the caret; read-only edits are unchanged.
 bool GuiEditErase();
 // True in INPUTMODE_NO_BINDS (guiSetInputEnabled(true) or guiSetInputMode("no_binds")).
 // The phone then shows the soft keyboard and delivers keystrokes as onClientCharacter

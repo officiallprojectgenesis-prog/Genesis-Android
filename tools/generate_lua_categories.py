@@ -44,14 +44,14 @@ CATEGORIES = OrderedDict([
         "file": "ELEMENTS.md",
         "description": "Core element hierarchy (parent/child), element data (synced/local), collisions, dimensions, alpha, positions, velocities, matrix, and spatial streaming.",
         "groups": ["CLuaElementDefs"],
-        "subsystem_notes": "Implemented via `ElementManager.cpp` and `ServerWorld.cpp`. Gaps relate to spatial octree lookup, element matrix math, and custom attachments."
+        "subsystem_notes": "Implemented via `LuaElementApi.cpp` and `ServerWorld.cpp`. Attachment queries read ENTITY_ADD metadata, resolve references after the batch and clear references on removal. Physical attachment, attachment RPCs, spatial octree lookup and complete element matrix math remain pending."
     }),
     ("GUI_AND_DX", {
         "title": "GUI & 2D/3D Drawing (DX & CEGUI)",
         "file": "GUI_AND_DX.md",
         "description": "2D screen drawing, fonts, text, rectangles, lines, textures, render targets, GUI windows, buttons, edits, labels, gridlists, and 3D line drawing.",
         "groups": ["CLuaGUIDefs", "CLuaDrawingDefs", "CLuaVectorGraphicDefs", "CLua2DFXDefs"],
-        "subsystem_notes": "Desktop uses CEGUI and Direct3D9. Mobile uses `MtaDxView.java` (Android Canvas) + `LuaGuiApi.cpp`. Windows, edits, memos, tabs, scroll panes and grid lists are stored and drawn into the DX frame. Grid sorting does not reorder rows. `guiCreateFont` returns false because CreateGuiFont is not hooked. Shaders (HLSL -> GLSL ES) and the browser are still missing."
+        "subsystem_notes": "Desktop uses CEGUI and Direct3D9. Mobile uses `MtaDxView.java` (Android Canvas) + `LuaGuiApi.cpp`. Edit/memo input and caret count Unicode characters; the JNI input/output bridge converts UTF-16/UTF-8. Memo Enter inserts a newline; logical lines render separately, with CEGUI's terminal newline. The eight 2D draw calls honor postGUI on screen, capture blend/font state and retain render-target order. Primitive lines interpolate vertex colors. Grid sorting, selection, memo wrapping/automatic caret scrolling, advanced text layout and HLSL/3D drawing remain pending. `guiCreateFont` returns false because CreateGuiFont is not hooked. Host tests and Android compilation do not verify device rendering."
     }),
     ("ENGINE_AND_MODELS", {
         "title": "Engine & Model Replacement (DFF, TXD, COL)",
@@ -139,6 +139,18 @@ def format_status(status):
         return "Missing"
 
 def guess_conversion_notes(name, group, status, detail):
+    if status == "stub" and name in {"attachElements", "detachElements"}:
+        return "Returns false until native physical attachment and its lifecycle/events are ported. Server attachment queries are metadata-only; these calls do not mutate that snapshot."
+    if status == "implemented" and name in {"isElementAttached", "getElementAttachedTo", "getAttachedElements", "getElementAttachedOffsets"}:
+        return "Reads server ENTITY_ADD attachment metadata, including forward references in the batch and offsets in degrees. Removal clears references before ID reuse. Physical attachment, local attach/detach and later attachment RPCs remain pending. Host-tested; not device-verified."
+    if status == "implemented" and name in {"guiEditSetCaretIndex", "guiEditGetCaretIndex", "guiEditSetMaxLength", "guiEditGetMaxLength", "guiSetText"}:
+        return "Edit/memo caret uses Unicode characters; insertion/backspace respect the caret and read-only flag. An explicit edit maximum of 0 accepts no text. Memo text preserves CEGUI's terminal newline. Selection editing remains pending. Host-tested; not device-verified."
+    if status == "implemented" and name in {"guiCreateMemo", "guiMemoSetCaretIndex", "guiMemoGetCaretIndex", "guiMemoSetReadOnly", "guiMemoIsReadOnly"}:
+        return "Memo accepts Unicode text, backspace and Enter without onClientGUIAccepted; emits onClientGUIChanged, participates in focus and requests multiline Android input. Terminal newline/caret follow CEGUI. Selection, wrapping and automatic caret scrolling remain pending. Host-tested; Android compiles; not device-verified."
+    if status == "implemented" and name in {"dxDrawRectangle", "dxDrawText", "dxDrawImage", "dxDrawImageSection"}:
+        return "Canvas 2D calls return true/false, honor postGUI and capture blend state; custom text font commands stay with their text. Render-target draws keep their original order. Existing texture elements work outside a resource owner; file paths still require one. Finite numeric arguments required. Text supports the common scalar-scale form; advanced alignment/wrapping/clipping/rotation and per-axis scales remain partial or absent. Host-tested; not device-verified."
+    if status == "implemented" and name in {"dxDrawLine", "dxDrawCircle", "dxDrawPrimitive", "dxDrawMaterialPrimitive"}:
+        return "2D Canvas bridge honors postGUI on screen and retains render-target order; queued calls capture blend mode. Primitive lines interpolate endpoint colors. Nonfinite/out-of-float-range input is rejected. Host-tested; Android compiles; device rendering not verified."
     if status == "implemented" and name in {"createProjectile", "getProjectileType", "getProjectileCreator", "getProjectileTarget", "getProjectileForce", "getProjectileCounter", "setProjectileCounter"}:
         return "Native local-projectile bridge for verified GTA 2.10 arm64. Rotation/model overrides, satchel attachment, creation event and packet sync remain unported. Host guards tested; Android compiles; physical runtime not device-tested."
     if status == "implemented" and name in {"getWeaponAmmo", "getWeaponClipAmmo", "getWeaponState", "getWeaponOwner", "getWeaponTarget"}:

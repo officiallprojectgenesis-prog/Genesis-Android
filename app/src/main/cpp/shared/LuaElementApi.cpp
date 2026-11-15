@@ -17,6 +17,7 @@
 #include "LuaVMStub.h"
 #include "LuaCameraApi.h"
 #include "LuaStoredElementApi.h"
+#include "LuaDxApi.h"
 #include "ResourceLoader.h"
 #include "ServerWorld.h"
 #include "../gtasa/GameEngine.h"
@@ -203,7 +204,7 @@ void ResetCatalog() {
 bool KnownElement(uint32_t id) {
     if (id == 0) return false;
     if (Find(id)) return true;
-    if (id == ServerWorld::LocalPlayer() || id == ServerWorld::LastResourceRoot() || GuiIsElement(id)) return true;
+    if (id == ServerWorld::LocalPlayer() || id == ServerWorld::LastResourceRoot() || GuiIsElement(id) || DxElementType(id)) return true;
     if (Game::ScriptPedAlive(id) || SoundElementAlive(id) || CameraElementAlive(id) || FoliageElementAlive(id) ||
         EffectElementAlive(id) || StoredElementType(id) != nullptr)
         return true;
@@ -438,6 +439,44 @@ int GetRootElement(lua_State* L) {
     }
     PushElement(L, g_root);
     return 1;
+}
+
+// CLuaElementDefs.cpp:1138-1232,1281-1311; CStaticFunctionDefinitions.cpp:642-647,685-691.
+// Server attachment metadata only; physical attachment and attachment RPCs are separate hooks.
+int IsElementAttached(lua_State* L) {
+    uint32_t id = 0;
+    ServerWorld::Attachment attachment;
+    if (ReadElement(L, 1, id) && ServerWorld::CopyAttachment(id, attachment) && attachment.parent != 0xFFFFFFFFu)
+        lua_pushboolean(L, 1);
+    else lua_pushnil(L);
+    return 1;
+}
+int GetElementAttachedTo(lua_State* L) {
+    uint32_t id = 0;
+    if (!ReadElement(L, 1, id)) { lua_pushnil(L); return 1; }
+    ServerWorld::Attachment attachment;
+    if (ServerWorld::CopyAttachment(id, attachment) && attachment.parent != 0xFFFFFFFFu) PushElement(L, attachment.parent);
+    else lua_pushboolean(L, 0);
+    return 1;
+}
+int GetAttachedElements(lua_State* L) {
+    uint32_t id = 0;
+    if (!ReadElement(L, 1, id)) { PushFail(L); return 1; }
+    lua_newtable(L);
+    int index = 0;
+    for (uint32_t child : ServerWorld::CopyAttachedElements(id)) {
+        PushElement(L, child); lua_rawseti(L, -2, ++index);
+    }
+    return 1;
+}
+int GetElementAttachedOffsets(lua_State* L) {
+    uint32_t id = 0;
+    if (!ReadElement(L, 1, id)) { PushFail(L); return 1; }
+    ServerWorld::Attachment attachment;
+    ServerWorld::CopyAttachment(id, attachment);
+    for (float value : attachment.position) lua_pushnumber(L, value);
+    for (float value : attachment.rotation) lua_pushnumber(L, value);
+    return 6;
 }
 
 // CLuaElementDefs::GetElementID (CLuaElementDefs.cpp 268-289).
@@ -948,6 +987,10 @@ void InstallElementBindings(lua_State* L) {
     }
     Bind(L, "getRootElement", GetRootElement);
     Bind(L, "getElementID", GetElementID);
+    Bind(L, "isElementAttached", IsElementAttached);
+    Bind(L, "getElementAttachedTo", GetElementAttachedTo);
+    Bind(L, "getAttachedElements", GetAttachedElements);
+    Bind(L, "getElementAttachedOffsets", GetElementAttachedOffsets);
     Bind(L, "getElementByID", GetElementByID);
     Bind(L, "getElementByIndex", GetElementByIndex);
     Bind(L, "getElementChildren", GetElementChildren);

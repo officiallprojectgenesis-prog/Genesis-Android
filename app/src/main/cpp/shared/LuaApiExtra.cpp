@@ -221,21 +221,6 @@ int GetCameraMatrix(lua_State* L) {
     return 8;
 }
 
-// dxGetTextWidth(text, scale, font): rough width until the phone's font metrics are wired (P4).
-int DxGetTextWidth(lua_State* L) {
-    size_t length = 0;
-    luaL_optlstring(L, 1, "", &length);
-    lua_pushnumber(L, static_cast<lua_Number>(length) * 7.0 * luaL_optnumber(L, 2, 1.0));
-    return 1;
-}
-
-// dxGetFontHeight(scale, font): desktop line height, the font's D3DX height times scale (15 px default).
-int DxGetFontHeight(lua_State* L) {
-    const char* font = lua_type(L, 2) == LUA_TSTRING ? lua_tostring(L, 2) : "default";
-    lua_pushnumber(L, 15.0 * luaL_optnumber(L, 1, 1.0) * DxFontScale(font));
-    return 1;
-}
-
 // setElementCollisionsEnabled and similar setters need no reply, but scripts expect a boolean.
 int TrueResult(lua_State* L) {
     lua_pushboolean(L, 1);
@@ -560,8 +545,6 @@ void InstallExtraBindings(lua_State* L) {
     SetGlobal(L, "setElementData", SetElementData);
     SetGlobal(L, "Vector3", Vector3New);
     SetGlobal(L, "getCameraMatrix", GetCameraMatrix);
-    SetGlobal(L, "dxGetTextWidth", DxGetTextWidth);
-    SetGlobal(L, "dxGetFontHeight", DxGetFontHeight);
     InstallGuiBindings(L);
     SetGlobal(L, "fileOpen", FileOpen);
     SetGlobal(L, "bitAnd", BitAnd);
@@ -614,14 +597,14 @@ void InstallExtraBindings(lua_State* L) {
         {"restorePedNativeVehicleResponse", kTrue}, {"releasePedNativePointArm", kTrue},
         {"acquirePedNativePointArm", kFalse}, {"isLineOfSightClear", kFalse}, {"getWaterLevel", kNil},
         {"getScreenFromWorldPosition", kNil}, {"isControlEnabled", kTrue}, {"toggleControl", kTrue},
-        {"executeCommandHandler", kFalse}, {"attachElements", kTrue}, {"detachElements", kTrue},
+        // Physical attachment has no mobile hook yet; do not report a successful mutation.
+        {"executeCommandHandler", kFalse}, {"attachElements", kFalse}, {"detachElements", kFalse},
         {"setObjectMaterial", kTrue},
         {"playSoundFrontEnd", kFalse}, {"playSound3D", kFalse}, {"playSound", kFalse}, {"stopSound", kTrue},
         {"setSoundVolume", kTrue}, {"setSoundMaxDistance", kTrue}, {"setSoundMinDistance", kTrue},
         {"setSoundPosition", kTrue}, {"setSoundDopplerEnabled", kTrue},
         {"setCameraTarget", kTrue}, {"setCameraInterior", kTrue}, {"setCameraFieldOfView", kTrue},
         {"fadeCamera", kTrue}, {"getPedCameraRotation", kZero},
-        {"dxDrawCircle", kTrue}, {"dxDrawPrimitive", kTrue},
         {"engineLoadIMG", kNil}, {"engineAddImage", kNil}, {"engineLoadCOL", kNil}, {"engineParseSAMPMap", kNil},
         {"engineFreeTXD", kTrue}, {"engineFreeModel", kTrue}, {"engineImageLinkTXD", kTrue},
         {"engineImageLinkDFF", kTrue}, {"engineSetModelTXDID", kTrue}, {"engineReplaceCOL", kTrue},

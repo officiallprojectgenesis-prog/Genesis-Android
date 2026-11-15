@@ -8,6 +8,7 @@
 #include "entity/PedWire.h"
 
 #include <cmath>
+#include <algorithm>
 #include <cstring>
 #include <mutex>
 #include <unordered_map>
@@ -30,6 +31,8 @@ std::mutex g_lock;
 uint32_t g_local = 0;
 uint32_t g_resourceRoot = 0;
 std::unordered_map<uint32_t, Visual> g_visuals;
+std::unordered_map<uint32_t, Attachment> g_attachments;
+std::vector<uint32_t> g_attachmentOrder;
 std::unordered_map<uint32_t, std::unordered_map<std::string, Datum>> g_data;
 // Player nicks. PLAYER_LIST reads the nick and this keeps it. The local nick is
 // noted at join. Not part of Visual, so noting the local nick does not invent a pose.
@@ -230,9 +233,13 @@ void Remember(uint32_t id, const Visual& visual) {
     if (visual.model >= 0) stored.model = visual.model;
 }
 
-// CClientWeapon.cpp:22-23 registers entity references that are nulled on deletion.
+// CClientWeapon.cpp:22-23 registers references; CClientEntity.cpp:94-98 detaches on deletion.
 // Keep snapshots from pointing at a new element that later reuses the same id.
-void ForgetWeaponReferences(uint32_t id) {
+void ForgetElementReferences(uint32_t id) {
+    g_attachments.erase(id);
+    g_attachmentOrder.erase(std::remove(g_attachmentOrder.begin(), g_attachmentOrder.end(), id), g_attachmentOrder.end());
+    for (auto& [child, attachment] : g_attachments)
+        if (attachment.parent == id) attachment.parent = 0xFFFFFFFFu;
     for (auto& [weaponId, visual] : g_visuals) {
         if (!visual.weapon || (visual.weapon->owner != id && visual.weapon->target != id)) continue;
         auto next = std::make_shared<WeaponSpawn>(*visual.weapon);
@@ -253,6 +260,8 @@ void ResetSession() {
             if (visual.kind == 14) peds.push_back(id);
         }
         g_visuals.clear();
+        g_attachments.clear();
+        g_attachmentOrder.clear();
         g_data.clear();
         g_nicks.clear();
         g_resourceRoot = 0;
@@ -387,6 +396,24 @@ bool CopyWeaponSpawn(uint32_t id, Entity::WeaponSpawn& out) {
     return true;
 }
 
+bool CopyAttachment(uint32_t id, Attachment& out) {
+    std::lock_guard lock(g_lock);
+    auto found = g_attachments.find(id);
+    if (found == g_attachments.end()) return false;
+    out = found->second;
+    return true;
+}
+
+std::vector<uint32_t> CopyAttachedElements(uint32_t parent) {
+    std::lock_guard lock(g_lock);
+    std::vector<uint32_t> result;
+    for (uint32_t child : g_attachmentOrder) {
+        auto found = g_attachments.find(child);
+        if (found != g_attachments.end() && found->second.parent == parent) result.push_back(child);
+    }
+    return result;
+}
+
 const char* ElementKindName(uint32_t id) {
     std::lock_guard<std::mutex> lock(g_lock);
     if (id == g_local) return "player";
@@ -503,6 +530,7 @@ void OnEntityAdd(const uint8_t* body, size_t length, size_t bits) {
     if (count == 0 || count > 512) { DIAG("ENTITY_ADD bad count=%u", static_cast<unsigned>(count)); return; }
     std::lock_guard<std::mutex> lock(g_lock);
     int stored = 0;
+    std::vector<std::pair<uint32_t, uint32_t>> attachments;
     for (uint32_t index = 0; index < count; ++index) {
         EntityCommon common;
         if (!ReadEntityCommon(reader, common)) {
@@ -529,7 +557,25 @@ void OnEntityAdd(const uint8_t* body, size_t length, size_t bits) {
         visual.interior = common.interior;
         visual.syncTimeContext = common.syncTimeContext;
         if (common.type != kTypePlayer) Remember(common.id, visual);
+        if (common.id == 0 || common.id == 0xFFFFFFFFu) { ++stored; continue; }
+        Attachment attachment;
+        if (common.attached) {
+            attachment.position[0] = common.attachedX; attachment.position[1] = common.attachedY; attachment.position[2] = common.attachedZ;
+            attachment.rotation[0] = common.attachedRotX; attachment.rotation[1] = common.attachedRotY; attachment.rotation[2] = common.attachedRotZ;
+            attachments.emplace_back(common.id, common.attachedTo);
+        }
+        g_attachments[common.id] = attachment;
+        g_attachmentOrder.erase(std::remove(g_attachmentOrder.begin(), g_attachmentOrder.end(), common.id), g_attachmentOrder.end());
         ++stored;
+    }
+    // CPacketHandler.cpp:4443-4467 links attachments after all entities in the
+    // batch exist. Forward references must not disappear during parsing.
+    for (const auto& [child, parent] : attachments) {
+        if (parent == 0 || parent == 0xFFFFFFFFu ||
+            (parent != g_local && !g_visuals.count(parent) && !g_nicks.count(parent))) continue;
+        g_attachments[child].parent = parent;
+        g_attachmentOrder.erase(std::remove(g_attachmentOrder.begin(), g_attachmentOrder.end(), child), g_attachmentOrder.end());
+        g_attachmentOrder.push_back(child);
     }
     DIAG("ENTITY_ADD stored %d/%u", stored, static_cast<unsigned>(count));
 }
@@ -551,7 +597,7 @@ void OnEntityRemove(const uint8_t* body, size_t length, size_t bits) {
             g_visuals.erase(id);
             g_data.erase(id);
             g_nicks.erase(id);
-            ForgetWeaponReferences(id);
+            ForgetElementReferences(id);
         }
         // Deleting a CClientPed takes it out of CPedSync (CClientPed::~CClientPed, CClientPed.cpp 926). Without this a reused
         // ElementID inherits the old hosted flag and interpolators.
@@ -587,7 +633,7 @@ void OnPlayerQuit(uint32_t id) {
         g_visuals.erase(id);
         g_data.erase(id);
         g_nicks.erase(id);
-        ForgetWeaponReferences(id);
+        ForgetElementReferences(id);
     }
     WorldRPG::Sync::PedSyncState::Forget(id);
     Game::ForgetPedNativeTaskState(id);
@@ -790,7 +836,7 @@ void ForgetPlaceholder(uint32_t id) {
     auto found = g_visuals.find(id);
     if (found == g_visuals.end() || found->second.kind != 0) return;
     g_visuals.erase(found);
-    ForgetWeaponReferences(id);
+    ForgetElementReferences(id);
     if (g_resourceRoot == id) g_resourceRoot = 0;
 }
 

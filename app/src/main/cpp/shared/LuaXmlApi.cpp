@@ -509,6 +509,32 @@ int l_xmlUnloadFile(lua_State* L) {
 
 }  // namespace
 
+int XmlParseString(const std::string& text) {
+    std::size_t index = 0;
+    int created = 0;
+    if (!ParseNode(text, index, 0, 0, created)) {
+        if (created) KillTree(g_nodes[created].root ? g_nodes[created].root : created);
+        return 0;
+    }
+    return created;
+}
+
+bool XmlNodeString(lua_State* L, int index, std::string& out) {
+    const XmlNode* node = NodeOf(L, index);
+    if (!node) return false;
+    out = Serialize(node->id);
+    return true;
+}
+
+bool XmlValidateString(const std::string& text) {
+    // Parsing is synchronous and invokes no Lua callbacks. Discard every node
+    // made by this validation, including dead nodes left by a failed parse.
+    const int first = g_next;
+    const bool valid = XmlParseString(text) != 0;
+    g_nodes.erase(g_nodes.lower_bound(first), g_nodes.end());
+    return valid;
+}
+
 void InstallXmlLua(lua_State* L) {
     const struct { const char* name; lua_CFunction fn; } binds[] = {
         {"xmlCreateFile", l_xmlCreateFile},

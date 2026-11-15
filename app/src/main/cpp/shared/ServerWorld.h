@@ -81,6 +81,13 @@ uint8_t SyncTimeContext(uint32_t id);
 bool CopyPedSpawn(uint32_t id, Entity::PedSpawn& out);
 // Last ENTITY_ADD weapon snapshot. False for removed elements and other types.
 bool CopyWeaponSpawn(uint32_t id, Entity::WeaponSpawn& out);
+// Attachment metadata received in ENTITY_ADD. This does not move a GTA body.
+struct Attachment {
+    uint32_t parent = 0xFFFFFFFFu;
+    float position[3] = {}, rotation[3] = {}; // Lua-facing rotation in degrees.
+};
+bool CopyAttachment(uint32_t id, Attachment& out);
+std::vector<uint32_t> CopyAttachedElements(uint32_t parent);
 // PLAYER_QUIT (5): CPacketHandler::Packet_PlayerQuit -> CClientGame::QuitPlayer deletes the player element.
 void OnPlayerQuit(uint32_t id);
 // A remote player this session knows (PLAYER_LIST nick, PLAYER_SPAWN skin, or a body record of kind 1).

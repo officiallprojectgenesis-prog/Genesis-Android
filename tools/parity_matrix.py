@@ -329,6 +329,8 @@ FOLLOW_INSTALLS = {
     "InstallResourceLua",
     "InstallMtaWindowLua",
     "InstallKeyBindLua",
+    "InstallDxLua",
+    "InstallSvgLua",
     "InstallElementLua",
     "InstallElementBindings",
     "InstallPedLua",
