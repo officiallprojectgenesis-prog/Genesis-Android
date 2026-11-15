@@ -475,6 +475,36 @@ void CheckElementsGuiDx(WorldRPG::Script::LuaVMStub& vm) {
     )LUA");
 }
 
+void CheckDxTextLayout(WorldRPG::Script::LuaVMStub& vm) {
+    RunLua(vm,"dx-text-layout-setup",R"LUA(
+        _G.textLayoutLabel = guiCreateLabel(1000,900,100,20,'layout-gui',false)
+        _G.textLayoutDraw = function()
+            assert(dxDrawText('minimal',10.25,20.75))
+            assert(dxDrawText('a\nb\\n🙂',1.25,2.5,101.25,42.5,4278190081,2,0.5,'default','right','bottom',true,true,true,false,true,30,10,20))
+            assert(dxDrawText('#FF0000colored',0,0,100,100,-1,1,'default','center','center',true,true,false,true,false,0,50,50,21))
+        end
+        assert(addEventHandler('onClientRender',root,textLayoutDraw))
+        assert(dxDrawText('bad',0,0,0,0,-1,1,'default','middle') == false, 'horizontal alignment enum')
+        assert(dxDrawText('bad',0,0,0,0,-1,1,'default','left','sideways') == false, 'vertical alignment enum')
+        assert(dxDrawText('bad',0,0,0,0,-1,1,'default','left','top','yes') == false, 'clip is boolean')
+        assert(dxDrawText('bad',0,0,0,0,-1,1,math.huge) == false, 'scale Y must be finite')
+        assert(dxDrawText('fallback-font',0,0,0,0,-1,1,'123') == true, 'numeric font string falls back to default instead of changing scale Y')
+        assert(dxDrawText('bad',0,0,0,0,-1,1,localPlayer) == false, 'font argument must be a live DX font')
+        assert(dxDrawText('bad',0,0,0,0,-1,1,'default','left','top',false,false,false,false,false,math.huge) == false, 'rotation must be finite')
+    )LUA");
+    const std::string frame = vm.pumpDx();
+    CHECK(frame.find("X 10.250 20.750 10.250 20.750 1.0000 1.0000 4294967295 0 0 0 0 0 0 0.000 10.250 20.750 0.000 minimal\n") != std::string::npos);
+    const size_t draw = frame.find("X 1.250 2.500 101.250 42.500 2.0000 0.5000 4278190081 0 2 2 1 1 1 30.000 10.000 20.000 0.000 a\\nb\\\\n🙂\n");
+    const size_t gui = frame.find("layout-gui");
+    CHECK(draw != std::string::npos && gui != std::string::npos && gui < draw);
+    CHECK(frame.find("\na\nb") == std::string::npos); // Text cannot inject new frame commands.
+    CHECK(frame.find("X 0.000 0.000 100.000 100.000 1.0000 1.0000 4294967295 1 1 1 1 1 0 0.000 50.000 50.000 21.000 #FF0000colored\n") != std::string::npos);
+    RunLua(vm,"dx-text-layout-cleanup",R"LUA(
+        assert(removeEventHandler('onClientRender',root,textLayoutDraw))
+        assert(destroyElement(textLayoutLabel))
+    )LUA");
+}
+
 void CheckMemoInput(WorldRPG::Script::LuaVMStub& vm) {
     using namespace WorldRPG::Script;
     RunLua(vm,"memo-input-setup",R"LUA(
@@ -1061,8 +1091,8 @@ void CheckGui(WorldRPG::Script::LuaVMStub& vm) {
         addEventHandler("onClientRender", root, once)
     )LUA");
     frame = WorldRPG::Script::ActiveVmPump();
-    CHECK(Has(frame, "T 0.0 0.0 10.0 10.0 2.00 "));
-    CHECK(Has(frame, "T 0.0 0.0 10.0 10.0 1.00 "));
+    CHECK(Has(frame, "X 0.000 0.000 10.000 10.000 2.0000 2.0000 "));
+    CHECK(Has(frame, "X 0.000 0.000 10.000 10.000 1.0000 1.0000 "));
 
     // destroyElement removes the element and its children; the element is no longer an element.
     RunLua(vm, "gui-destroy", "destroyElement(win)\nassert(not isElement(win) and not isElement(lab), 'children destroyed')");
@@ -1731,9 +1761,9 @@ void CheckDxImage(WorldRPG::Script::LuaVMStub& vm) {
         CHECK(Has(frame, "I 40.0 41.0 64.0 32.0 0.0 0.0 -1.0 -1.0 4294967295 0.0 0.0 0.0 rt:"));
     }
     CHECK(Has(frame, "I 50.0 51.0 16.0 16.0 0.0 0.0 -1.0 -1.0 4294967295 0.0 0.0 0.0 tx:"));
-    CHECK(Has(frame, "F 17.0 1 /tmp/neon-dx-cache/radarres/radar/font.ttf\nT 0.0 0.0 50.0 20.0 2.00 4294967295 0 styled\nF\n"));
+    CHECK(Has(frame, "F 17.0 1 /tmp/neon-dx-cache/radarres/radar/font.ttf\nX 0.000 0.000 50.000 20.000 2.0000 2.0000 4294967295 0 0 0 0 0 0 0.000 25.000 10.000 0.000 styled\nF\n"));
     const size_t fontGui = frame.find("font-layer-gui");
-    const size_t fontPost = frame.find("F 17.0 1 /tmp/neon-dx-cache/radarres/radar/font.ttf\nT 0.0 0.0 50.0 20.0 2.00 4294967295 0 styled-post\nF\n");
+    const size_t fontPost = frame.find("F 17.0 1 /tmp/neon-dx-cache/radarres/radar/font.ttf\nX 0.000 0.000 50.000 20.000 2.0000 2.0000 4294967295 0 0 0 0 0 0 0.000 25.000 10.000 0.000 styled-post\nF\n");
     CHECK(fontGui != std::string::npos && fontPost != std::string::npos && fontGui < fontPost);
     CHECK(Has(frame, "M 4 3 0.0 0.0 4294967295 0.0000 0.0000 10.0 0.0 4294901760 1.0000 0.0000 0.0 10.0 4294967295 0.0000 1.0000 "
                      "/tmp/neon-dx-cache/radarres/radar/tex.png\n"));
@@ -2337,6 +2367,7 @@ int main(int argc, char** argv) {
     CheckWeaponSnapshots(vm);
     CheckGui(vm);
     CheckElementsGuiDx(vm);
+    CheckDxTextLayout(vm);
     CheckMemoInput(vm);
     CheckMtaWindow(vm);
     CheckDxDrawing(vm);

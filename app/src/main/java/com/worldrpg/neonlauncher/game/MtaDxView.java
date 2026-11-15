@@ -13,6 +13,7 @@ import android.graphics.Rect;
 import android.graphics.RectF;
 import android.graphics.Typeface;
 import android.text.StaticLayout;
+import android.text.Layout;
 import android.text.TextPaint;
 import android.view.View;
 
@@ -181,6 +182,7 @@ public final class MtaDxView extends View {
         {
             if (line.startsWith("R ")) drawRect(canvas, line.substring(2));
             else if (line.startsWith("T ")) drawText(canvas, line.substring(2));
+            else if (line.startsWith("X ")) drawDxText(canvas, line.substring(2));
             else if (line.startsWith("I ")) drawImage(canvas, line.substring(2));
             else if (line.startsWith("L ")) drawLine(canvas, line.substring(2));
             else if (line.startsWith("P ")) drawPrimitive(canvas, line.substring(2));
@@ -644,6 +646,52 @@ public final class MtaDxView extends View {
         canvas.translate(x, y + Math.max(0, (bottom - y - layout.getHeight()) / 2f));
         layout.draw(canvas);
         canvas.restore();
+    }
+
+    // X: box, scales, color/code flag, alignments, clip/wrap/subpixel,
+    // rotation/pivot, coded-line height, then an escaped UTF-8 text payload.
+    private void drawDxText(Canvas canvas, String body) {
+        String[] p = body.split(" ", 18);
+        if (p.length != 18) return;
+        float scaleX = f(p[4]), scaleY = f(p[5]);
+        if (!(scaleX > 0f && scaleY > 0f)) return;
+        float stretch = scaleX / scaleY;
+        if (!Float.isFinite(stretch) || !Float.isFinite(textBase * scaleY)) return;
+        boolean subpixel = "1".equals(p[12]);
+        float x = f(p[0]), y = f(p[1]), right = f(p[2]), bottom = f(p[3]);
+        if (!subpixel) {
+            x = (float) Math.floor(x); y = (float) Math.floor(y);
+            right = (float) Math.floor(right); bottom = (float) Math.floor(bottom);
+        }
+        text.setColor((int) l(p[6]));
+        text.setTextSize(textBase * scaleY);
+        boolean coded = "1".equals(p[7]);
+        String decoded = DxTextLayout.decode(p[17]).replace("\r\n", "\n").replace('\r', '\n');
+        CharSequence shown = coded ? MtaChatView.colorize(decoded) : decoded;
+        // CGraphics::DrawStringQueued splits coded text itself; clip and word
+        // break apply to the ordinary-text path only.
+        boolean wrap = !coded && "1".equals(p[11]);
+        int width = DxTextLayout.width(wrap ? (right - x) / stretch : Layout.getDesiredWidth(shown, text));
+        int alignX = (int) l(p[8]), alignY = (int) l(p[9]);
+        Layout.Alignment alignment = alignX == 1 ? Layout.Alignment.ALIGN_CENTER
+                : alignX == 2 ? Layout.Alignment.ALIGN_OPPOSITE : Layout.Alignment.ALIGN_NORMAL;
+        StaticLayout.Builder builder = StaticLayout.Builder.obtain(shown, 0, shown.length(), text, width)
+                .setIncludePad(false).setAlignment(alignment);
+        float lineHeight = f(p[16]);
+        if (coded && lineHeight > 0f) builder.setLineSpacing(lineHeight - text.getFontSpacing(), 1f);
+        StaticLayout layout = builder.build();
+        float dx = x + DxTextLayout.offset(right - x, width * stretch, alignX);
+        float dy = y + DxTextLayout.offset(bottom - y, layout.getHeight(), alignY);
+        canvas.save();
+        try {
+            canvas.rotate(f(p[13]), f(p[14]), f(p[15]));
+            if (!coded && "1".equals(p[10])) canvas.clipRect(x, y, right, bottom);
+            canvas.translate(dx, dy);
+            canvas.scale(stretch, 1f);
+            layout.draw(canvas);
+        } finally {
+            canvas.restore();
+        }
     }
 
     private static float f(String value) {

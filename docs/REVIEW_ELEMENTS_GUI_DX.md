@@ -1,6 +1,6 @@
 # Revisão de elementos, GUI e DX
 
-Revisão em 2026-11-15, branch `staging`. Escopo: os dois lotes de elementos,
+Revisão em 2026-11-15, branch `staging`. Escopo: os lotes de elementos,
 GUI e DX deste chat. O commit inclui a base de DX/SVG necessária para essas
 funções. As alterações anteriores de motor, rede e launcher permanecem locais.
 
@@ -26,9 +26,25 @@ Na preparação para publicação, a validação SVG passou a descartar os nós 
 temporários e recusar dimensões não finitas ou que virariam zero. O teste verifica
 que esses nós não permanecem acessíveis pelos handles XML.
 
+## Continuação: layout de texto DX
+
+O desenho DX deixou de usar o formato de texto da GUI, que centralizava todas
+as chamadas e limitava a saída a três linhas. O comando separado preserva
+newlines/backslashes e carrega alinhamento, clipping, quebra, escala por eixo,
+subpixel, rotação/pivô e altura positiva de linha em texto colorido. Conforme o
+caminho desktop, texto colorido não usa clip/wordBreak. Fontes personalizadas
+continuam selecionadas e restauradas junto da chamada, inclusive após a GUI.
+
+As verificações conferem a ordem dos argumentos quando há duas escalas, os
+valores padrão do pivô, flags, texto escapado, fallback de fonte desconhecida,
+retornos inválidos e posicionamento de texto maior que a caixa. Canvas ainda
+tem métricas próprias; escala não positiva não desenha e a largura do layout
+é limitada a 32768 pixels.
+
 ## Validação realizada
 
-- `neon_resource_tests`: **251 verificações, zero falhas**.
+- `neon_resource_tests`: **257 verificações, zero falhas**.
+- `neon_dx_text_tests`: **18 verificações Java, zero falhas**, sem runtime Android.
 - `WorldRPGNeon` ARM64: compilou e linkou com o NDK.
 - Classes Java de jogo: compilaram; somente avisos de APIs obsoletas e
   bootstrap class path para Java 8.
@@ -46,8 +62,8 @@ isolado está em [REVIEW_LUA_MOBILE.md](REVIEW_LUA_MOBILE.md).
   e transformações completas de elementos.
 - Seleção de texto, posicionamento do cursor pelo toque, propriedades/fonte
   CEGUI, ordenação real de gridlist e quebra/rolagem automática de memo.
-- Layout completo de `dxDrawText`: alinhamento, clipping, quebras, escalas por
-  eixo e rotação. A renderização atual usa o formato Canvas de escala única.
+- Comparação visual de fontes e métricas do texto Canvas com Direct3D. O layout
+  agora aceita alinhamento, clipping, quebras, escalas por eixo e rotação.
 - DX 3D com profundidade, shaders e efeitos de modelo 2DFX.
 - Validação visual de transparência, gradientes, render targets, teclado e
   eventos de foco nos dispositivos Android de destino.

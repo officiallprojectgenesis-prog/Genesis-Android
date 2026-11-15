@@ -1,6 +1,6 @@
 # Elementos, GUI e DX no mobile
 
-Revisão em 2026-11-15 na branch `staging`. Os dois lotes usam a árvore de trabalho
+Revisão em 2026-11-15 na branch `staging`. Os lotes usam a árvore de trabalho
 completa, que já continha alterações locais de DX, SVG e motor.
 
 ## Implementado neste lote
@@ -13,7 +13,7 @@ completa, que já continha alterações locais de DX, SVG e motor.
 | GUI memo | Foco, digitação Unicode, backspace, Enter e desenho por linha; newline final e cursor seguem CEGUI | Faltam seleção, quebra automática de linha e rolagem automática do cursor. |
 | Limite de texto | `guiSetText` e `guiEditSetMaxLength` preservam caracteres completos; limite zero aceita texto vazio | Digitação mantém o limite adicional de 4096 bytes do mobile. |
 | JNI | Conversão UTF-16/UTF-8 para entrada do teclado, medição e envio do frame DX | Outras interfaces JNI não foram revisadas neste lote. |
-| DX 2D | `postGUI` nas oito funções de desenho 2D, com blend capturado e comandos de fonte junto do texto | O texto Canvas ainda usa a forma comum de escala única; layout avançado permanece parcial. |
+| DX 2D | `postGUI` nas oito funções de desenho 2D, com blend capturado e comandos de fonte junto do texto | O texto Canvas usa alinhamento, clipping, quebra, escalas por eixo e rotação; métricas ainda diferem do desktop. |
 | Retornos DX | `dxDrawRectangle` e `dxDrawText` agora retornam `true`/`false` e recusam números não finitos | Registradas antes, essas funções retornavam zero valores Lua. |
 | Texturas | `dxDrawImage`/`dxDrawImageSection` aceitam uma textura existente sem exigir dono de recurso | Caminhos de arquivo ainda precisam de recurso para resolução. |
 | Composição da GUI | A GUI usa blend normal, independente do último modo DX do script | Desenhos depois da GUI restauram o modo capturado na chamada. |
@@ -32,11 +32,13 @@ CEGUI exposta como `unsigned int`; um valor Lua negativo segue essa conversão.
 
 ## Validação
 
-- `neon_resource_tests`: **251 verificações, zero falhas**. Inclui referências
+- `neon_resource_tests`: **257 verificações, zero falhas**. Inclui referências
   futuras, ordem dos filhos, remoção/reuso de ID, offsets em graus, Unicode,
   digitação/backspace de emoji, texto somente leitura, limite zero, camadas DX,
   blend capturado, fonte personalizada, render targets, memo/Enter/CRLF,
-  retornos booleanos e geometria inválida.
+  retornos booleanos, geometria inválida e opções de layout de texto.
+- `neon_dx_text_tests`: **18 verificações Java, zero falhas**, sem depender de
+  runtime Android. Confere alinhamento, limites de largura e decodificação do texto.
 - Biblioteca Android ARM64: compilou e linkou com o NDK.
 - Classes Java do jogo: compilaram, incluindo o gradiente de linhas.
 - `git diff --check`: sem erros de whitespace.
@@ -57,16 +59,22 @@ de trabalho; a limitação do checkout isolado está em [REVIEW_LUA_MOBILE.md](R
    fonte customizada, quebra/rolagem automática de memo e ordenação efetiva
    de gridlist. Funções registradas podem ter
    comportamento parcial; o catálogo não comprova equivalência visual.
-3. **DX:** completar alinhamento, clipping, quebra de texto, escala por eixo e
-   rotação; portar desenho 3D com câmera/profundidade, shaders e efeitos de modelo 2DFX.
+3. **DX:** comparar métricas e quebras de texto no aparelho, ampliar fontes
+   nativas e portar desenho 3D com câmera/profundidade, shaders e efeitos de modelo 2DFX.
 4. **Aparelho:** verificar cursor no meio do texto, acentos/emoji, composição
    com transparência, gradientes, GUI antes/depois do DX e desenho em texturas.
 
 ## Catálogo atualizado
 
-A [revisão dos dois lotes](REVIEW_ELEMENTS_GUI_DX.md) registra problemas
-corrigidos, evidências e limites de validação. O segundo lote completa
+A [revisão dos lotes](REVIEW_ELEMENTS_GUI_DX.md) registra problemas
+corrigidos, evidências e limites de validação. Os lotes seguintes completam
 comportamentos de funções já registradas; a contagem de bindings permanece igual.
+
+O layout DX usa o comando `X`, separado do comando `T` da GUI. Seu texto é
+escapado antes de atravessar a ponte JNI; seleção de fonte e reset seguem na
+mesma fila. O renderer Android usa `StaticLayout`, com largura máxima de 32768
+pixels. Escalas não positivas não desenham. Os testes Java verificam a geometria
+e o payload; não verificam os glifos ou a composição no aparelho.
 
 | Categoria | Handlers não constantes | Stubs | Ausentes |
 |---|---:|---:|---:|

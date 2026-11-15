@@ -697,26 +697,70 @@ static int l_dxDrawRectangle(lua_State* L) {
     return DrawResult(L,true);
 }
 
-// CLuaDrawingDefs.cpp:322-410. The scalar-scale form of the Canvas text bridge.
-// Alignment, clipping, wrapping and rotation still need renderer support.
+static int ReadDrawAlign(lua_State* L, int index, const char* first, const char* last) {
+    if (lua_isnoneornil(L,index)) return 0;
+    if (lua_type(L,index) != LUA_TSTRING) return -1;
+    const char* value = lua_tostring(L,index);
+    if (std::strcmp(value,first) == 0) return 0;
+    if (std::strcmp(value,"center") == 0) return 1;
+    return std::strcmp(value,last) == 0 ? 2 : -1;
+}
+
+static std::string EncodeDrawText(const char* text, size_t length) {
+    std::string encoded;
+    encoded.reserve(length);
+    for (size_t i = 0; i < length; ++i) {
+        switch (text[i]) {
+            case '\\': encoded += "\\\\"; break;
+            case '\n': encoded += "\\n"; break;
+            case '\r': encoded += "\\r"; break;
+            case '\t': encoded += "\\t"; break;
+            default:
+                encoded += static_cast<unsigned char>(text[i]) < 32 ? ' ' : text[i];
+        }
+    }
+    return encoded;
+}
+
+// CLuaDrawingDefs.cpp:322-410; CGraphics.cpp:1230-1345. X is the DX text
+// command with layout options; GUI keeps its existing T command format.
 static int l_dxDrawText(lua_State* L) {
-    double left, top, right, bottom, color, scale;
-    bool postGUI, colorCoded;
+    double left, top, right, bottom, color, scaleX, scaleY, rotation, pivotX, pivotY, lineHeight;
+    bool postGUI, colorCoded, clip, wordBreak, subPixel;
     if (!lua_isstring(L,1) || !ReadDrawNumber(L,2,left) || !ReadDrawNumber(L,3,top) ||
         !ReadDrawOptional(L,4,left,right) || !ReadDrawOptional(L,5,top,bottom) ||
-        !ReadDrawOptional(L,6,4294967295.0,color) || !ReadDrawOptional(L,7,1,scale) ||
-        !ReadDrawBool(L,13,postGUI) || !ReadDrawBool(L,14,colorCoded)) return DrawResult(L,false);
+        !ReadDrawOptional(L,6,4294967295.0,color) || !ReadDrawOptional(L,7,1,scaleX)) return DrawResult(L,false);
+    scaleY = scaleX;
+    int fontIndex = 8;
+    // Desktop permits a second numeric scale before the font argument.
+    if (lua_type(L,fontIndex) == LUA_TNUMBER) {
+        if (!ReadDrawNumber(L,fontIndex++,scaleY)) return DrawResult(L,false);
+    }
+    if (lua_istable(L,fontIndex)) {
+        const char* kind = DxElementType(ElementIdOf(L,fontIndex));
+        if (!kind || std::strcmp(kind,"dx-font") != 0) return DrawResult(L,false);
+    } else if (!lua_isnoneornil(L,fontIndex)) {
+        if (lua_type(L,fontIndex) != LUA_TSTRING) return DrawResult(L,false);
+        // MixedReadDxFontString leaves FONT_DEFAULT when an unknown name does
+        // not convert. Numeric strings are font names, never the second scale.
+    }
+    const int alignX = ReadDrawAlign(L,fontIndex+1,"left","right");
+    const int alignY = ReadDrawAlign(L,fontIndex+2,"top","bottom");
+    if (alignX < 0 || alignY < 0 || !ReadDrawBool(L,fontIndex+3,clip) || !ReadDrawBool(L,fontIndex+4,wordBreak) ||
+        !ReadDrawBool(L,fontIndex+5,postGUI) || !ReadDrawBool(L,fontIndex+6,colorCoded) || !ReadDrawBool(L,fontIndex+7,subPixel) ||
+        !ReadDrawOptional(L,fontIndex+8,0,rotation) || !ReadDrawOptional(L,fontIndex+9,(left+right)*0.5,pivotX) ||
+        !ReadDrawOptional(L,fontIndex+10,(top+bottom)*0.5,pivotY) || !ReadDrawOptional(L,fontIndex+11,0,lineHeight))
+        return DrawResult(L,false);
     size_t length = 0;
     const char* text = lua_tolstring(L,1,&length);
-    std::string safe(text,length);
-    for (char& ch : safe) if (ch == '\n' || ch == '\r') ch = ' ';
+    const std::string safe = EncodeDrawText(text,length);
     // The renderer draws scale * 15 px, so a font taller than the default is scaled here.
-    const char* font = lua_type(L, 8) == LUA_TSTRING ? lua_tostring(L, 8) : "default";
+    const char* font = lua_type(L, fontIndex) == LUA_TSTRING ? lua_tostring(L, fontIndex) : "default";
     // A dx-font element (dxCreateFont): "F height bold file" selects it for the next text line,
     // and a bare "F" returns to the default font. The text scale then multiplies the font height.
-    const DxFont custom = DxResolveFont(L, 8, 1.0);
-    if (std::abs(scale * DxFontScale(font)) > std::numeric_limits<float>::max() ||
-        std::abs(scale * custom.pixels) > std::numeric_limits<float>::max()) return DrawResult(L,false);
+    const DxFont custom = DxResolveFont(L, fontIndex, 1.0);
+    if (std::abs(scaleX * custom.pixels) > std::numeric_limits<float>::max() ||
+        std::abs(scaleY * custom.pixels) > std::numeric_limits<float>::max()) return DrawResult(L,false);
     std::string commands;
     if (!custom.file.empty()) {
         char select[64];
@@ -726,9 +770,11 @@ static int l_dxDrawText(lua_State* L) {
         commands += '\n';
         font = "default";
     }
-    char head[320];
-    std::snprintf(head, sizeof(head), "T %.1f %.1f %.1f %.1f %.2f %u %d ",
-        left, top, right, bottom, scale * DxFontScale(font), DrawColor(color), colorCoded ? 1 : 0);
+    char head[1024];
+    std::snprintf(head, sizeof(head), "X %.3f %.3f %.3f %.3f %.4f %.4f %u %d %d %d %d %d %d %.3f %.3f %.3f %.3f ",
+        left, top, right, bottom, scaleX * DxFontScale(font), scaleY * DxFontScale(font), DrawColor(color),
+        colorCoded ? 1 : 0, alignX, alignY, clip ? 1 : 0, wordBreak ? 1 : 0, subPixel ? 1 : 0,
+        rotation,pivotX,pivotY,lineHeight);
     commands += head;
     commands += safe;
     commands += '\n';

@@ -35,10 +35,10 @@ Desktop scope: the load graph from `CLuaManager::LoadCFunctions` (52 loader func
 | PushFalse | lua_pushboolean(L, 0) | shared/LuaPedApi.cpp:59 |
 | GetPlayerUserName | lua_pushboolean(L, 0) | shared/LuaPedApi.cpp:277 |
 | Fail | lua_pushboolean(L, 0) | shared/LuaVehicleApi.cpp:406 |
-| l_nil | lua_pushnil(L) | shared/LuaVMStub.cpp:1056 |
-| l_num0 | lua_pushinteger(L, 0) | shared/LuaVMStub.cpp:1057 |
-| l_false | lua_pushboolean(L, 0) | shared/LuaVMStub.cpp:1218 |
-| l_true | lua_pushboolean(L, 1) | shared/LuaVMStub.cpp:1219 |
+| l_nil | lua_pushnil(L) | shared/LuaVMStub.cpp:1102 |
+| l_num0 | lua_pushinteger(L, 0) | shared/LuaVMStub.cpp:1103 |
+| l_false | lua_pushboolean(L, 0) | shared/LuaVMStub.cpp:1264 |
+| l_true | lua_pushboolean(L, 1) | shared/LuaVMStub.cpp:1265 |
 
 Plus the `DefaultValue` dispatcher (`LuaApiExtra.cpp`), which returns the kind in its `defaults[]` row (`kTrue`, `kFalse`, `kNil`, `kZero`, ...). A name bound there is a stub.
 
@@ -185,7 +185,7 @@ Stub (8):
 |---|---|---|
 | getElementAngularVelocity | DefaultValue(kZero3) | shared/LuaApiExtra.cpp:577 |
 | getElementDistanceFromCentreOfMassToBaseOfModel | DefaultValue(kZero) | shared/LuaApiExtra.cpp:578 |
-| isElementOnScreen | l_false: lua_pushboolean(L, 0) | shared/LuaVMStub.cpp:2067 |
+| isElementOnScreen | l_false: lua_pushboolean(L, 0) | shared/LuaVMStub.cpp:2113 |
 | setElementPosition | TrueResult: lua_pushboolean(L, 1) | shared/LuaApiExtra.cpp:568 |
 | setElementVelocity | DefaultValue(kTrue) | shared/LuaApiExtra.cpp:575 |
 | setElementAngularVelocity | DefaultValue(kTrue) | shared/LuaApiExtra.cpp:575 |
@@ -275,81 +275,81 @@ Stub (75):
 
 | Lua function | Port binding | Where |
 |---|---|---|
-| removePedFromVehicle | l_true: lua_pushboolean(L, 1) | shared/LuaVMStub.cpp:2084 |
-| setPedRotation | l_true: lua_pushboolean(L, 1) | shared/LuaVMStub.cpp:2090 |
-| setPedWeaponSlot | l_true: lua_pushboolean(L, 1) | shared/LuaVMStub.cpp:2093 |
+| removePedFromVehicle | l_true: lua_pushboolean(L, 1) | shared/LuaVMStub.cpp:2130 |
+| setPedRotation | l_true: lua_pushboolean(L, 1) | shared/LuaVMStub.cpp:2136 |
+| setPedWeaponSlot | l_true: lua_pushboolean(L, 1) | shared/LuaVMStub.cpp:2139 |
 | setPedCanBeKnockedOffBike | DefaultValue(kTrue) | shared/LuaApiExtra.cpp:592 |
 | setPedAnimation | TrueResult: lua_pushboolean(L, 1) | shared/LuaApiExtra.cpp:570 |
-| setPedControlState | l_true: lua_pushboolean(L, 1) | shared/LuaVMStub.cpp:2087 |
+| setPedControlState | l_true: lua_pushboolean(L, 1) | shared/LuaVMStub.cpp:2133 |
 | setPedEnterVehicle | DefaultValue(kTrue) | shared/LuaApiExtra.cpp:595 |
 | setPedExitVehicle | DefaultValue(kTrue) | shared/LuaApiExtra.cpp:596 |
-| setPedWeaponShootingRate | l_true: lua_pushboolean(L, 1) | shared/LuaVMStub.cpp:2095 |
-| setPedWeaponAccuracy | l_true: lua_pushboolean(L, 1) | shared/LuaVMStub.cpp:2094 |
+| setPedWeaponShootingRate | l_true: lua_pushboolean(L, 1) | shared/LuaVMStub.cpp:2141 |
+| setPedWeaponAccuracy | l_true: lua_pushboolean(L, 1) | shared/LuaVMStub.cpp:2140 |
 | setPedGoTo | DefaultValue(kTrue) | shared/LuaApiExtra.cpp:594 |
-| setPedNavigateTo | l_true: lua_pushboolean(L, 1) | shared/LuaVMStub.cpp:2089 |
+| setPedNavigateTo | l_true: lua_pushboolean(L, 1) | shared/LuaVMStub.cpp:2135 |
 | setPedAimAt | DefaultValue(kTrue) | shared/LuaApiExtra.cpp:595 |
-| setPedStandStill | l_true: lua_pushboolean(L, 1) | shared/LuaVMStub.cpp:2091 |
+| setPedStandStill | l_true: lua_pushboolean(L, 1) | shared/LuaVMStub.cpp:2137 |
 | setPedHandsUp | DefaultValue(kTrue) | shared/LuaApiExtra.cpp:595 |
 | setPedTurnToFace | DefaultValue(kTrue) | shared/LuaApiExtra.cpp:595 |
 | setPedKillOnFoot | DefaultValue(kTrue) | shared/LuaApiExtra.cpp:594 |
-| isPedNativeAmbientCopWanderTask | l_false: lua_pushboolean(L, 0) | shared/LuaVMStub.cpp:2072 |
-| setPedJump | l_true: lua_pushboolean(L, 1) | shared/LuaVMStub.cpp:2088 |
+| isPedNativeAmbientCopWanderTask | l_false: lua_pushboolean(L, 0) | shared/LuaVMStub.cpp:2118 |
+| setPedJump | l_true: lua_pushboolean(L, 1) | shared/LuaVMStub.cpp:2134 |
 | setPedTaskSequence | DefaultValue(kTrue) | shared/LuaApiExtra.cpp:596 |
 | setPedDriveTo | DefaultValue(kTrue) | shared/LuaApiExtra.cpp:594 |
 | setPedDriveMission | DefaultValue(kTrue) | shared/LuaApiExtra.cpp:594 |
 | setPedDriveBy | DefaultValue(kTrue) | shared/LuaApiExtra.cpp:593 |
 | setPedMissionActor | DefaultValue(kTrue) | shared/LuaApiExtra.cpp:587 |
-| acquirePedNativeGroup | l_false: lua_pushboolean(L, 0) | shared/LuaVMStub.cpp:2075 |
-| releasePedNativeGroup | l_true: lua_pushboolean(L, 1) | shared/LuaVMStub.cpp:2078 |
-| isPedNativeGroupActive | l_false: lua_pushboolean(L, 0) | shared/LuaVMStub.cpp:2071 |
-| getPedNativeGroupDiagnostic | l_false: lua_pushboolean(L, 0) | shared/LuaVMStub.cpp:2083 |
-| validatePedNativeCouple | l_false: lua_pushboolean(L, 0) | shared/LuaVMStub.cpp:2079 |
-| acquirePedNativeCouple | l_false: lua_pushboolean(L, 0) | shared/LuaVMStub.cpp:2073 |
-| releasePedNativeCouple | l_true: lua_pushboolean(L, 1) | shared/LuaVMStub.cpp:2076 |
-| isPedNativeCoupleActive | l_false: lua_pushboolean(L, 0) | shared/LuaVMStub.cpp:2069 |
-| getPedNativeCoupleDiagnostic | l_false: lua_pushboolean(L, 0) | shared/LuaVMStub.cpp:2082 |
-| acquirePedNativeCouplePresentation | l_false: lua_pushboolean(L, 0) | shared/LuaVMStub.cpp:2074 |
-| updatePedNativeCouplePresentation | l_true: lua_pushboolean(L, 1) | shared/LuaVMStub.cpp:2080 |
-| releasePedNativeCouplePresentation | l_true: lua_pushboolean(L, 1) | shared/LuaVMStub.cpp:2077 |
-| isPedNativeCouplePresentationActive | l_false: lua_pushboolean(L, 0) | shared/LuaVMStub.cpp:2070 |
+| acquirePedNativeGroup | l_false: lua_pushboolean(L, 0) | shared/LuaVMStub.cpp:2121 |
+| releasePedNativeGroup | l_true: lua_pushboolean(L, 1) | shared/LuaVMStub.cpp:2124 |
+| isPedNativeGroupActive | l_false: lua_pushboolean(L, 0) | shared/LuaVMStub.cpp:2117 |
+| getPedNativeGroupDiagnostic | l_false: lua_pushboolean(L, 0) | shared/LuaVMStub.cpp:2129 |
+| validatePedNativeCouple | l_false: lua_pushboolean(L, 0) | shared/LuaVMStub.cpp:2125 |
+| acquirePedNativeCouple | l_false: lua_pushboolean(L, 0) | shared/LuaVMStub.cpp:2119 |
+| releasePedNativeCouple | l_true: lua_pushboolean(L, 1) | shared/LuaVMStub.cpp:2122 |
+| isPedNativeCoupleActive | l_false: lua_pushboolean(L, 0) | shared/LuaVMStub.cpp:2115 |
+| getPedNativeCoupleDiagnostic | l_false: lua_pushboolean(L, 0) | shared/LuaVMStub.cpp:2128 |
+| acquirePedNativeCouplePresentation | l_false: lua_pushboolean(L, 0) | shared/LuaVMStub.cpp:2120 |
+| updatePedNativeCouplePresentation | l_true: lua_pushboolean(L, 1) | shared/LuaVMStub.cpp:2126 |
+| releasePedNativeCouplePresentation | l_true: lua_pushboolean(L, 1) | shared/LuaVMStub.cpp:2123 |
+| isPedNativeCouplePresentationActive | l_false: lua_pushboolean(L, 0) | shared/LuaVMStub.cpp:2116 |
 | acquirePedNativePointArm | DefaultValue(kFalse) | shared/LuaApiExtra.cpp:598 |
 | updatePedNativePointArm | DefaultValue(kFalse) | shared/LuaApiExtra.cpp:615 |
 | releasePedNativePointArm | DefaultValue(kTrue) | shared/LuaApiExtra.cpp:597 |
-| addPedNativeDamageResponseEvent | l_true: lua_pushboolean(L, 1) | shared/LuaVMStub.cpp:2081 |
+| addPedNativeDamageResponseEvent | l_true: lua_pushboolean(L, 1) | shared/LuaVMStub.cpp:2127 |
 | getPedNativeVehicleResponse | DefaultValue(kNil) | shared/LuaApiExtra.cpp:590 |
 | restorePedNativeVehicleResponse | DefaultValue(kTrue) | shared/LuaApiExtra.cpp:597 |
 | setPedSuffersCriticalHits | DefaultValue(kTrue) | shared/LuaApiExtra.cpp:592 |
 | setPedCanBeDraggedOut | DefaultValue(kTrue) | shared/LuaApiExtra.cpp:596 |
 | setPedOnlyDamagedByPlayer | DefaultValue(kTrue) | shared/LuaApiExtra.cpp:593 |
-| setPedStayInSamePlace | l_true: lua_pushboolean(L, 1) | shared/LuaVMStub.cpp:2092 |
+| setPedStayInSamePlace | l_true: lua_pushboolean(L, 1) | shared/LuaVMStub.cpp:2138 |
 | setPedNeverTargeted | DefaultValue(kTrue) | shared/LuaApiExtra.cpp:593 |
 | setPedPhysicalProofs | DefaultValue(kTrue) | shared/LuaApiExtra.cpp:592 |
-| getPedWeaponSlot | l_num0: lua_pushinteger(L, 0) | shared/LuaVMStub.cpp:2056 |
+| getPedWeaponSlot | l_num0: lua_pushinteger(L, 0) | shared/LuaVMStub.cpp:2102 |
 | canPedBeKnockedOffBike | DefaultValue(kFalse) | shared/LuaApiExtra.cpp:588 |
-| getPedControlState | l_false: lua_pushboolean(L, 0) | shared/LuaVMStub.cpp:2064 |
+| getPedControlState | l_false: lua_pushboolean(L, 0) | shared/LuaVMStub.cpp:2110 |
 | isPedDoingGangDriveby | DefaultValue(kFalse) | shared/LuaApiExtra.cpp:590 |
 | getPedCameraRotation | DefaultValue(kZero) | shared/LuaApiExtra.cpp:590 |
 | isPedMissionActor | DefaultValue(kFalse) | shared/LuaApiExtra.cpp:586 |
 | getPedSuffersCriticalHits | DefaultValue(kFalse) | shared/LuaApiExtra.cpp:588 |
 | canPedBeDraggedOut | DefaultValue(kFalse) | shared/LuaApiExtra.cpp:589 |
 | isPedOnlyDamagedByPlayer | DefaultValue(kFalse) | shared/LuaApiExtra.cpp:589 |
-| getPedStayInSamePlace | l_false: lua_pushboolean(L, 0) | shared/LuaVMStub.cpp:2065 |
+| getPedStayInSamePlace | l_false: lua_pushboolean(L, 0) | shared/LuaVMStub.cpp:2111 |
 | isPedNeverTargeted | DefaultValue(kFalse) | shared/LuaApiExtra.cpp:589 |
 | getPedPhysicalProofs | DefaultValue(kFalse) | shared/LuaApiExtra.cpp:588 |
-| getPedStat | l_num0: lua_pushinteger(L, 0) | shared/LuaVMStub.cpp:2059 |
-| getPedTask | l_false: lua_pushboolean(L, 0) | shared/LuaVMStub.cpp:2062 |
+| getPedStat | l_num0: lua_pushinteger(L, 0) | shared/LuaVMStub.cpp:2105 |
+| getPedTask | l_false: lua_pushboolean(L, 0) | shared/LuaVMStub.cpp:2108 |
 | getPedSimplestTask | DefaultValue(kEmptyString) | shared/LuaApiExtra.cpp:587 |
-| getPedTarget | l_false: lua_pushboolean(L, 0) | shared/LuaVMStub.cpp:2063 |
-| getPedWeapon | l_num0: lua_pushinteger(L, 0) | shared/LuaVMStub.cpp:2055 |
-| getPedWeaponShootingRate | l_num0: lua_pushinteger(L, 0) | shared/LuaVMStub.cpp:2058 |
-| getPedWeaponAccuracy | l_num0: lua_pushinteger(L, 0) | shared/LuaVMStub.cpp:2057 |
-| getPedAmmoInClip | l_num0: lua_pushinteger(L, 0) | shared/LuaVMStub.cpp:2053 |
-| getPedTotalAmmo | l_num0: lua_pushinteger(L, 0) | shared/LuaVMStub.cpp:2054 |
+| getPedTarget | l_false: lua_pushboolean(L, 0) | shared/LuaVMStub.cpp:2109 |
+| getPedWeapon | l_num0: lua_pushinteger(L, 0) | shared/LuaVMStub.cpp:2101 |
+| getPedWeaponShootingRate | l_num0: lua_pushinteger(L, 0) | shared/LuaVMStub.cpp:2104 |
+| getPedWeaponAccuracy | l_num0: lua_pushinteger(L, 0) | shared/LuaVMStub.cpp:2103 |
+| getPedAmmoInClip | l_num0: lua_pushinteger(L, 0) | shared/LuaVMStub.cpp:2099 |
+| getPedTotalAmmo | l_num0: lua_pushinteger(L, 0) | shared/LuaVMStub.cpp:2100 |
 | getPedTaskSequenceProgress | DefaultValue(kZero) | shared/LuaApiExtra.cpp:587 |
 | getPedBonePosition | DefaultValue(kZero3) | shared/LuaApiExtra.cpp:591 |
-| isPedOnGround | l_true: lua_pushboolean(L, 1) | shared/LuaVMStub.cpp:2068 |
+| isPedOnGround | l_true: lua_pushboolean(L, 1) | shared/LuaVMStub.cpp:2114 |
 | isPedDoingTask | DefaultValue(kFalse) | shared/LuaApiExtra.cpp:586 |
-| isPedDead | l_false: lua_pushboolean(L, 0) | shared/LuaVMStub.cpp:2122 |
+| isPedDead | l_false: lua_pushboolean(L, 0) | shared/LuaVMStub.cpp:2168 |
 
 Missing (82): `detonateSatchels`, `killPed`, `resetPedVoice`, `updateElementRpHAnim`, `warpPedIntoVehicle`, `givePedWeapon`, `setPedVoice`, `setElementBonePosition`, `setElementBoneRotation`, `setElementBoneQuaternion`, `setElementBoneMatrix`, `setPedAnimationProgress`, `setPedAnimationSpeed`, `setPedWalkingStyle`, `setPedUseNativeWalkingStyle`, `setPedAnalogControlState`, `setPedDoingGangDriveby`, `setPedFightingStyle`, `setPedLookAt`, `setPedHeadless`, `setPedFrozen`, `setPedFootBloodEnabled`, `setPedCameraRotation`, `setPedAimTarget`, `setPedStat`, `setPedOxygenLevel`, `setPedArmor`, `isPedNativeTaskReady`, `setPedChatWith`, `setPedAchieveHeading`, `setPedGoToOffset`, `setPedScriptedSpeechMuted`, `setPedFacialTalk`, `stopPedFacialTalk`, `setPedShootAt`, `setPedCarryObject`, `pickUpPedObject`, `getPedNoiseLevel`, `getPedCarriedObject`, `putDownPedObject`, `cancelPedCarryObject`, `setPedDriveWander`, `acquirePedNativeEventProfile`, `releasePedNativeEventProfile`, `isPedNativeEventProfileActive`, `isPedNativePointArmActive`, `addPedNativeGunAimedAtEvent`, `addPedNativeDamageEvent`, `addPedNativeBikeJackTask`, `setPedStoryProtected`, `setPedBleeding`, `playPedVoiceLine`, `getPedVoice`, `getElementBonePosition`, `getElementBoneRotation`, `getElementBoneQuaternion`, `getElementBoneMatrix`, `getPedAnimation`, `getPedAnimationProgress`, `getPedAnimationSpeed`, `getPedAnimationLength`, `getPedWalkingStyle`, `isPedUsingNativeWalkingStyle`, `getPedAnalogControlState`, `getPedFightingStyle`, `isPedHeadless`, `isPedFrozen`, `isPedFootBloodEnabled`, `isPedStoryProtected`, `getPedOxygenLevel`, `isPedBleeding`, `getPedContactElement`, `getPedTargetStart`, `getPedTargetEnd`, `getPedTargetCollision`, `getPedClothes`, `doesPedHaveJetPack`, `isPedWearingJetpack`, `isPedChoking`, `isPedDucked`, `isPedReloadingWeapon`, `killPedTask`
 
@@ -365,7 +365,7 @@ Stub (2):
 
 | Lua function | Port binding | Where |
 |---|---|---|
-| getPlayerWantedLevel | l_num0: lua_pushinteger(L, 0) | shared/LuaVMStub.cpp:2036 |
+| getPlayerWantedLevel | l_num0: lua_pushinteger(L, 0) | shared/LuaVMStub.cpp:2082 |
 | getPlayerUserName | GetPlayerUserName: lua_pushboolean(L, 0) | shared/LuaPedApi.cpp:432 |
 
 Missing (20): `getPlayerScriptDebugLevel`, `isPlayerCrosshairVisible`, `setPlayerMoney`, `givePlayerMoney`, `takePlayerMoney`, `setPlayerHudComponentProperty`, `resetPlayerHudComponentProperty`, `forcePlayerMap`, `isPlayerMapForced`, `isPlayerMapVisible`, `getPlayerMapBoundingBox`, `getPlayerMapOpacity`, `getPlayerHudComponentProperty`, `acquireMissionText`, `showMissionText`, `showMissionHelp`, `showMissionBigText`, `clearMissionTexts`, `clearMissionHelp`, `releaseMissionText`
@@ -460,10 +460,10 @@ Stub (7):
 
 | Lua function | Port binding | Where |
 |---|---|---|
-| processLineOfSight | l_false: lua_pushboolean(L, 0) | shared/LuaVMStub.cpp:2108 |
+| processLineOfSight | l_false: lua_pushboolean(L, 0) | shared/LuaVMStub.cpp:2154 |
 | getScreenFromWorldPosition | DefaultValue(kNil) | shared/LuaApiExtra.cpp:599 |
-| updateAmbientPedPopulationModels | l_true: lua_pushboolean(L, 1) | shared/LuaVMStub.cpp:2107 |
-| resetAmbientPedPopulationModels | l_true: lua_pushboolean(L, 1) | shared/LuaVMStub.cpp:2098 |
+| updateAmbientPedPopulationModels | l_true: lua_pushboolean(L, 1) | shared/LuaVMStub.cpp:2153 |
+| resetAmbientPedPopulationModels | l_true: lua_pushboolean(L, 1) | shared/LuaVMStub.cpp:2144 |
 | removeWorldModel | DefaultValue(kTrue) | shared/LuaApiExtra.cpp:613 |
 | restoreWorldModel | DefaultValue(kTrue) | shared/LuaApiExtra.cpp:613 |
 | isLineOfSightClear | DefaultValue(kFalse) | shared/LuaApiExtra.cpp:598 |
@@ -616,8 +616,8 @@ Desktop: literal `AddEvent("name", ...)` calls under `Client/mods/deathmatch/log
 |---|---|---|---|
 | onClientBirdShot | not fired | - | Client/mods/deathmatch/logic/CClientBirdManager.cpp:84 |
 | onClientFireDamage | not fired | - | Client/mods/deathmatch/logic/CClientFireManager.cpp:99 |
-| onClientResourceStart | fired | app/src/main/cpp/shared/LuaVMStub.cpp:2526 | Client/mods/deathmatch/logic/CClientGame.cpp:2730 |
-| onClientResourceStop | fired | app/src/main/cpp/shared/LuaVMStub.cpp:2876, app/src/main/cpp/shared/LuaVMStub.cpp:2882 | Client/mods/deathmatch/logic/CClientGame.cpp:2731 |
+| onClientResourceStart | fired | app/src/main/cpp/shared/LuaVMStub.cpp:2572 | Client/mods/deathmatch/logic/CClientGame.cpp:2730 |
+| onClientResourceStop | fired | app/src/main/cpp/shared/LuaVMStub.cpp:2922, app/src/main/cpp/shared/LuaVMStub.cpp:2928 | Client/mods/deathmatch/logic/CClientGame.cpp:2731 |
 | onClientElementDataChange | not fired | - | Client/mods/deathmatch/logic/CClientGame.cpp:2734 |
 | onClientElementStreamIn | not fired | - | Client/mods/deathmatch/logic/CClientGame.cpp:2735 |
 | onClientElementStreamOut | not fired | - | Client/mods/deathmatch/logic/CClientGame.cpp:2736 |
@@ -703,18 +703,18 @@ Desktop: literal `AddEvent("name", ...)` calls under `Client/mods/deathmatch/log
 | onClientPaste | not fired | - | Client/mods/deathmatch/logic/CClientGame.cpp:2830 |
 | onClientConsole | fired | app/src/main/cpp/shared/LuaVMStub.cpp:477 | Client/mods/deathmatch/logic/CClientGame.cpp:2833 |
 | onClientCoreCommand | not fired | - | Client/mods/deathmatch/logic/CClientGame.cpp:2834 |
-| onClientChatMessage | fired | app/src/main/cpp/shared/LuaVMStub.cpp:2534, app/src/main/cpp/shared/LuaVMStub.cpp:2542, app/src/main/cpp/shared/LuaVMStub.cpp:2554, app/src/main/cpp/shared/LuaVMStub.cpp:2562, app/src/main/cpp/shared/LuaVMStub.cpp:2867 | Client/mods/deathmatch/logic/CClientGame.cpp:2837 |
+| onClientChatMessage | fired | app/src/main/cpp/shared/LuaVMStub.cpp:2580, app/src/main/cpp/shared/LuaVMStub.cpp:2588, app/src/main/cpp/shared/LuaVMStub.cpp:2600, app/src/main/cpp/shared/LuaVMStub.cpp:2608, app/src/main/cpp/shared/LuaVMStub.cpp:2913 | Client/mods/deathmatch/logic/CClientGame.cpp:2837 |
 | onClientDebugMessage | not fired | - | Client/mods/deathmatch/logic/CClientGame.cpp:2840 |
-| onClientPreRender | fired | app/src/main/cpp/shared/LuaVMStub.cpp:2643 | Client/mods/deathmatch/logic/CClientGame.cpp:2843 |
+| onClientPreRender | fired | app/src/main/cpp/shared/LuaVMStub.cpp:2689 | Client/mods/deathmatch/logic/CClientGame.cpp:2843 |
 | onClientPedsProcessed | not fired | - | Client/mods/deathmatch/logic/CClientGame.cpp:2844 |
 | onClientNativeUI | not fired | - | Client/mods/deathmatch/logic/CClientGame.cpp:2845 |
 | onClientHUDRender | not fired | - | Client/mods/deathmatch/logic/CClientGame.cpp:2846 |
-| onClientRender | fired | app/src/main/cpp/shared/LuaVMStub.cpp:2644 | Client/mods/deathmatch/logic/CClientGame.cpp:2847 |
+| onClientRender | fired | app/src/main/cpp/shared/LuaVMStub.cpp:2690 | Client/mods/deathmatch/logic/CClientGame.cpp:2847 |
 | onClientMinimize | not fired | - | Client/mods/deathmatch/logic/CClientGame.cpp:2848 |
 | onClientRestore | not fired | - | Client/mods/deathmatch/logic/CClientGame.cpp:2849 |
 | onClientMTAFocusChange | not fired | - | Client/mods/deathmatch/logic/CClientGame.cpp:2850 |
-| onClientClick | fired | app/src/main/cpp/shared/LuaVMStub.cpp:2609 | Client/mods/deathmatch/logic/CClientGame.cpp:2853 |
-| onClientCursorMove | fired | app/src/main/cpp/shared/LuaVMStub.cpp:2590, app/src/main/cpp/shared/LuaVMStub.cpp:2598 | Client/mods/deathmatch/logic/CClientGame.cpp:2854 |
+| onClientClick | fired | app/src/main/cpp/shared/LuaVMStub.cpp:2655 | Client/mods/deathmatch/logic/CClientGame.cpp:2853 |
+| onClientCursorMove | fired | app/src/main/cpp/shared/LuaVMStub.cpp:2636, app/src/main/cpp/shared/LuaVMStub.cpp:2644 | Client/mods/deathmatch/logic/CClientGame.cpp:2854 |
 | onClientMarkerHit | not fired | - | Client/mods/deathmatch/logic/CClientGame.cpp:2857 |
 | onClientMarkerLeave | not fired | - | Client/mods/deathmatch/logic/CClientGame.cpp:2858 |
 | onClientPlayerMarkerHit | not fired | - | Client/mods/deathmatch/logic/CClientGame.cpp:2860 |
@@ -854,7 +854,7 @@ Port inbound ids with no desktop inbound case: 84 (CUSTOM_DATA), 68 (PLAYER_RCON
 | 64 | PED_WASTED | Client/mods/deathmatch/logic/CClientGame.cpp:6573 | not sent |  |
 | 71 | VOICE_DATA | Client/mods/deathmatch/CVoiceRecorder.cpp:313 | not sent |  |
 | 72 | VOICE_END | Client/mods/deathmatch/CVoiceRecorder.cpp:335 | not sent |  |
-| 81 | LUA_EVENT | Client/mods/deathmatch/logic/CStaticFunctionDefinitions.cpp:195 | sent | app/src/main/cpp/shared/LuaVMStub.cpp:1308 |
+| 81 | LUA_EVENT | Client/mods/deathmatch/logic/CStaticFunctionDefinitions.cpp:195 | sent | app/src/main/cpp/shared/LuaVMStub.cpp:1354 |
 | 84 | CUSTOM_DATA | Client/mods/deathmatch/logic/CStaticFunctionDefinitions.cpp:1045 | not sent |  |
 | 85 | CAMERA_SYNC | Client/mods/deathmatch/logic/CNetAPI.cpp:454 | not sent |  |
 | 88 | OBJECT_SYNC | Client/mods/deathmatch/logic/CObjectSync.cpp:212 | not sent |  |

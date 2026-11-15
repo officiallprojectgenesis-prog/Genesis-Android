@@ -124,6 +124,19 @@ add_subdirectory("${NATIVE_DIR}/lua53" "${CMAKE_CURRENT_BINARY_DIR}/lua53")
 
 find_package(Threads REQUIRED)
 find_package(ZLIB REQUIRED)
+
+# Pure Java checks for the DX text payload/placement; no Android runtime needed.
+find_package(Java 1.8 COMPONENTS Runtime Development QUIET)
+if(Java_FOUND)
+    add_custom_target(neon_dx_text_tests
+        COMMAND "${CMAKE_COMMAND}" -E make_directory "${CMAKE_CURRENT_BINARY_DIR}/dx-text-java"
+        COMMAND "${Java_JAVAC_EXECUTABLE}" -d "${CMAKE_CURRENT_BINARY_DIR}/dx-text-java"
+            "${NATIVE_DIR}/../java/com/worldrpg/neonlauncher/game/DxTextLayout.java"
+            "${HEADLESS_DIR}/java/DxTextLayoutTest.java"
+        COMMAND "${Java_JAVA_EXECUTABLE}" -cp "${CMAKE_CURRENT_BINARY_DIR}/dx-text-java"
+            com.worldrpg.neonlauncher.game.DxTextLayoutTest
+        VERBATIM)
+endif()
 # Usage requirements only (Lua and zlib headers): the objects are linked by the executables below.
 target_link_libraries(neon_core PRIVATE lua53 ZLIB::ZLIB)
 # Link-time wrap of the one RakNetWrapper send entry point (see send_tap.cpp). The
