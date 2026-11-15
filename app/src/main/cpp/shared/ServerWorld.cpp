@@ -1,5 +1,6 @@
 #include "ServerWorld.h"
 #include "ResourceFiles.h"
+#include "ConnectionLoading.h"
 #include "../gtasa/GameEngine.h"
 #include "../gtasa/RemoteVehicle.h"
 #include "../net/raknet/RakNetWrapper.h"
@@ -10,6 +11,7 @@
 #include <cmath>
 #include <algorithm>
 #include <cstring>
+#include <atomic>
 #include <mutex>
 #include <unordered_map>
 #include <vector>
@@ -29,6 +31,8 @@ using namespace WorldRPG::Entity;
 
 std::mutex g_lock;
 uint32_t g_local = 0;
+// CClientGame::SetAllDimensions: the local player's dimension (PLAYER_SPAWN, PLAYER_LIST, SET_ELEMENT_DIMENSION).
+std::atomic<uint16_t> g_localDimension{0};
 uint32_t g_resourceRoot = 0;
 std::unordered_map<uint32_t, Visual> g_visuals;
 std::unordered_map<uint32_t, Attachment> g_attachments;
@@ -266,6 +270,7 @@ void ResetSession() {
         g_nicks.clear();
         g_resourceRoot = 0;
     }
+    g_localDimension = 0;
     // Hosted and observer ped state is keyed by ElementID, which the new session reuses.
     for (uint32_t id : peds) {
         WorldRPG::Sync::PedSyncState::Forget(id);
@@ -528,10 +533,14 @@ void OnEntityAdd(const uint8_t* body, size_t length, size_t bits) {
         DIAG("ENTITY_ADD body hex count=%u bytes=%zu %s", static_cast<unsigned>(count), dumpBytes, hex);
     }
     if (count == 0 || count > 512) { DIAG("ENTITY_ADD bad count=%u", static_cast<unsigned>(count)); return; }
+    // Desktop CPacketHandler::Packet_EntityAdd (CPacketHandler.cpp:2989-2995): status, then the entity
+    // percentage through CCore::UpdateDummyProgress(index * 100 / count, "%").
+    ConnectionLoading::Update(ConnectionLoading::Phase::World, "Preparing world", 0.0f);
     std::lock_guard<std::mutex> lock(g_lock);
     int stored = 0;
     std::vector<std::pair<uint32_t, uint32_t>> attachments;
     for (uint32_t index = 0; index < count; ++index) {
+        ConnectionLoading::UpdateProgress(static_cast<float>(index * 100 / count) / 100.0f);
         EntityCommon common;
         if (!ReadEntityCommon(reader, common)) {
             DIAG("ENTITY_ADD stop idx=%u/%u common header failed bit=%zu", index, static_cast<unsigned>(count), reader.GetReadOffsetBits());
@@ -556,6 +565,7 @@ void OnEntityAdd(const uint8_t* body, size_t length, size_t bits) {
         }
         visual.interior = common.interior;
         visual.syncTimeContext = common.syncTimeContext;
+        visual.dimension = static_cast<uint16_t>(common.dimension);
         if (common.type != kTypePlayer) Remember(common.id, visual);
         if (common.id == 0 || common.id == 0xFFFFFFFFu) { ++stored; continue; }
         Attachment attachment;
@@ -609,6 +619,48 @@ void OnEntityRemove(const uint8_t* body, size_t length, size_t bits) {
         ++removed;
     }
     if (removed > 1) DIAG("ENTITY_REMOVE removed %d element(s)", removed);
+}
+
+void SetSyncTimeContext(uint32_t id, uint8_t context) {
+    std::lock_guard<std::mutex> lock(g_lock);
+    auto found = g_visuals.find(id);
+    if (found != g_visuals.end()) found->second.syncTimeContext = context;
+}
+
+void NoteElementPosition(uint32_t id, float x, float y, float z) {
+    std::lock_guard<std::mutex> lock(g_lock);
+    auto found = g_visuals.find(id);
+    if (found == g_visuals.end()) return;
+    found->second.x = x;
+    found->second.y = y;
+    found->second.z = z;
+}
+
+void NoteElementInterior(uint32_t id, uint8_t interior) {
+    std::lock_guard<std::mutex> lock(g_lock);
+    auto found = g_visuals.find(id);
+    if (found != g_visuals.end()) found->second.interior = interior;
+}
+
+void NoteElementDimension(uint32_t id, uint16_t dimension) {
+    std::lock_guard<std::mutex> lock(g_lock);
+    auto found = g_visuals.find(id);
+    if (found != g_visuals.end()) found->second.dimension = dimension;
+}
+
+uint16_t DimensionOf(uint32_t id) {
+    std::lock_guard<std::mutex> lock(g_lock);
+    auto found = g_visuals.find(id);
+    return found != g_visuals.end() ? found->second.dimension : g_localDimension.load();
+}
+
+void SetLocalDimension(uint16_t dimension) { g_localDimension = dimension; }
+uint16_t LocalDimension() { return g_localDimension.load(); }
+
+void NoteElementModel(uint32_t id, int model) {
+    std::lock_guard<std::mutex> lock(g_lock);
+    auto found = g_visuals.find(id);
+    if (found != g_visuals.end() && model >= 0) found->second.model = model;
 }
 
 void NotePlayerSeen(uint32_t id) {
@@ -783,6 +835,9 @@ void OnPlayerList(const uint8_t* body, size_t length, size_t bits) {
         uint32_t dimension = 0, alpha = 0;
         uint8_t style = 0, interior = 0;
         if (!ReadCompressed(reader, 2, dimension) || !reader.Read(style)) { DIAG("PLAYER_LIST id=%u stop at dimension/style bit=%zu", id, reader.GetReadOffsetBits()); break; }
+        // CClientPlayer::SetDimension (Packet_PlayerList). The local player's entry sets the streamer dimension.
+        g_visuals[id].dimension = static_cast<uint16_t>(dimension);
+        if (id == g_local) g_localDimension = static_cast<uint16_t>(dimension);
         if (!ReadCompressed(reader, 1, alpha) || !reader.Read(interior)) { DIAG("PLAYER_LIST id=%u stop at alpha/interior bit=%zu", id, reader.GetReadOffsetBits()); break; }
         bool animated = false;
         for (int slot = 0; slot < 16; ++slot) {

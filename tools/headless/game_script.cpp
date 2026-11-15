@@ -326,6 +326,7 @@ void NoteServerVehicleInOut(uint32_t vehicle, uint8_t action) {
 namespace WorldRPG::Game {
 
 bool BeginServerSession() { return false; }
+bool ServerSessionLive() { return true; }
 
 void ApplyServerSpawn(float x, float y, float z) {
     g_spawn = Foot{x, y, z, 0.f};
@@ -526,6 +527,18 @@ void ForgetPedNativeTaskState(uint32_t) {}
 void SetPedVitals(uint32_t, float, float) {}
 void NoteRemoteClothes(uint32_t, const std::vector<WorldRPG::Entity::PedClothes>&) {}
 void NoteRemoteButtons(uint32_t, uint8_t) {}
+void RpcSetPosition(uint32_t, float, float, float) {}
+void RpcSetFrozen(uint32_t, bool) {}
+void NoteRemoteWasted(uint32_t, int, int, int) {}
+bool ConsumeHostedWasted(HostedWasted&) { return false; }
+void NoteRemoteSpawn(uint32_t) {}
+void RpcSetRotation(uint32_t, float) {}
+void RpcSetInterior(uint32_t, uint8_t) {}
+void RpcSetHealth(uint32_t, float) {}
+void RpcSetArmor(uint32_t, float) {}
+void QueuePedRpc(uint32_t, const PedRpcOp&) {}
+void RpcSetAlpha(uint32_t, uint8_t) {}
+void RpcSetCollisions(uint32_t, bool) {}
 
 // ---------------------------------------------------------------------------
 // GameEngine class: no libGTASA on the host, every call reports "not available".

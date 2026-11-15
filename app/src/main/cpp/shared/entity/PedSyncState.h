@@ -46,6 +46,10 @@ bool SamplePose(uint32_t id);
 // Drop all state for a ped that left the world (ForgetRemote / ENTITY_REMOVE).
 void Forget(uint32_t id);
 
+// CClientPed::SetPosition with bResetInterpolation (SET_ELEMENT_POSITION): the pose is the target and any running
+// interpolation stops, so SamplePose does not push the previous target back.
+void Teleport(uint32_t id, const Vec3& pos);
+
 // Monotonic milliseconds (reference CClientTime::GetTime).
 uint64_t NowMs();
 

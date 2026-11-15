@@ -94,6 +94,18 @@ void OnPlayerQuit(uint32_t id);
 bool IsKnownPlayer(uint32_t id);
 // A PLAYER_PURESYNC came from this id: it is a player (kind 1) even without a PLAYER_LIST or PLAYER_SPAWN record.
 void NotePlayerSeen(uint32_t id);
+// CClientEntity::SetSyncTimeContext from an RPC (SET_ELEMENT_POSITION, SET_ELEMENT_HEALTH, SET_PED_ARMOR, ...).
+void SetSyncTimeContext(uint32_t id, uint8_t context);
+// Element record updates from RPCs, so the per-frame actor copy does not undo them.
+void NoteElementPosition(uint32_t id, float x, float y, float z);
+void NoteElementInterior(uint32_t id, uint8_t interior);
+void NoteElementModel(uint32_t id, int model);
+// CClientEntity::SetDimension and CClientGame::SetAllDimensions. A ped whose dimension is not the local one is streamed
+// out (no body). DimensionOf returns the local dimension for an element this session has no record of.
+void NoteElementDimension(uint32_t id, uint16_t dimension);
+uint16_t DimensionOf(uint32_t id);
+void SetLocalDimension(uint16_t dimension);
+uint16_t LocalDimension();
 
 // Radar blips and the F11 snapshot. Call on the game thread.
 void Tick(float playerX, float playerY, float playerZ);

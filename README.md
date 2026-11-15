@@ -17,6 +17,73 @@ A high-performance, native ARM64 (aarch64) Android client port of **Multi Theft 
 
 ---
 
+## Install the Release APK (players)
+
+The APK on the [Releases page](https://github.com/samuk190/mta-sa-neon-android/releases) contains **only this project's code**. It does not include any GTA San Andreas file. You copy those from your own copy of the game into one folder on the phone, and the app runs the game from there.
+
+### What you need
+
+- An ARM64 (aarch64) Android phone, Android 8.0 or newer.
+- Your own, legally purchased **GTA San Andreas for Android, version 2.10** (Google Play), installed on the phone or on a PC.
+- A PC with [adb](https://developer.android.com/tools/releases/platform-tools) (recommended), or a file manager that can write to `Android/data`.
+
+### 1. Install the APK
+
+Download `mta-sa-neon-android-<version>.apk` from the Releases page and install it. Open it once, then close it: Android creates the app's folder on the first start.
+
+### 2. Get the files from your copy of the game
+
+GTA San Andreas for Android keeps its files in two places. Both are ZIP archives that any unzip tool opens:
+
+| Source | Where it is | What to take |
+|---|---|---|
+| Game APK | `adb shell pm path com.rockstargames.gtasa`, then `adb pull` that `base.apk` | `lib/arm64-v8a/libGTASA.so`, `libSCAnd.so`, `libOpenAL64.so`, and everything inside `assets/` |
+| OBB data | `Android/obb/com.rockstargames.gtasa/*.obb` | everything inside (`anim/`, `audio/`, `data/`, `models/`, `texdb/`, ...) |
+
+### 3. Put them in the game folder
+
+The default game folder is:
+
+```text
+/sdcard/Android/data/com.worldrpg.neonlauncher/files/game_assets/
+```
+
+Arrange the files like this (the three libraries go in `lib/`, everything else at the top):
+
+```text
+game_assets/
+├── lib/
+│   ├── libGTASA.so          <-- from the game APK, lib/arm64-v8a/
+│   ├── libSCAnd.so
+│   └── libOpenAL64.so
+├── anim/  audio/  models/  Text/  Textures/
+├── data/
+│   ├── gta.dat              <-- required
+│   └── handling.cfg         <-- required
+├── texdb/
+│   ├── gta3.img             <-- required
+│   └── menu/menu.pvr.dat    <-- required
+├── assetfile.txt
+└── scache.txt  scache_small.txt  scache_small_low.txt
+```
+
+With adb, after extracting both archives into one folder `gta_sa/` on your PC (with the libraries in `gta_sa/lib/`):
+
+```bash
+adb push gta_sa/. /sdcard/Android/data/com.worldrpg.neonlauncher/files/game_assets/
+```
+
+### 4. Play
+
+Open the app, pick a server, tap **Join**, enter your nickname and tap **Play**. If the three libraries are missing, the app names them and the folder it expects them in. If a required data file is missing (`data/gta.dat`, `data/handling.cfg`, `texdb/gta3.img`, `texdb/menu/menu.pvr.dat`), the game does not start: check the layout above.
+
+Optional, for the loading screen artwork and font of the MTA desktop client: copy `MTA/cgui/images/loadscreens/loadsc1.jpg` ... `loadsc14.jpg` and `MTA/cgui/sabankgothic.ttf` from an MTA:SA desktop installation into `game_assets/MTA/cgui/` (same sub-folders). Without them the loading screen is plain black.
+
+> [!NOTE]
+> Uninstalling the app deletes `Android/data/com.worldrpg.neonlauncher/`, including the game folder. Keep your extracted copy on the PC.
+
+---
+
 ## Architecture Highlights
 
 - **Platform:** Android 8.0+ (API level 26 minimum, Target API 34).
@@ -49,7 +116,7 @@ A complete line-by-line conversion catalog comparing all 1,581 desktop MTA clien
 | **Peds & Players (CLuaPedDefs, CLuaPlayerDefs)** | [PEDS_AND_PLAYERS.md](docs/lua-functions/PEDS_AND_PLAYERS.md) | 206 | 27 | 77 | 102 | 13.1% |
 | **World, Objects & Environment** | [WORLD_AND_OBJECTS.md](docs/lua-functions/WORLD_AND_OBJECTS.md) | 227 | 124 | 11 | 92 | 54.6% |
 | **Element Tree & Data (CLuaElementDefs)** | [ELEMENTS.md](docs/lua-functions/ELEMENTS.md) | 81 | 50 | 8 | 23 | 61.7% |
-| **GUI & 2D/3D Drawing (DX & CEGUI)** | [GUI_AND_DX.md](docs/lua-functions/GUI_AND_DX.md) | 199 | 146 | 2 | 51 | 73.4% |
+| **GUI & 2D/3D Drawing (DX & CEGUI)** | [GUI_AND_DX.md](docs/lua-functions/GUI_AND_DX.md) | 199 | 175 | 0 | 24 | 87.9% |
 | **Engine & Model Replacement (DFF, TXD, COL)** | [ENGINE_AND_MODELS.md](docs/lua-functions/ENGINE_AND_MODELS.md) | 125 | 1 | 15 | 109 | 0.8% |
 | **Audio & Voice System (CLuaAudioDefs)** | [AUDIO_AND_VOICE.md](docs/lua-functions/AUDIO_AND_VOICE.md) | 57 | 19 | 1 | 37 | 33.3% |
 | **Camera & Viewport (CLuaCameraDefs)** | [CAMERA.md](docs/lua-functions/CAMERA.md) | 47 | 47 | 0 | 0 | 100.0% |
@@ -57,7 +124,7 @@ A complete line-by-line conversion catalog comparing all 1,581 desktop MTA clien
 | **Core System, Networking & Utilities** | [CORE_AND_UTILITY.md](docs/lua-functions/CORE_AND_UTILITY.md) | 195 | 167 | 2 | 26 | 85.6% |
 | **Markers, Blips, ColShapes & Spatial** | [MARKERS_AND_SPATIAL.md](docs/lua-functions/MARKERS_AND_SPATIAL.md) | 145 | 0 | 3 | 142 | 0.0% |
 | **Web Browser & Compatibility (CEF / Discord)** | [BROWSER_AND_COMPATIBILITY.md](docs/lua-functions/BROWSER_AND_COMPATIBILITY.md) | 103 | 4 | 0 | 99 | 3.9% |
-| **TOTAL** | **All Categories** | **1581** | **602** | **138** | **841** | **38.1%** |
+| **TOTAL** | **All Categories** | **1581** | **631** | **136** | **814** | **39.9%** |
 
 *Full machine-generated parity matrix: [`docs/PARITY_MATRIX.md`](docs/PARITY_MATRIX.md)*
 
@@ -260,10 +327,9 @@ mta-sa-neon-android/
 
 1. Open your GTA SA Mobile 2.10 APK as a ZIP archive.
 2. Navigate to `lib/arm64-v8a/`.
-3. Copy `libGTASA.so` (and optional companion libraries `libSCAnd.so`, `libOpenAL64.so`) into:
-   ```text
-   app/src/main/jniLibs/arm64-v8a/libGTASA.so
-   ```
+3. Copy `libGTASA.so`, `libSCAnd.so` and `libOpenAL64.so` into the game folder on the device, under `lib/` (`game_assets/lib/`), as in [Install the Release APK](#install-the-release-apk-players). The app copies them into its private storage and loads them from there (`GameLibraries.java`).
+
+A debug build also packages them when they are in `app/src/main/jniLibs/arm64-v8a/` (git-ignored); that copy is used first. The release build never packages them, nor the game files in `app/src/main/assets/` (`american.gxt`, fonts, `mainV1.scm`, `menu.pvr`, `scache*.txt`); the engine reads those from the game folder first. To test a debug build exactly as the release behaves, build with `./gradlew assembleDebug -PnoGameFiles`.
 
 ### 4. Transferring Assets to Device
 
@@ -298,6 +364,13 @@ adb push game_assets/. /sdcard/Android/data/com.worldrpg.neonlauncher/files/game
 ```bash
 # Debug build (generates APK in app/build/outputs/apk/debug/)
 ./gradlew assembleDebug
+
+# Release build (app/build/outputs/apk/release/), signed with keystore.properties when present:
+#   storeFile=/path/to/release.jks
+#   storePassword=...
+#   keyAlias=...
+#   keyPassword=...
+./gradlew assembleRelease
 
 # Install directly to connected device
 ./gradlew installDebug

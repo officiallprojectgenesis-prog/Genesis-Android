@@ -30,7 +30,16 @@ bool InstallRemoteControlHook();
 bool RemoteControlHookActive();
 // Stick in PC CControllerState units (-128..128). Negative Y is forward.
 // fire sets ButtonCircle (CControllerState offset 0x26) to 255, the desktop pressed value.
-void SetRemoteStick(void* ped, int stickX, int stickY, bool fire);
+// camera: the remote player's keysync camera rotation (TheCamera+0x154 for the call), as desktop SwitchContext.
+// CWorld::Remove plus CPed::~CPed and CPed::operator delete (desktop CPlayerPedSA::~CPlayerPedSA). Game thread.
+bool DestroyRemotePlayerPed(void* ped);
+// True when the body has its own CPlayerPedData and CPedClothesDesc (desktop CPlayerPedSA ctor), so model 0 can be dressed.
+bool HasPrivatePlayerData(void* ped);
+bool CanAttachPrivatePlayerData();
+void SetRemoteStick(void* ped, int stickX, int stickY, bool fire, float camera = 0.f, bool hasCamera = false,
+                    uint8_t buttons = 0);
+// True when remote bodies get their own virtual touch (CTouchInterface hooks installed).
+bool RemoteTouchActive();
 void ClearRemoteStick(void* ped);
 
 // Hooks CWeapon::Fire once (desktop CWeaponSA::Fire / CMultiplayerSA shotsync). For the local ped with a

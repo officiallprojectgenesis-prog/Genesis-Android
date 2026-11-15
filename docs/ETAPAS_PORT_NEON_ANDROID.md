@@ -23,7 +23,7 @@ The [full architectural plan](PLANO_PORT_NEON_ANDROID.md) details audits, depend
 | **P3.2 Chat Layout** | P2 | The chat does not match the MTA desktop client: lines are spaced too far apart and the layout differs. Match the desktop chat box (line height, padding, font, colour codes, and the line limit) so both clients show the same chat. Verify with a screenshot of the desktop and the phone side by side. | Implemented (line step = font height, one background box); side-by-side desktop screenshot pending |
 | **P4. Lua, DX, GUI & Browser** | P2, P3 | RenderWare 2D DX draw calls, custom UI interactions, CEGUI/WebView bindings. | In Progress (Desktop Tahoma 15px text scaling matched in MtaDxView; GUI element model with window, button, edit, memo, grid list, tabs, scroll pane, static text, setVisible, destroyElement; showCursor touch routing to onClientClick; mobile HUD component toggles via CWidgetPlayerInfo::Draw NOP patching. Open: DX shaders, `guiCreateFont` (CreateGuiFont is not hooked), CEF webview browser) |
 | **P4.1 Wardrobe preview** | P4 | Registration clothes preview matches the desktop client. Port order and desktop line ranges: [ROADMAP_WARDROBE_PREVIEW.md](ROADMAP_WARDROBE_PREVIEW.md). | In progress. The eight preview calls are bound. The login cinematic (`setCameraMatrix` from `onClientPreRender`) is confirmed on the S25. Opening music uses `playSound`, `stopSound` and `setSoundVolume`. The clothes preview itself has not been recorded on a device. |
-| **P5. Neon Parity Matrix** | P3, P4 | Complete API matrix, events, and elements matching MTA Neon desktop capabilities. | In Progress (Derived from source via tools/parity_matrix.py -> docs/PARITY_MATRIX.md. 2026-11-14: Lua functions 602 implemented / 138 stub / 841 missing of 1581 (38.1%); GUI 146/199 (73.4%), CLuaGUIDefs 137/137; camera 47/47; client events 10/144 (6.9%); inbound packets 24/62; outbound 9/31; element types 13/17) |
+| **P5. Neon Parity Matrix** | P3, P4 | Complete API matrix, events, and elements matching MTA Neon desktop capabilities. | In Progress (Derived from source via tools/parity_matrix.py -> docs/PARITY_MATRIX.md. 2026-11-14: Lua functions 631 implemented / 136 stub / 814 missing of 1581 (39.9%); GUI and DX 175/199 (87.9%), CLuaGUIDefs 137/137, CLuaDrawingDefs 32/43, SVG 6/6; camera 47/47; client events 11/144 (7.6%); inbound packets 24/62; outbound 10/31; element types 13/17) |
 | **P6. Release Distribution** | P5 | Reproducible release builds, multi-device hardware validation, automated updates. | Pending |
 
 P1A (Engine/Platform) and P1B (Network Transport) are independent parallel tracks. The approval of the port requires a fully native Android ARM64 session connecting to a live server.
@@ -120,12 +120,48 @@ Derived directly from `mta_neon_source` vs `app/src/main/cpp/` via `tools/parity
 
 | Category | Desktop Total | Android Implemented | Android Stubs | Remaining / Missing | Priority |
 |---|---|---|---|---|---|
-| **Lua Core Functions** | 1,581 | 602 (38.1%) | 138 (8.7%) | 841 (53.2%) | High |
-| **Client Events** | 144 | 10 (6.9%) | 0 | 134 (93.1%) | High |
+| **Lua Core Functions** | 1,581 | 631 (39.9%) | 136 (8.6%) | 814 (51.5%) | High |
+| **Client Events** | 144 | 11 (7.6%) | 0 | 133 (92.4%) | High |
 | **Inbound Packets (S->C)** | 62 | 24 (38.7%) | 0 | 38 (61.3%) | Medium |
-| **Outbound Packets (C->S)** | 31 | 9 (29.0%) | 0 | 22 (71.0%) | Medium |
+| **Outbound Packets (C->S)** | 31 | 10 (32.3%) | 0 | 21 (67.7%) | Medium |
 | **Element Types (ENTITY_ADD)**| 17 | 13 (76.5%) | 1 (5.9%) | 3 (17.6%) | Low |
 | **OOP Lua Classes** | 63 | 0 (0.0%) | 0 | 63 (100.0%) | Low |
+
+
+### Lua functions done, by category (2026-11-14)
+
+Regenerate with `python3 tools/parity_matrix.py && python3 tools/generate_lua_categories.py`.
+
+| Category | Total | Implemented | Stub | Missing | Done |
+|---|---|---|---|---|---|
+| **Vehicles (CLuaVehicleDefs)** | 165 | 9 | 19 | 137 | 5.5% |
+| **Peds & Players (CLuaPedDefs, CLuaPlayerDefs)** | 206 | 27 | 77 | 102 | 13.1% |
+| **World, Objects & Environment** | 227 | 124 | 11 | 92 | 54.6% |
+| **Element Tree & Data (CLuaElementDefs)** | 81 | 50 | 8 | 23 | 61.7% |
+| **GUI & 2D/3D Drawing (DX & CEGUI)** | 199 | 175 | 0 | 24 | 87.9% |
+| **Engine & Model Replacement (DFF, TXD, COL)** | 125 | 1 | 15 | 109 | 0.8% |
+| **Audio & Voice System (CLuaAudioDefs)** | 57 | 19 | 1 | 37 | 33.3% |
+| **Camera & Viewport (CLuaCameraDefs)** | 47 | 47 | 0 | 0 | 100.0% |
+| **Weapons & Projectiles (CLuaWeaponDefs, CLuaProjectileDefs)** | 31 | 8 | 0 | 23 | 25.8% |
+| **Core System, Networking & Utilities** | 195 | 167 | 2 | 26 | 85.6% |
+| **Markers, Blips, ColShapes & Spatial** | 145 | 0 | 3 | 142 | 0.0% |
+| **Web Browser & Compatibility (CEF / Discord)** | 103 | 4 | 0 | 99 | 3.9% |
+| **TOTAL** | **1581** | **631** | **136** | **814** | **39.9%** |
+
+### GUI and DX: plan for the calls left (24 missing), easiest first
+
+| Step | Calls | Approach | Needs | State |
+|---|---|---|---|---|
+| 1 | `dxGetStatus` | Desktop table with the values the phone knows | Nothing new | Done |
+| 2 | `dxCreateFont` | TTF loaded by the overlay; text calls take the font element | Canvas | Done |
+| 3 | `dxDrawMaterialPrimitive` | Textured 2D triangles | Canvas (Android 10+) | Done |
+| 4 | `dxCreateRenderTarget`, `dxSetRenderTarget` | Draw lines between the calls go to an offscreen bitmap | Canvas | Done |
+| 5 | `dxGetTexturePixels`, `dxSetTexturePixels`, `dxGetPixelsSize`, `dxConvertPixels` | Decode and encode through Android bitmap codecs; textures made from pixels live as overlay bitmaps | A bitmap bridge to the Activity | Done (codec paths need a device) |
+| 6 | `svgCreate`, `svgGetDocumentXML`, `svgSetDocumentXML`, `svgGetSize`, `svgSetSize`, `svgSetUpdateCallback` | Element and XML stored natively; picture drawn by an SVG library | The AndroidSVG library (`com.caverock:androidsvg-aar:1.4`, added to `app/build.gradle.kts`) | Done (the picture needs a device) |
+| 7 | `dxCreateScreenSource`, `dxUpdateScreenSource` | Copy the game surface with `PixelCopy` | Device testing | Done (the copy needs a device) |
+| 8 | `dxDrawLine3D`, `dxDrawMaterialLine3D`, `dxDrawMaterialSectionLine3D`, `dxDrawPrimitive3D`, `dxDrawMaterialPrimitive3D`, `dxDrawModel3D`, `dxDrawWiredSphere` | Project world points with the live game camera and draw on the overlay, without a depth test | A libGTASA camera hook, device testing. The same hook gives `getScreenFromWorldPosition` | Open |
+| 9 | `dxCreateShader`, `dxSetShaderValue`, `dxSetShaderTessellation`, `dxSetShaderTransform` | HLSL effect files need an OpenGL ES overlay and a translation to GLSL ES | A new renderer | Open |
+| 10 | Model 2DFX (13 calls) | Read and write the 2D effects of game models | libGTASA model-info hooks, device testing | Open |
 
 ### Critical Missing Subsystems:
 1. **Audio / Voice System**:

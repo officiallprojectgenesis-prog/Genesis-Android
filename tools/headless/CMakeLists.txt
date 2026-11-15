@@ -22,6 +22,7 @@ set(NATIVE_DIR "${HEADLESS_DIR}/../../app/src/main/cpp")
 set(NATIVE_SOURCES
     # Join protocol (the same object the JNI layer drives).
     "${NATIVE_DIR}/net/NeonJoinProtocol.cpp"
+    "${NATIVE_DIR}/net/DisconnectMessages.cpp"
 
     # RakNet-compatible wrapper on top of the native MTA transport.
     "${NATIVE_DIR}/net/raknet/RakNetWrapper.cpp"
@@ -66,6 +67,7 @@ set(NATIVE_SOURCES
     "${NATIVE_DIR}/shared/VehicleSync.cpp"
     "${NATIVE_DIR}/shared/CombatSync.cpp"
     "${NATIVE_DIR}/shared/ServerWorld.cpp"
+    "${NATIVE_DIR}/shared/ConnectionLoading.cpp"
     "${NATIVE_DIR}/shared/entity/EntityAddCore.cpp"
     "${NATIVE_DIR}/shared/entity/EntityAddDummy.cpp"
     "${NATIVE_DIR}/shared/entity/EntityAddMarker.cpp"

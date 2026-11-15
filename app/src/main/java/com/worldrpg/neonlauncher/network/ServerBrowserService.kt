@@ -1,13 +1,15 @@
 package com.worldrpg.neonlauncher.network
 
-import com.worldrpg.neonlauncher.BuildConfig
-import kotlinx.coroutines.delay
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.channelFlow
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 /**
- * Service for fetching MTA:SA server list.
- * Currently a placeholder - actual implementation will query master server or cached list.
+ * Server list: the server configured in .env plus the player's favorites, each
+ * queried live over ASE ([ServerQuery]). There is no master server list yet.
  */
 class ServerBrowserService {
 
@@ -18,47 +20,38 @@ class ServerBrowserService {
     }
 
     /**
-     * Fetches the server list as a Flow of states.
-     * Uses default server configured via .env / BuildConfig.
+     * Emits the list right away with every server QUERYING, then again each time
+     * a query answers or times out.
      */
-    fun fetchServerList(): Flow<BrowserState> = flow {
-        emit(BrowserState.Loading)
+    fun fetchServerList(favoriteKeys: Set<String> = emptySet()): Flow<BrowserState> = channelFlow {
+        send(BrowserState.Loading)
+        val configured = ServerInfo.configured()
+        val keys = LinkedHashSet<String>().apply {
+            add(configured.getKey())
+            addAll(favoriteKeys.sorted())
+        }
+        val servers = keys.map { key ->
+            (if (key == configured.getKey()) configured else ServerInfo.fromFavoriteKey(key))
+                .copy(isFavorite = key in favoriteKeys)
+        }.toMutableList()
+        send(BrowserState.Success(servers.toList()))
 
-        try {
-            // Simulate network delay
-            delay(800)
-
-            // Placeholder server list using configured defaults from .env
-            val servers = listOf(
-                ServerInfo(
-                    name = BuildConfig.DEFAULT_SERVER_NAME,
-                    ip = BuildConfig.DEFAULT_SERVER_IP,
-                    port = BuildConfig.DEFAULT_SERVER_PORT,
-                    players = 42,
-                    maxPlayers = 100,
-                    ping = 85
-                )
-            )
-
-            emit(BrowserState.Success(servers))
-        } catch (e: Exception) {
-            emit(BrowserState.Error(e.message ?: "Unknown error"))
+        val lock = Mutex()
+        coroutineScope {
+            servers.indices.forEach { index ->
+                launch {
+                    val s = servers[index]
+                    val result = ServerQuery.query(s.ip, s.port)
+                    lock.withLock {
+                        servers[index] = servers[index].withQuery(result)
+                        send(BrowserState.Success(servers.toList()))
+                    }
+                }
+            }
         }
     }
 
-    /**
-     * Pings a single server to get current player count and latency.
-     * Placeholder - actual implementation uses native RakNet ping.
-     */
-    suspend fun pingServer(ip: String, port: Int): ServerInfo? {
-        delay(200)
-        return ServerInfo(
-            name = "Server",
-            ip = ip,
-            port = port,
-            players = 0,
-            maxPlayers = 100,
-            ping = 50
-        )
-    }
+    /** Queries one server. */
+    suspend fun refresh(server: ServerInfo): ServerInfo =
+        server.withQuery(ServerQuery.query(server.ip, server.port))
 }

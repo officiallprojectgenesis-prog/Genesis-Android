@@ -82,6 +82,8 @@ struct DxRuntime {
     std::string frame;
     std::string postGuiFrame;
     std::string owner;  // resource whose code is running; tags the handlers and timers it registers
+    // The device self-test script was looked for in this VM (RunDeviceSelfTest).
+    bool selfTestRan = false;
     uint16_t ownerNetId = 0;
     uint32_t ownerGeneration = 0;
 };
@@ -420,6 +422,30 @@ bool ActiveVmRunCommand(const char* name, const char* args) {
         handled = true;
     }
     return handled;
+}
+
+// Device testing without a server change: after the join, the script
+// files/neon_selftest.lua in the app's private directory runs once per VM as the resource
+// "neon_selftest". Put it there with
+//   adb shell run-as com.worldrpg.neonlauncher sh -c 'cat > files/neon_selftest.lua' < test.lua
+// No file, no effect. Its print() lines go to logcat.
+static void RunDeviceSelfTest() {
+#ifdef __ANDROID__
+    if (g_dx.selfTestRan || !g_dx.L || WorldRPG::ServerWorld::LocalPlayer() == 0) return;
+    g_dx.selfTestRan = true;
+    const char* path = "/data/data/com.worldrpg.neonlauncher/files/neon_selftest.lua";
+    std::FILE* probe = std::fopen(path, "rb");
+    if (!probe) return;
+    std::fclose(probe);
+    lua_State* L = g_dx.L;
+    OwnerScope scope("neon_selftest", 0, 0);
+    if (luaL_loadfile(L, path) != LUA_OK || lua_pcall(L, 0, 0, 0) != LUA_OK) {
+        LUA_LOGE("SELFTEST failed: %s", lua_tostring(L, -1));
+        lua_pop(L, 1);
+        return;
+    }
+    LUA_LOGI("SELFTEST script loaded");
+#endif
 }
 
 // Desktop CClientVectorGraphic::OnUpdate: after an svg's picture changed, its update callback is
@@ -2680,6 +2706,7 @@ std::string LuaVMStub::pumpDx() {
     ApplyKeyEvents();
     ApplyChatCommands();
     PumpEndedSounds();
+    RunDeviceSelfTest();
     ApplySvgUpdates();
     g_dx.frame.clear();
     g_dx.postGuiFrame.clear();
@@ -3034,6 +3061,30 @@ void ActiveVmQueueCursor(int action, float x, float y) {
     std::lock_guard<std::mutex> lock(g_cursorMutex);
     if (g_cursorQueue.size() < 256) g_cursorQueue.push_back(CursorEvent{action, x, y});
 }
+// onClientTransferBoxProgressChange(downloadedSizeTotal, downloadTotalBytes) and
+// onClientTransferBoxVisibilityChange(isVisible) on the root, source the root
+// (g_pClientGame->GetRootEntity()->CallEvent). Registered in CClientGame.cpp:2912-2913.
+void ActiveVmFireTransferProgress(double downloadedBytes, double totalBytes) {
+    if (!g_dx.L || g_dx.handlers.find("onClientTransferBoxProgressChange") == g_dx.handlers.end()) return;
+    lua_getglobal(g_dx.L, "source");
+    PushElement(g_dx.L, ClientRootElement());
+    lua_setglobal(g_dx.L, "source");
+    lua_pushnumber(g_dx.L, downloadedBytes);
+    lua_pushnumber(g_dx.L, totalBytes);
+    fireHandlers("onClientTransferBoxProgressChange", 2, ClientRootElement());
+    lua_setglobal(g_dx.L, "source");
+}
+
+void ActiveVmFireTransferVisibility(bool visible) {
+    if (!g_dx.L || g_dx.handlers.find("onClientTransferBoxVisibilityChange") == g_dx.handlers.end()) return;
+    lua_getglobal(g_dx.L, "source");
+    PushElement(g_dx.L, ClientRootElement());
+    lua_setglobal(g_dx.L, "source");
+    lua_pushboolean(g_dx.L, visible ? 1 : 0);
+    fireHandlers("onClientTransferBoxVisibilityChange", 1, ClientRootElement());
+    lua_setglobal(g_dx.L, "source");
+}
+
 void ActiveVmNoteSoundEnded(uint32_t id) {
     std::lock_guard<std::mutex> lock(g_soundEndMu);
     if (g_soundEnded.size() < 32) g_soundEnded.push_back(id);

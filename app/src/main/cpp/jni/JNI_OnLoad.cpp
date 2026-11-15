@@ -1,3 +1,4 @@
+#include "../shared/ConnectionLoading.h"
 #include <jni.h>
 #include <cstring>
 #include <string>
@@ -483,6 +484,9 @@ Java_com_worldrpg_neonlauncher_game_GameActivity_nativeInit(JNIEnv* env, jobject
                     WorldRPG::Net::HttpDownloader::BuildServerBase(g_state->join->Info(), g_serverHost));
             }
         } else if (state == JoinState::Failed) {
+            // Desktop ~CClientGame / CCore::RemoveMessageBox path: never leave the screen over an error.
+            WorldRPG::ConnectionLoading::End();
+            WorldRPG::ConnectionLoading::Flush();
             PostConnectionState(false, detail);
         }
     });
@@ -584,6 +588,14 @@ Java_com_worldrpg_neonlauncher_game_GameActivity_nativeConnect(
     }
     g_enterServer = true;
     g_sessionOpened = true;
+    {
+        // The phone opens the loading screen at connect: GTA is still loading underneath, and its
+        // counter is the first part of the bar. Desktop shows CConnectManager's box here instead.
+        char status[160];
+        std::snprintf(status, sizeof(status), "Connecting to %s:%d", g_serverHost.c_str(), static_cast<int>(port));
+        WorldRPG::ConnectionLoading::End();
+        WorldRPG::ConnectionLoading::Begin(status);
+    }
     return JNI_TRUE;
 }
 
@@ -629,13 +641,25 @@ Java_com_worldrpg_neonlauncher_game_GameActivity_nativePulse(JNIEnv* env, jobjec
     if (g_enterServer.load()) WorldRPG::Game::BeginServerSession();
     g_state->network->DoPulse();
     g_state->join->Pulse();
+    bool transferring = false;
     {
         // Transfer box (desktop CTransferBox): "downloaded|total" while files are in flight, then one
         // empty line. Sent only when the numbers change.
         static uint64_t lastDone = ~0ull, lastTotal = ~0ull;
         static bool shown = false;
         const auto transfer = WorldRPG::Net::HttpDownloader::GetTransfer();
-        if (transfer.active && transfer.total > 0) {
+        transferring = transfer.active && transfer.total > 0;
+        if (transferring) {
+            // Desktop CResourceFileDownloadManager::AddDownloadSize (245-269) on the first queued file,
+            // then DoPulse (198-210) every pulse: loading status with bytes done / total, and the Lua event.
+            if (!shown) {
+                WorldRPG::ConnectionLoading::Update(WorldRPG::ConnectionLoading::Phase::Download, "Downloading resources", 0.0f);
+                WorldRPG::Script::ActiveVmFireTransferVisibility(true);
+            }
+            WorldRPG::ConnectionLoading::Update(WorldRPG::ConnectionLoading::Phase::Download, "Downloading resources",
+                static_cast<float>(static_cast<double>(transfer.done) / static_cast<double>(transfer.total)));
+            WorldRPG::Script::ActiveVmFireTransferProgress(static_cast<double>(transfer.done),
+                                                           static_cast<double>(transfer.total));
             if (transfer.done != lastDone || transfer.total != lastTotal) {
                 lastDone = transfer.done;
                 lastTotal = transfer.total;
@@ -649,8 +673,19 @@ Java_com_worldrpg_neonlauncher_game_GameActivity_nativePulse(JNIEnv* env, jobjec
             shown = false;
             lastDone = lastTotal = ~0ull;
             WorldRPG::JniBridge::PostGameLine(3, "0|0");
+            // Desktop DoPulse when the last group finished (214-232): hide, event, then "Processing resources".
+            WorldRPG::Script::ActiveVmFireTransferVisibility(false);
+            WorldRPG::ConnectionLoading::Update(WorldRPG::ConnectionLoading::Phase::Process, "Processing resources");
         }
     }
+    // GTA's own load counter feeds the engine part of the bar until the session leaves the frontend.
+    WorldRPG::ConnectionLoading::SetEngine(WorldRPG::Game::ServerSessionLive() ? 1.0f
+                                                                              : WorldRPG::ConnectionLoading::ReadEngineLoad());
+    // Desktop CClientGame::PulseConnectionLoading (CClientGame.cpp:3657-3672). GTA is loaded once the
+    // session left the frontend (desktop m_bGameLoaded).
+    WorldRPG::ConnectionLoading::Pulse(g_state->join->State() == WorldRPG::Net::JoinState::Complete,
+                                       WorldRPG::Game::ServerSessionLive(), transferring);
+    WorldRPG::ConnectionLoading::Flush();
     // Client scripts of resources that became ready run here, on the VM thread.
     WorldRPG::Script::ActiveVmPulseResources();
     if (!g_onDxFrameMethod || !g_gameActivityRef) return;
@@ -734,6 +769,7 @@ Java_com_worldrpg_neonlauncher_game_GameActivity_nativeDestroy(JNIEnv* env, jobj
     g_state->network->Shutdown();
     g_hudRenderer = nullptr;
     g_enterServer = false;
+    WorldRPG::ConnectionLoading::End();
     // The Activity and its chat input bar are gone.
     WorldRPG::Script::MtaWindowSetChatInputActive(false);
     g_state.reset();

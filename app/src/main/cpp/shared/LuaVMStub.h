@@ -117,6 +117,10 @@ void ActiveVmQueueCursor(int action, float x, float y);
 // previous value, backspaces is how many characters were removed before that, and
 // key is "enter" or empty. Applied on the VM thread in pumpDx.
 void ActiveVmQueueScriptInput(const char* text, int backspaces, const char* key);
+// Transfer box events on the root, VM thread (nativePulse). Desktop
+// CResourceFileDownloadManager::DoPulse / AddDownloadSize (CResourceFileDownloadManager.cpp:205-210, 221-225, 259-263).
+void ActiveVmFireTransferProgress(double downloadedBytes, double totalBytes);
+void ActiveVmFireTransferVisibility(bool visible);
 // MediaPlayer finished a playSound id. Any thread.
 void ActiveVmNoteSoundEnded(uint32_t id);
 // MediaPlayer prepared a sound. Seconds are zero while duration is unknown (streams).

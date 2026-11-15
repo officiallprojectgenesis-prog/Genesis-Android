@@ -157,6 +157,16 @@ bool SamplePose(uint32_t id) {
     return true;
 }
 
+void Teleport(uint32_t id, const Vec3& pos) {
+    if (!ValidId(id)) return;
+    std::lock_guard<std::mutex> lock(gMutex);
+    auto it = gPeds.find(id);
+    if (it == gPeds.end()) return;
+    it->second.pose = pos;
+    it->second.havePose = true;
+    it->second.position = {};
+}
+
 void Forget(uint32_t id) {
     std::lock_guard<std::mutex> lock(gMutex);
     gPeds.erase(id);

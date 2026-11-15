@@ -62,11 +62,15 @@ These are suspects ranked by evidence. None of them is confirmed yet. Phase 0 te
 | 1.1-1.9 | Kept in `PedSpawn`, host test `CheckPedEntityBody`. 1.10 (model validation) open. |
 | 2.3 health/armor, frozen, 2.10, 2.11, 2.12 | In the tree. |
 | 2.8 seat | Reverted to `DIAG`: crashed on device (fault `0x18f`, `RemoveWeaponWhenEnteringVehicle` needs a `CPlayerInfo` the remote body lacks). |
-| 2.3 collision, 2.4 weapons, 2.5, 2.6 alpha/headless, 2.7, 2.9, 2.13 | `DIAG` only. Weapons need the weapon-model request first. |
+| 2.3 collision, 2.4 weapons, 2.6 alpha, 2.13 animation | In the tree through the Phase 6 RPC queue (ENTITY_ADD record). |
+| 2.5, 2.6 headless, 2.7, 2.9 | `DIAG` only. |
 | 3.1, 3.2 (sync state and locks) | In the tree. 3.3 open. |
 | 4.1 health/armor, 4.2 | In the tree. A PED_STOPSYNC stale-health lock was also fixed. |
-| 5.1 | Held back until 6.2. The phone drops SET_ELEMENT_POSITION, so its stored context goes stale and the check would reject every later PED_SYNC. |
-| 5.2-8 | Not started. |
+| 5.1 | In the tree (with Phase 6). Was held back until 6.2. The phone drops SET_ELEMENT_POSITION, so its stored context goes stale and the check would reject every later PED_SYNC. |
+| 5.2-5.5 | 5.3 done for remote players (UpdateTargetPosition); server ped observers keep the 0.35 blend. |
+| 6 | In the tree for position, frozen, health, armor, rotation, interior, model (ped and player branches). Extras in the tree too: 6.5 animation (+ progress / speed), 6.7 dimension (stream-out by dimension, PLAYER_SPAWN / PLAYER_LIST / ENTITY_ADD dimension), 6.9 weapons (give / take / take all / ammo / slot), 6.10 alpha and collisions (6.10 velocity open). 6.11 move anim / headless / on fire and 6.12 warp / remove vehicle still open. Notes: packet ids confirmed on device: Lua RPCs on 76 (SHOW_CHAT 119), element RPCs on 77 (`[u8 func][ElementID][args]`). The phone's packet-68 / funcId-120 SHOW_CHAT path never fires; move it to 76 / 119. Read orders taken from desktop: SET_ELEMENT_POSITION (7) x,y,z float, u8 time context, players then an optional u8 warp; SET_ELEMENT_FROZEN (152) 1 bit; SET_ELEMENT_HEALTH (15) float, u8 time context, LockHealth if locked else SetHealth; SET_PED_ARMOR (25) u8 / 1.25, u8 time context; SET_PED_ROTATION (26) SPedRotationSync, u8 time context, optional u8 newWay; SET_ELEMENT_INTERIOR (9) u8 interior, u8 setPosition, then x,y,z if 1; SET_ELEMENT_MODEL (16) u16 model (ResolveModelID, then SetModel). Every time-context write must reach ServerWorld before 5.1 (`CanUpdateSync`) is switched on. A teleport must also reset `PedSyncState`, or `SamplePose` pushes the old target back. |
+| 7 | In the tree: observer (27 / 64 -> Kill, respawn) and owner (damage hook -> PED_WASTED). Lua wasted / damage events open (Phase 8). |
+| 8 | Not started. |
 
 Run the phases in order. A phase is done only after its test passes on a phone, against the live server, with a desktop client connected. A clean compile or a headless pass does not count.
 

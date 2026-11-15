@@ -84,3 +84,8 @@ ghidra-bridge.yaml
 ghidra-bridge.yml
 ghidra-local/
 .ghidra-exports/
+
+# Release signing (kept outside version control)
+keystore.properties
+*.jks
+*.keystore

@@ -137,6 +137,8 @@ private:
 // through that function. The menu flag only starts a new game, which is the
 // single-player path.
 bool BeginServerSession();
+// True once BeginServerSession left the frontend and the game is playing (read-only).
+bool ServerSessionLive();
 void ApplyServerSpawn(float x, float y, float z);
 void CopySpawn(float& x, float& y, float& z);
 // Live pose sampled on the game thread. Heading is radians, -pi..pi.
@@ -287,6 +289,67 @@ void NoteRemoteClothes(uint32_t id, const std::vector<WorldRPG::Entity::PedCloth
 // SFullKeysyncSync button flags of a remote player (0x01 L1, 0x02 R1, 0x04 Square, 0x08 Cross, 0x10 Circle,
 // 0x20 Triangle, 0x40 ShockL, 0x80 PedWalk; SyncStructures.h 1004-1012).
 void NoteRemoteButtons(uint32_t id, uint8_t buttons);
+// Element RPCs (packet 77) applied to peds and players. The game thread writes the body (ApplyRemotePeds).
+void RpcSetPosition(uint32_t id, float x, float y, float z);
+void RpcSetFrozen(uint32_t id, bool frozen);
+// CClientGame::SendPedWastedPacket for a ped this phone hosts (queued by the damage hook, sent by NeonJoinProtocol).
+struct HostedWasted {
+    uint32_t id = 0;
+    uint32_t damager = 0xFFFFFFFFu;
+    int weapon = 0;
+    int bodyPart = 0;
+    int animGroup = 0;
+    int animId = 15;
+    float x = 0, y = 0, z = 0;
+};
+bool ConsumeHostedWasted(HostedWasted& out);
+// PED_WASTED (64) / PLAYER_WASTED (27): CClientPed::Kill on the game thread.
+void NoteRemoteWasted(uint32_t id, int weapon, int animGroup, int animId);
+// PLAYER_SPAWN of a remote player: alive again (CClientPlayer::Spawn).
+void NoteRemoteSpawn(uint32_t id);
+void RpcSetRotation(uint32_t id, float radians);
+void RpcSetInterior(uint32_t id, uint8_t interior);
+void RpcSetHealth(uint32_t id, float health);
+void RpcSetArmor(uint32_t id, float armor);
+// Phase 6 extras: ped animation (CPedRPCs.cpp 259-375) and weapon RPCs (CWeaponRPCs.cpp 26-260), queued per element in
+// arrival order and run on the game thread against the body (the local player included, as on desktop).
+struct PedRpcOp {
+    enum class Kind : uint8_t {
+        Animation,         // CClientPed::RunNamedAnimation
+        KillAnimation,     // CClientPed::KillAnimation
+        AnimationProgress, // CAnimBlendAssociationSA::SetCurrentProgress
+        AnimationSpeed,    // CAnimBlendAssociationSA::SetCurrentSpeed
+        GiveWeapon,        // CWeaponRPCs::GiveWeapon body
+        TakeWeaponAmmo,    // CWeaponRPCs::TakeWeapon with ammo
+        RemoveWeapon,      // CClientPed::RemoveWeapon (TakeWeapon without ammo, local player only)
+        TakeAllWeapons,    // CClientPed::RemoveAllWeapons
+        SetWeaponAmmo,     // CWeaponRPCs::SetWeaponAmmo body
+        SetWeaponSlot,     // CClientPed::SetCurrentWeaponSlot
+    };
+    Kind kind = Kind::Animation;
+    std::string block;
+    std::string name;
+    int32_t time = -1;
+    int32_t blend = 250;
+    bool loop = false;
+    bool updatePosition = false;
+    bool interruptible = false;
+    bool freezeLastFrame = false;
+    float value = 0.f;      // progress or speed
+    int weapon = 0;
+    unsigned ammo = 0;
+    unsigned ammoInClip = 0;
+    bool setCurrent = false;
+    int slot = 0;
+    // Game thread only: frames spent waiting for the anim block or the weapon model to stream in.
+    int waits = 0;
+    bool requested = false;
+};
+void QueuePedRpc(uint32_t id, const PedRpcOp& op);
+// SET_ELEMENT_ALPHA (CElementRPCs.cpp 422-454 -> CClientPed::SetAlpha) and SET_ELEMENT_COLLISIONS_ENABLED (658-696 ->
+// CClientPed::SetUsesCollision). Stored on the element and written to every body it gets.
+void RpcSetAlpha(uint32_t id, uint8_t alpha);
+void RpcSetCollisions(uint32_t id, bool enabled);
 struct HostedPed {
     uint32_t id = 0;
     float x = 0, y = 0, z = 0, heading = 0;

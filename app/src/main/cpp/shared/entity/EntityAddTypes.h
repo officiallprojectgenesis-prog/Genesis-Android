@@ -72,6 +72,8 @@ struct Visual {
     uint8_t interior = 0;
     // ENTITY_ADD sync time context (CPacketHandler::Packet_EntityAdd sets it on the element).
     uint8_t syncTimeContext = 0;
+    // ENTITY_ADD common header / PLAYER_LIST / SET_ELEMENT_DIMENSION (CClientEntity::m_usDimension).
+    uint16_t dimension = 0;
     uint32_t attached = 0xFFFFFFFFu;
     int blipHandle = -1;
     bool blipLive = false;

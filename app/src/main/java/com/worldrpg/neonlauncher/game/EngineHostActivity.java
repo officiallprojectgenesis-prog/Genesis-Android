@@ -51,6 +51,7 @@ public final class EngineHostActivity extends GTASA {
     private MtaChatView chatLog;
     private MtaDxView dxOverlay;
     private MtaTransferBox transferBox;
+    private ConnectionLoadingView loadingView;
     private PlayerMapView playerMap;
     private final Handler mapHandler = new Handler(Looper.getMainLooper());
     private final Runnable mapRefresh = new Runnable() {
@@ -117,6 +118,37 @@ public final class EngineHostActivity extends GTASA {
     private boolean keyListAvailable;
     private native void nativeDropConnection();
     private native String nativeMapSnapshot();
+    // Keeps the Wi-Fi radio out of power save while the game runs. Device 2026-11-14 04:30:57 (UTC-3): traffic stopped in
+    // both directions at once while client and server kept running; the server timed the phone out 6 s later
+    // (PLAYER_TIMEOUT, shim "MOBILE CLIENT REMOVED slot 0 packet 6"). A dozing radio drops UDP that way.
+    private android.net.wifi.WifiManager.WifiLock wifiLock;
+
+    private void acquireWifiLock() {
+        try {
+            android.net.wifi.WifiManager wifi =
+                (android.net.wifi.WifiManager) getApplicationContext().getSystemService(WIFI_SERVICE);
+            if (wifi == null) return;
+            final int mode = Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q
+                ? android.net.wifi.WifiManager.WIFI_MODE_FULL_LOW_LATENCY
+                : android.net.wifi.WifiManager.WIFI_MODE_FULL_HIGH_PERF;
+            wifiLock = wifi.createWifiLock(mode, "worldrpg:game-network");
+            wifiLock.setReferenceCounted(false);
+            wifiLock.acquire();
+            Log.i(TAG, "Wi-Fi lock held (mode " + mode + ")");
+        } catch (RuntimeException error) {
+            Log.w(TAG, "Wi-Fi lock not available", error);
+        }
+    }
+
+    private void releaseWifiLock() {
+        try {
+            if (wifiLock != null && wifiLock.isHeld()) wifiLock.release();
+        } catch (RuntimeException ignored) {
+            // Already released by the system.
+        }
+        wifiLock = null;
+    }
+
     @Override
     public void onCreate(Bundle savedInstanceState) {
         try {
@@ -128,7 +160,8 @@ public final class EngineHostActivity extends GTASA {
             validateLevelDefinitions(generation);
             // The VM calls the engine's JNI_OnLoad and registers the native
             // NvEventQueueActivity methods. A plain dlopen does not do this.
-            System.loadLibrary("GTASA");
+            // From the APK in a developer build, else from <game folder>/lib (GameLibraries).
+            GameLibraries.load(this, generation, new NativeAssetBridge(this).findLocalAssetsFolder());
             // Loaded here, before the engine thread exists: its JNI_OnLoad gives libGTASA a heap inside one
             // 2 GB window (GameHeap.cpp). startMtaSession loads it again, which is then a no-op.
             try {
@@ -145,6 +178,7 @@ public final class EngineHostActivity extends GTASA {
         // The base class still receives Android's lifecycle after a failed
         // preparation. shouldStartEngine then refuses native initialization.
         super.onCreate(savedInstanceState);
+        if (bootError == null && gameDirectory != null) acquireWifiLock();
         if (bootError == null && gameDirectory != null) {
             installMtaPause();
             installPlayerMap();
@@ -193,9 +227,14 @@ public final class EngineHostActivity extends GTASA {
         connectNick = nick;
         if (!nativeConnect(ip, port, nick)) {
             Log.e(TAG, "MTA connect failed to start");
+            // Desktop CConnectManager::Connect when StartNetwork fails (CConnectManager.cpp:246-255).
+            showDisconnectDialog("Error [CC22]", "Connecting to " + ip + " at port " + port + " failed!");
             return;
         }
-        showDownload(0, "Connecting to server");
+        // Before SERVER_JOIN_COMPLETE opens the desktop loading screen, the same screen shows the connect step
+        // (desktop CConnectManager shows "Connecting to ..." in its own box).
+        if (loadingView != null) loadingView.update("Connecting to " + ip + ":" + port, 0f, 0f, 1f);
+        else showDownload(0, "Connecting to server");
         netRunning = true;
         netThread = new Thread(() -> {
             while (netRunning) {
@@ -241,6 +280,10 @@ public final class EngineHostActivity extends GTASA {
         // Desktop transfer box for the HTTP file downloads (kind 3 lines from nativePulse).
         transferBox = new MtaTransferBox(this);
         addContentView(transferBox, new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
+
+        loadingView = new ConnectionLoadingView(this, gameDirectory);
+        addContentView(loadingView, new FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
 
         dxOverlay = new MtaDxView(this);
@@ -680,16 +723,23 @@ public final class EngineHostActivity extends GTASA {
                 setKeyListAvailable(true);
             } else {
                 hideDownload();
+                // Never leave the loading screen over a disconnect (desktop ~CClientGame ends it first).
+                if (loadingView != null) loadingView.end();
                 setKeyListAvailable(false);
-                String text = message == null || message.isEmpty() ? "Disconnected." : message;
-                appendChat("#FF6666" + text);
-                // A drop after a join offers Retry / Quit (P3.1), and so does a retried join that fails later
-                // (timeout, refused, transport failure): without it the player is left in a dead session.
-                if (joinedOnce || retryPending) {
-                    joinedOnce = false;
-                    retryPending = false;
-                    showDisconnectDialog(text);
+                // Native sends the desktop error box as "title<0x1F>text" (net/DisconnectMessages).
+                String title = "Disconnected";
+                String text = message == null || message.isEmpty() ? "Disconnected from the server." : message;
+                int split = text.indexOf('\u001f');
+                if (split >= 0) {
+                    title = text.substring(0, split);
+                    text = text.substring(split + 1);
                 }
+                appendChat("#FF6666" + title + ": " + text.replace('\n', ' '));
+                // Every refusal, timeout and drop is a popup, as on the desktop (ShowErrorMessageBox), with
+                // Reconnect / Close (P3.1) so the player is never left in a dead session.
+                joinedOnce = false;
+                retryPending = false;
+                showDisconnectDialog(title, text);
             }
         });
     }
@@ -849,15 +899,16 @@ public final class EngineHostActivity extends GTASA {
         try { player.seekTo(Math.max(0, (int) (seconds * 1000f))); } catch (Exception ignored) {}
     }
 
-    private void showDisconnectDialog(String message) {
+    private void showDisconnectDialog(String title, String message) {
         if (isFinishing() || disconnectDialog != null) return;
-        disconnectDialog = new DisconnectDialog(this, message, new DisconnectDialog.Actions() {
+        disconnectDialog = new DisconnectDialog(this, title, message, gameDirectory, new DisconnectDialog.Actions() {
             @Override public void onRetry() {
                 disconnectDialog = null;
                 if (!nativeConnect(connectIp, connectPort, connectNick)) {
                     retryPending = false;
-                    appendChat("#FF6666Falha ao reconectar.");
-                    showDisconnectDialog("Falha ao reconectar.");
+                    String failed = "Connecting to " + connectIp + " at port " + connectPort + " failed!";
+                    appendChat("#FF6666" + failed);
+                    showDisconnectDialog("Error [CC22]", failed);
                 } else {
                     // The attempt was only scheduled; its result arrives in onNativeConnectionStateChange.
                     retryPending = true;
@@ -928,6 +979,30 @@ public final class EngineHostActivity extends GTASA {
                     } catch (NumberFormatException ignored) {
                     }
                 }
+                return;
+            }
+            if (kind == 19) {
+                // Connection loading screen (native ConnectionLoading): "B|fill|segStart|segEnd|status",
+                // "U|..." or "E".
+                if (loadingView == null) return;
+                if (text.startsWith("E")) {
+                    loadingView.end();
+                    return;
+                }
+                String[] parts = text.split("\\|", 5);
+                if (parts.length < 5) return;
+                float fill, segStart, segEnd;
+                try {
+                    fill = Float.parseFloat(parts[1]);
+                    segStart = Float.parseFloat(parts[2]);
+                    segEnd = Float.parseFloat(parts[3]);
+                } catch (NumberFormatException ignored) {
+                    return;
+                }
+                // The screen opened for "Connecting" keeps its artwork when native opens it.
+                if ("B".equals(parts[0]) && !loadingView.isActive()) loadingView.begin(parts[4], fill, segStart, segEnd);
+                else loadingView.update(parts[4], fill, segStart, segEnd);
+                if (downloadPanel != null) hideDownload();
                 return;
             }
             if (kind == 3) {
@@ -1193,8 +1268,10 @@ public final class EngineHostActivity extends GTASA {
 
     @Override
     public void onDestroy() {
+        releaseWifiLock();
         for (Integer id : new java.util.ArrayList<>(sounds.keySet())) stopUrlSound(Integer.toString(id));
         if (transferBox != null) transferBox.setProgress(0, 0);
+        if (loadingView != null) loadingView.end();
         netRunning = false;
         if (netThread != null) netThread.interrupt();
         try {
