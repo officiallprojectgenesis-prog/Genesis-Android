@@ -16,6 +16,8 @@
 #include "LuaGuiApi.h"
 #include "LuaMtaWindowApi.h"
 #include "LuaVMStub.h"
+#include "LuaWeaponApi.h"
+#include "ClientWeapon.h"
 #include "MtaCipher.h"
 #include "MtaOfflineCodec.h"
 #include "MtaReliabilityCodec.h"
@@ -304,6 +306,15 @@ void CheckWeaponSnapshots(WorldRPG::Script::LuaVMStub& vm) {
         assert(getWeaponOwner(localOwned).id == 777 and getWeaponAmmo(localOwned) == 1234, 'local owner and unchanged stats')
         assert(getWeaponAmmo() == false and getWeaponClipAmmo(903) == false, 'invalid weapon')
         assert(getWeaponState({id = 903}) == false and getWeaponOwner({}) == false, 'player is not a weapon')
+        -- Server weapons are CClientWeapon AK-47s (CPacketHandler.cpp:3181); setters change the local copy.
+        local fixed = {id = 1003, element = true}
+        assert(getWeaponFiringRate(fixed) == math.floor((getOriginalWeaponProperty(30, 'std', 'anim_loop_stop') -
+            getOriginalWeaponProperty(30, 'std', 'anim_loop_start')) * 1000), 'server weapon fire rate is the AK-47 STD rate')
+        assert(setWeaponAmmo(fixed, 55) and getWeaponAmmo(fixed) == 55, 'server weapon ammo set locally')
+        assert(setWeaponClipAmmo(fixed, 4) and getWeaponClipAmmo(fixed) == 4, 'server weapon clip set locally')
+        assert(getWeaponProperty(fixed, 'std', 'damage') == 3456, 'changed stats from the packet')
+        assert(getWeaponFlags(fixed, 'instant_reload') == true and getWeaponFlags(fixed, 'disable_model') == false, 'packet flags')
+        assert(setWeaponState(fixed, 'ready') and getWeaponState(fixed) == 'ready', 'server weapon state set locally')
     )LUA");
     ServerWorld::OnPlayerQuit(903);
     ServerWorld::NotePlayerSkin(903, 8); // ID reuse must not restore old references.
@@ -316,6 +327,141 @@ void CheckWeaponSnapshots(WorldRPG::Script::LuaVMStub& vm) {
     ServerWorld::OnEntityRemove(removed.GetData(), removed.GetByteLength(), removed.GetBitLength());
     RunLua(vm, "weapon-removed", "assert(getWeaponAmmo({id = 1001}) == false and getWeaponTarget({id = 1002}) == false)");
     ServerWorld::OnPlayerQuit(903);
+}
+
+// createWeapon and the CClientWeapon element functions (CLuaWeaponDefs.cpp:150-695).
+void CheckCustomWeapons(WorldRPG::Script::LuaVMStub& vm) {
+    using namespace WorldRPG;
+    RunLua(vm, "weapon-create-outside-resource", R"LUA(
+        assert(createWeapon(31, 0, 0, 0) == false, 'createWeapon needs a resource')
+        assert(fireWeapon({}) == false and setWeaponState() == false and getWeaponFlags({}, 'flags') == false, 'not a weapon')
+    )LUA");
+    Net::ResourceStartInfo info;
+    info.name = "weapons";
+    info.resourceId = 88;
+    info.entityId = 0x3880;
+    info.dynamicEntityId = 0x3881;
+    info.noClientCacheScripts = 1;
+    info.startCounter = 1;
+    Script::ActiveVmOnResourceStart(info);
+    const std::vector<uint8_t> body = NoCacheScriptBody(88, R"LUA(
+        _G.cwBad = createWeapon(31) == false and createWeapon('nope', 1, 2, 3) == false
+        _G.cw = createWeapon(31, 1, 2, 3)
+        _G.cw2 = createWeapon('M4', 4, 5, 6)
+        _G.cwRocket = createWeapon(35, 0, 0, 0)
+    )LUA");
+    CHECK(Script::ActiveVmFeedScripts(body.data(), body.size(), body.size() * 8));
+    Script::ActiveVmPulseResources();
+    RunLua(vm, "weapon-create", R"LUA(
+        local w = _G.cw
+        assert(_G.cwBad, 'bad createWeapon arguments')
+        assert(isElement(w) and getElementType(w) == 'weapon' and isElement(_G.cw2), 'weapon elements')
+        assert(getWeaponState(w) == 'ready' and getWeaponOwner(w) == false and getWeaponTarget(w) == nil, 'constructor state')
+        assert(getWeaponAmmo(w) == 9999, 'total ammo 9999')
+        assert(getWeaponClipAmmo(w) == getOriginalWeaponProperty(31, 'std', 'maximum_clip_ammo'), 'full STD clip')
+        _G.cwRate = math.floor((getOriginalWeaponProperty(31, 'std', 'anim_loop_stop') -
+            getOriginalWeaponProperty(31, 'std', 'anim_loop_start')) * 1000)
+        assert(getWeaponFiringRate(w) == _G.cwRate, 'GetWeaponFireTime of the STD stat')
+        local a, b, c, d, e, f, g, h = getWeaponFlags(w, 'flags')
+        assert(a and b and c and d and e and f and not g and not h, 'constructor line-of-sight flags')
+        for _, name in ipairs({'disable_model', 'instant_reload', 'shoot_if_out_of_range', 'shoot_if_blocked'}) do
+            assert(getWeaponFlags(w, name) == false, name .. ' starts false')
+        end
+        assert(getWeaponFlags(w, 'bogus') == false and setWeaponFlags(w, 'bogus', true) == false, 'unknown flag')
+        assert(setWeaponFlags(w, 'flags', false, false, true, true, true, true, true, false), 'set all flags')
+        a, b, c, d, e, f, g, h = getWeaponFlags(w, 'flags')
+        assert(not a and not b and c and d and e and f and g and not h, 'flags round trip')
+        assert(setWeaponFlags(w, 'flags', true) == false, 'flags needs eight booleans')
+        assert(setWeaponFlags(w, 'shoot_if_blocked', true) and getWeaponFlags(w, 'shoot_if_blocked'), 'single flag')
+
+        assert(setWeaponState(w, 'firing') and getWeaponState(w) == 'firing', 'state')
+        assert(setWeaponState(w, 'bad') == false and setWeaponState(w, 1) == false, 'state needs the enum string')
+        assert(setWeaponState(w, 'ready'), 'back to ready')
+
+        assert(setWeaponTarget(w, 10, 20, 30), 'vector target')
+        local x, y, z = getWeaponTarget(w)
+        assert(x == 10 and y == 20 and z == 30, 'vector target read back')
+        assert(setWeaponTarget(w, nil) and getWeaponTarget(w) == nil, 'nil clears the target')
+        assert(setWeaponTarget(w) == false and setWeaponTarget(w, 'x') == false, 'bad target argument')
+        assert(setWeaponTarget(w, localPlayer) and getWeaponTarget(w).id == localPlayer.id, 'entity target')
+        assert(setWeaponTarget(w, nil), 'clear again')
+
+        assert(setWeaponFiringRate(w, 5) and getWeaponFiringRate(w) == 5, 'firing rate')
+        assert(resetWeaponFiringRate(w) and getWeaponFiringRate(w) == _G.cwRate, 'reset firing rate')
+        assert(setWeaponFiringRate(w, 'x') == false, 'firing rate needs a number')
+        assert(setWeaponAmmo(w, 100) and getWeaponAmmo(w) == 100, 'ammo')
+        assert(setWeaponClipAmmo(w, 3) and getWeaponClipAmmo(w) == 3, 'clip ammo')
+
+        -- Fire (CClientWeapon.cpp:216-339): an instant-hit shot takes one round from the clip.
+        assert(fireWeapon(w) and getWeaponClipAmmo(w) == 2, 'fixed target shot')
+        assert(setWeaponTarget(w, 5000, 0, 0) and fireWeapon(w) and getWeaponClipAmmo(w) == 2, 'out of range: no shot')
+        assert(setWeaponFlags(w, 'shoot_if_out_of_range', true) and fireWeapon(w) and getWeaponClipAmmo(w) == 1, 'shoot if out of range')
+        local rocketClip = getWeaponClipAmmo(_G.cwRocket)
+        assert(fireWeapon(_G.cwRocket) and getWeaponClipAmmo(_G.cwRocket) == rocketClip, 'rocket launcher is not fired by Fire')
+
+        local damage = getOriginalWeaponProperty(31, 'std', 'damage')
+        assert(getWeaponProperty(w, 'std', 'damage') == damage, 'per-weapon damage starts at STD')
+        assert(setWeaponProperty(w, 'damage', 77) and getWeaponProperty(w, 'pro', 'damage') == 77, 'per-weapon damage')
+        assert(getWeaponProperty(31, 'std', 'damage') == damage, 'type stats unchanged')
+        assert(setWeaponProperty(w, 'fire_rotation', 0, 90, 0), 'fire rotation')
+        local rx, ry, rz = getWeaponProperty(w, 'std', 'fire_rotation')
+        assert(math.abs(rx) < 1e-4 and math.abs(ry - 90) < 1e-3 and math.abs(rz) < 1e-4, 'fire rotation in degrees')
+        assert(setWeaponProperty(w, 'accuracy', 0.5) and math.abs(getWeaponProperty(w, 'std', 'accuracy') - 0.5) < 1e-6, 'accuracy')
+        assert(setWeaponProperty(w, 'move_speed', 1) == false and getWeaponProperty(w, 'std', 'move_speed') == false, 'unsupported property')
+        assert(setWeaponProperty(w, 'nonsense', 1) == false and getWeaponProperty(w, 9, 'damage') == false, 'bad property / skill')
+
+        assert(setWeaponClipAmmo(w, 0) and setWeaponAmmo(w, 100) and setWeaponFlags(w, 'instant_reload', true), 'empty clip')
+    )LUA");
+    // CClientWeapon::DoPulse (CClientWeapon.cpp:151-176): instant reload refills from the total.
+    Script::WeaponsPulse();
+    RunLua(vm, "weapon-instant-reload", R"LUA(
+        local clip = getOriginalWeaponProperty(31, 'std', 'maximum_clip_ammo')
+        assert(getWeaponClipAmmo(_G.cw) == clip and getWeaponAmmo(_G.cw) == 100 - clip, 'instant reload')
+        assert(setWeaponClipAmmo(_G.cw, 0) and setWeaponFlags(_G.cw, 'instant_reload', false), 'empty again')
+    )LUA");
+    Script::WeaponsPulse();
+    RunLua(vm, "weapon-timed-reload", R"LUA(
+        assert(getWeaponState(_G.cw) == 'reloading' and getWeaponClipAmmo(_G.cw) == 0, 'reload starts')
+        assert(destroyElement(_G.cw) and not isElement(_G.cw), 'destroyElement releases the weapon')
+        assert(getWeaponAmmo(_G.cw) == false, 'destroyed weapon')
+    )LUA");
+
+    // The timed parts of DoPulse and Fire, with a clock the test controls.
+    Weapons::Stat stat;
+    stat.known = true;
+    stat.maximumClipAmmo = 30;
+    stat.animLoopStart = 0.2f;
+    stat.animLoopStop = 0.3f;
+    stat.weaponRange = 100.f;
+    stat.flags = Weapons::kFlagReload;
+    Weapons::Weapon weapon;
+    Weapons::Initialize(weapon, 1, 30, stat, Weapons::Vec3{}, 1000);
+    Weapons::Hooks hooks;
+    CHECK(weapon.fireRate == 100 && weapon.ammoInClip == 30);
+    weapon.state = Weapons::State::Firing;
+    CHECK(!Weapons::DoPulse(weapon, true, 0, 1050, hooks));  // fire timer not elapsed
+    CHECK(Weapons::DoPulse(weapon, true, 0, 1100, hooks) && weapon.ammoInClip == 29);
+    CHECK(!Weapons::DoPulse(weapon, false, 7, 1300, hooks));  // remote weapon not owned by the local player
+    weapon.owner = 7;
+    CHECK(Weapons::DoPulse(weapon, false, 7, 1300, hooks) && weapon.ammoInClip == 28);
+    weapon.ammoInClip = 0;
+    weapon.ammoTotal = 60;
+    CHECK(!Weapons::DoPulse(weapon, true, 0, 2000, hooks) && weapon.state == Weapons::State::Reloading);
+    CHECK(!Weapons::DoPulse(weapon, true, 0, 2999, hooks) && weapon.ammoInClip == 0);
+    CHECK(Weapons::DoPulse(weapon, true, 0, 3000, hooks));  // reload done, back to firing, fires at once
+    CHECK(weapon.state == Weapons::State::Firing && weapon.ammoInClip == 29 && weapon.ammoTotal == 30);
+    weapon.ammoInClip = 0;
+    weapon.ammoTotal = 10;  // less than a clip: no reload, no shot
+    CHECK(!Weapons::DoPulse(weapon, true, 0, 5000, hooks) && weapon.state == Weapons::State::Firing);
+    CHECK(Weapons::WeaponReloadTime(stat) == 1000);
+    stat.flags |= Weapons::kFlagTwinPistol;
+    CHECK(Weapons::WeaponReloadTime(stat) == 2000);
+
+    // RESOURCE_STOP destroys the resource's weapons with its dynamic element.
+    Net::BitStreamWriter stop;
+    stop.Write(static_cast<uint16_t>(88));
+    Script::ActiveVmOnResourceStop(stop.GetData(), stop.GetByteLength(), stop.GetBitLength());
+    RunLua(vm, "weapon-resource-stop", "assert(not isElement(_G.cw2) and not isElement(_G.cwRocket), 'weapons left with the resource')");
 }
 
 void CheckElementsGuiDx(WorldRPG::Script::LuaVMStub& vm) {
@@ -2510,6 +2656,7 @@ int main(int argc, char** argv) {
     CheckDxDrawing(vm);
     CheckSvg(vm);
     CheckStopLifecycle(vm);
+    CheckCustomWeapons(vm);
     CheckDxImage(vm);
     CheckGuiFonts(vm);
     CheckNetworkCalls(vm);

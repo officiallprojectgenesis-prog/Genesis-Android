@@ -27,6 +27,7 @@
 #include "../shared/Utf8.h"
 #include "../shared/LuaMtaWindowApi.h"
 #include "../shared/LuaKeyBindApi.h"
+#include "../shared/LuaWeaponApi.h"
 #include "../shared/ServerWorld.h"
 #include "../shared/AssetManager.h"
 
@@ -689,6 +690,8 @@ Java_com_worldrpg_neonlauncher_game_GameActivity_nativePulse(JNIEnv* env, jobjec
     WorldRPG::ConnectionLoading::Flush();
     // Client scripts of resources that became ready run here, on the VM thread.
     WorldRPG::Script::ActiveVmPulseResources();
+    // CClientWeaponManager::DoPulse for createWeapon and touched server weapons.
+    WorldRPG::Script::WeaponsPulse();
     if (!g_onDxFrameMethod || !g_gameActivityRef) return;
     const std::string frame = WorldRPG::Script::ActiveVmPump();
     // Commands that a key bind ran go to the server as a typed command does (COMMAND_Executed).

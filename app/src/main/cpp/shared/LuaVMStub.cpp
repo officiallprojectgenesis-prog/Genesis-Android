@@ -2760,6 +2760,7 @@ void LuaVMStub::shutdown() {
     g_dx = DxRuntime{};
     Events::Reset();
     GuiReset();
+    WeaponsReset();
 
     if (pImpl_->L) {
         lua_close(pImpl_->L);
@@ -2931,6 +2932,7 @@ static void DropResourceState(lua_State* L, const std::string& name, uint16_t ne
     KeyBindsDropResource(L, name, netId, generation);
     CommandHandlersDropResource(L, name, netId, generation);
     DxDropResource(name, netId, generation);
+    WeaponsDropOwner(name, netId, generation);
     for (auto& [event, refs] : g_dx.handlers) {
         refs.erase(std::remove_if(refs.begin(), refs.end(), [&](const DxRuntime::Handler& handler) {
             if (OwnerOfHandler(handler.ref) != name) return false;

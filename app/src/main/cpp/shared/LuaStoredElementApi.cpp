@@ -1,5 +1,6 @@
 #include "LuaStoredElementApi.h"
 #include "LuaDxApi.h"
+#include "LuaWeaponApi.h"
 #include "../gtasa/ProjectileEngine.h"
 
 #include "LuaApiExtra.h"
@@ -284,6 +285,7 @@ bool EffectElementAlive(uint32_t id) { return FindEffect(id) != nullptr; }
 const char* StoredElementType(uint32_t id) {
     Projectiles::Snapshot projectile;
     if (Projectiles::Copy(id, projectile)) return "projectile";
+    if (LocalWeaponAlive(id)) return "weapon";
     if (FindFoliage(id)) return "foliage";
     if (FindEffect(id)) return "effect";
     return DxElementType(id);
@@ -291,6 +293,7 @@ const char* StoredElementType(uint32_t id) {
 
 bool ReleaseStoredElement(uint32_t id) {
     if (Projectiles::Release(id)) return true;
+    if (ReleaseLocalWeapon(id)) return true;
     if (Foliage* item = FindFoliage(id)) {
         item->alive = false;
         return true;

@@ -8,6 +8,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added — custom weapon elements (2026-11-16)
+
+Completes the Weapons roadmap section (`docs/lua-functions/WEAPONS_AND_COMBAT.md`, 31/31). The state machine is `shared/ClientWeapon.h` (header only), the Lua glue is `shared/LuaWeaponApi.cpp`. No native `CObject` / `CWeapon` is created yet, so nothing is drawn or hit; those steps log `DIAG` once. Host-tested (`neon_resource_tests` `CheckCustomWeapons`), arm64 build compiles, not device-tested.
+
+- **`createWeapon`** follows `CLuaWeaponDefs.cpp:150-185`, `CStaticFunctionDefinitions.cpp:7827-7833` and the `CClientWeapon` constructor (`CClientWeapon.cpp:19-67`): STD weapon stat, full clip, 9999 total ammo, fixed target, constructor line-of-sight flags, fire rate from the STD animation loop. Local element ids `0x36000001+`, type `weapon`, owned by the calling resource and destroyed on `RESOURCE_STOP` (`WeaponsDropOwner`), by `destroyElement`, and on VM shutdown (`WeaponsReset`).
+- **`fireWeapon`** follows `CClientWeapon::Fire` (`CClientWeapon.cpp:216-339`): local/owner guard, instant-hit type list (shotguns excluded, as with `SHOTGUN_TEST` off), entity/vector target with the weapon-range check and `shoot_if_out_of_range`, one round from the clip, fire timer reset. `FireInstantHit` (bullet, damage, `onClientWeaponFire`) is not ported. For a fixed target only the weapon heading is applied.
+- **`setWeaponState`**, **`setWeaponTarget`** (element + bone/wheel, vector, nil; `CClientWeapon.cpp:541-570`), **`setWeaponFlags` / `getWeaponFlags`** (`572-630`; single flag or the eight booleans, `CLuaWeaponDefs.cpp:451-538`), **`setWeaponFiringRate` / `getWeaponFiringRate` / `resetWeaponFiringRate`** (`692-711`), **`setWeaponAmmo` / `setWeaponClipAmmo`** (`CLuaWeaponDefs.cpp:650-694`).
+- **`WeaponsPulse`** (`CClientWeapon::DoPulse`, `CClientWeapon.cpp:84-187`), called from `nativePulse` after `ActiveVmPulseResources`: turns toward the target, timed or instant reload, and fires at the firing rate while `firing`. Reload time is `CWeaponInfo::GetWeaponReloadTime` (0x743D70, gta-reversed `WeaponInfo.cpp:442-456`); the aim-offset branch has no data on the phone and uses the 400 ms floor. Attached weapons, bone and wheel positions are not ported (element position used, `DIAG`).
+- **Server weapons** are `CClientWeapon` AK-47s on desktop (`CPacketHandler.cpp:3181`). The ENTITY_ADD snapshot (3258-3345) is now copied into the same state on first use, so the setters change a local copy as desktop does, and `getWeaponAmmo` / `getWeaponClipAmmo` / `getWeaponState` / `getWeaponOwner` / `getWeaponTarget` read that state. Owner and target cleared by ServerWorld are cleared in the copy too. Untouched server weapons are not pulsed.
+- **`getWeaponProperty` / `setWeaponProperty`** with a weapon element (`CLuaWeaponDefs.cpp:208-263, 696-735`; `CStaticFunctionDefinitions.cpp:7845-7944`): `damage`, `fire_rotation` (degrees), `accuracy`, `target_range`, `weapon_range` of the per-weapon stat. The type/skill forms are unchanged.
+- Gap: `getElementPosition` / `setElementPosition` / `setElementRotation` do not handle local weapons yet.
+
 ### Added — ped and weapon queries (2026-11-16)
 
 - **`isPedDead`** follows `Client/mods/deathmatch/logic/luadefs/CLuaPedDefs.cpp:2168-2198` and `CClientPed.cpp:3774-3804`: death/dying task, cached dead state and player network-death window with revival protection. Invalid arguments return nil. Native task execution has not been tested on a device.
