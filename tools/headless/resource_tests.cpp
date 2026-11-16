@@ -315,6 +315,23 @@ void CheckWeaponSnapshots(WorldRPG::Script::LuaVMStub& vm) {
         assert(getWeaponProperty(fixed, 'std', 'damage') == 3456, 'changed stats from the packet')
         assert(getWeaponFlags(fixed, 'instant_reload') == true and getWeaponFlags(fixed, 'disable_model') == false, 'packet flags')
         assert(setWeaponState(fixed, 'ready') and getWeaponState(fixed) == 'ready', 'server weapon state set locally')
+        assert(setWeaponAmmo(fixed, 1e20) == false and setWeaponClipAmmo(fixed, -1e20) == false, 'ammo out of int range')
+        assert(setWeaponTarget(fixed, {id = 4242}) == false, 'unknown target element')
+    )LUA");
+    {
+        // ENTITY_REMOVE and ENTITY_ADD of 1003 between two script calls: a new CClientWeapon.
+        Net::BitStreamWriter gone;
+        WriteTestBits(gone, 1003, 17);
+        ServerWorld::OnEntityRemove(gone.GetData(), gone.GetByteLength(), gone.GetBitLength());
+        Net::BitStreamWriter again;
+        again.WriteCompressed(1u, 4);
+        WriteWeaponHeader(again, 1003); WriteWeaponBody(again, 2, -1, 903, false);
+        ServerWorld::OnEntityAdd(again.GetData(), again.GetByteLength(), again.GetBitLength());
+    }
+    RunLua(vm, "weapon-id-reuse", R"LUA(
+        local fixed = {id = 1003, element = true}
+        assert(getWeaponAmmo(fixed) == 1234 and getWeaponClipAmmo(fixed) == 27, 'reused id reads the new snapshot')
+        assert(getWeaponState(fixed) == 'reloading', 'reused id state from the new snapshot')
     )LUA");
     ServerWorld::OnPlayerQuit(903);
     ServerWorld::NotePlayerSkin(903, 8); // ID reuse must not restore old references.

@@ -292,9 +292,23 @@ std::vector<LocalWeapon> g_localWeapons;
 // CClientEntityRefManager nulls m_pOwner / m_pTarget at the same moment.
 struct ServerWeapon {
     Weapons::Weapon state;
+    Entity::WeaponSpawn spawn;  // the snapshot the state was built from
     uint32_t spawnOwner = 0xFFFFFFFFu;
     uint32_t spawnTarget = 0xFFFFFFFFu;
 };
+
+// Weapon RPCs are not ported, so a snapshot only changes when ServerWorld clears its owner or
+// target. Any other difference is a new ENTITY_ADD that reused the id: a new CClientWeapon.
+bool SameSpawn(const Entity::WeaponSpawn& a, const Entity::WeaponSpawn& b) {
+    if (a.targetType != b.targetType || a.subTarget != b.subTarget || a.targetX != b.targetX ||
+        a.targetY != b.targetY || a.targetZ != b.targetZ || a.statsChanged != b.statsChanged ||
+        a.damage != b.damage || a.accuracy != b.accuracy || a.targetRange != b.targetRange ||
+        a.weaponRange != b.weaponRange || a.state != b.state || a.ammo != b.ammo || a.clipAmmo != b.clipAmmo)
+        return false;
+    for (int i = 0; i < 13; ++i)
+        if (a.flags[i] != b.flags[i]) return false;
+    return true;
+}
 std::unordered_map<uint32_t, ServerWeapon> g_serverWeapons;
 uint32_t g_nextLocalWeapon = kFirstLocalWeapon;
 bool g_diagWeaponObject = false;
@@ -386,9 +400,14 @@ Weapons::Weapon* ResolveWeapon(uint32_t id, bool& isLocal) {
         return nullptr;
     }
     auto found = g_serverWeapons.find(id);
+    if (found != g_serverWeapons.end() && !SameSpawn(found->second.spawn, spawn)) {
+        g_serverWeapons.erase(found);
+        found = g_serverWeapons.end();
+    }
     if (found == g_serverWeapons.end()) {
         found = g_serverWeapons.emplace(id, ServerWeapon{}).first;
         ApplySpawn(found->second.state, id, spawn);
+        found->second.spawn = spawn;
         found->second.spawnOwner = spawn.owner;
         found->second.spawnTarget = spawn.target;
     }
@@ -485,7 +504,8 @@ bool ReadVector(lua_State* L, int index, Weapons::Vec3& out) {
 bool ReadInt(lua_State* L, int index, int& out) {
     if (!lua_isnumber(L, index)) return false;
     const double value = lua_tonumber(L, index);
-    if (!std::isfinite(value)) return false;
+    // ReadNumber<int> rejects values it cannot hold; a cast out of range is undefined.
+    if (!std::isfinite(value) || value < -2147483648.0 || value > 2147483647.0) return false;
     out = static_cast<int>(value);
     return true;
 }
@@ -566,7 +586,10 @@ int SetWeaponTarget(lua_State* L) {
         const uint32_t target = ElementIdOf(L, 2);
         int bone = 255;
         if (!lua_isnoneornil(L, 3) && !ReadInt(L, 3, bone)) return PushFalse(L);
-        if (!target) return PushFalse(L);
+        if (!ElementAlive(target)) {
+            LUA_LOGE("setWeaponTarget: expected element at argument 2");
+            return PushFalse(L);
+        }
         const char* kind = ServerWorld::ElementKindName(target);
         const bool ped = Game::ScriptPedAlive(target) || std::strcmp(kind, "ped") == 0;
         Weapons::SetWeaponTarget(*weapon, target, bone, ped, std::strcmp(kind, "vehicle") == 0);
