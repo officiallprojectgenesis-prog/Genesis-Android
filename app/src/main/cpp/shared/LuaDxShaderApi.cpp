@@ -99,6 +99,7 @@ int TransformLua(lua_State* L) {
     return Result(L,SetTransform(*element->program,t));
 }
 }
+void Reset(){elements.clear();}
 bool Exists(uint32_t id){return elements.count(id);}
 bool Size(uint32_t id,unsigned& width,unsigned& height) {
     auto it=elements.find(id);if(it==elements.end())return false;
@@ -129,7 +130,7 @@ bool DrawImage(uint32_t id,const Tile& original,bool section,bool postGUI) {
     Script::DxFreeOverlayBitmap(bitmap);return true;
 }
 void InstallShaderLua(lua_State* L) {
-    elements.clear();
+    Reset();
     const struct{const char* name;lua_CFunction function;} binds[] = {
         {"dxCreateShader",CreateLua},{"dxSetShaderValue",ValueLua},
         {"dxSetShaderTessellation",TessellationLua},{"dxSetShaderTransform",TransformLua}};

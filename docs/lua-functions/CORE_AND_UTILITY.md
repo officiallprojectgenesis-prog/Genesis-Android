@@ -5,8 +5,8 @@ Timers, event handling, network latent transfers, file I/O, XML parsing, JSON se
 ## Parity Status
 
 - **Total Functions:** 195
-- **Implemented:** 169 (86.7%)
-- **Stubs:** 2
+- **Implemented:** 171 (87.7%)
+- **Stubs:** 0
 - **Missing:** 24
 
 > **Technical Requirement:** Pure CPU/platform logic. Mostly ported or needs standard library wrappers (e.g. tinyxml2, sha256, zlib).
@@ -125,7 +125,7 @@ Timers, event handling, network latent transfers, file I/O, XML parsing, JSON se
 | `isCapsLockEnabled` | **Implemented** | `CLuaClientDefs.cpp:27` | `ArgumentParser<IsCapsLockEnabled>` | Operational on Android. (l_isCapsLockEnabled) |
 | `isChatInputBlocked` | **Implemented** | `CLuaClientDefs.cpp:24` | `ArgumentParser<IsChatInputBlocked>` | Operational on Android. (l_isChatInputBlocked) |
 | `isChatVisible` | **Implemented** | `CLuaClientDefs.cpp:23` | `ArgumentParserWarn<false, IsChatVisible>` | Operational on Android. (IsChatVisible) |
-| `isControlEnabled` | *Stub* | `CLuaManager.cpp:214` | `CLuaFunctionDefs::IsControlEnabled` | Currently stubbed: `DefaultValue(kTrue)`. Needs native engine wiring. |
+| `isControlEnabled` | **Implemented** | `CLuaManager.cpp:214` | `CLuaFunctionDefs::IsControlEnabled` | Stores per-control enabled state; only the radar control currently changes Android behavior. Other GTA control actions are not wired by this handler. Registration coverage does not mean complete native control compatibility. |
 | `isCursorShowing` | **Implemented** | `CLuaManager.cpp:199` | `CLuaFunctionDefs::IsCursorShowing` | Operational on Android. (IsCursorShowing) |
 | `isMTAWindowFocused` | Missing | `CLuaClientDefs.cpp:26` | `ArgumentParser<IsMTAWindowFocused>` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
 | `isOOPEnabled` | **Implemented** | `CLuaUtilDefs.cpp:49` | `IsOOPEnabled` | Operational on Android. (l_isOOPEnabled) |
@@ -181,7 +181,7 @@ Timers, event handling, network latent transfers, file I/O, XML parsing, JSON se
 | `toJSON` | **Implemented** | `CLuaUtilDefs.cpp:61` | `toJSON` | Operational on Android. (ToJson) |
 | `tocolor` | **Implemented** | `CLuaUtilDefs.cpp:74` | `tocolor` | Operational on Android. (l_tocolor) |
 | `toggleAllControls` | Missing | `CLuaManager.cpp:222` | `CLuaFunctionDefs::ToggleAllControls` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `toggleControl` | *Stub* | `CLuaManager.cpp:221` | `CLuaFunctionDefs::ToggleControl` | Currently stubbed: `DefaultValue(kTrue)`. Needs native engine wiring. |
+| `toggleControl` | **Implemented** | `CLuaManager.cpp:221` | `CLuaFunctionDefs::ToggleControl` | Stores per-control enabled state; only the radar control currently changes Android behavior. Other GTA control actions are not wired by this handler. Registration coverage does not mean complete native control compatibility. |
 | `triggerEvent` | **Implemented** | `CLuaManager.cpp:167` | `CLuaFunctionDefs::TriggerEvent` | Operational on Android. (l_triggerEvent) |
 | `triggerLatentServerEvent` | Missing | `CLuaManager.cpp:171` | `CLuaFunctionDefs::TriggerLatentServerEvent` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
 | `triggerServerEvent` | **Implemented** | `CLuaManager.cpp:168` | `CLuaFunctionDefs::TriggerServerEvent` | Operational on Android. (l_triggerServerEvent) |

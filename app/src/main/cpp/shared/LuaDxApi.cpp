@@ -1495,11 +1495,11 @@ void DxEndRender(std::string& frame) {
     frame += "G\n";
 }
 
-void InstallDxLua(lua_State* L) {
-    DxShader::InstallShaderLua(L);
-    Dx3D::InstallDx3DLua(L);
+void DxReset() {
+    DxShader::Reset();
+    Dx3D::Reset();
     ModelEffects::Reset();
-    ModelEffects::InstallModelEffectsLua(L);
+    SvgReset(ActiveVmState());
     g_blendMode = 0;
     g_testMode = 0;
     for (const Texture& texture : g_textures)
@@ -1512,6 +1512,13 @@ void InstallDxLua(lua_State* L) {
     }
     g_fonts.clear();
     g_activeTarget = 0;
+}
+
+void InstallDxLua(lua_State* L) {
+    DxReset();
+    DxShader::InstallShaderLua(L);
+    Dx3D::InstallDx3DLua(L);
+    ModelEffects::InstallModelEffectsLua(L);
     static const struct { const char* name; lua_CFunction fn; } binds[] = {
         {"dxDrawLine", DxDrawLine},
         {"dxDrawCircle", DxDrawCircle},

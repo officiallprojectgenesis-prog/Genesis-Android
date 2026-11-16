@@ -36,6 +36,7 @@ struct Draw {
 std::vector<Vertex> LineQuad(const Draw&,Vec3 camera);
 std::vector<std::pair<Vec3,Vec3>> SphereLines(unsigned iterations);
 void InstallDx3DLua(lua_State*);
+void Reset();
 void BeginFrame();
 void EndFrame();
 void DropResource(const std::string&,uint16_t,uint32_t);

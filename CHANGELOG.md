@@ -28,6 +28,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - The cog, Chat and key-list row hides while a script shows the cursor (its own panel, such as a map or login form, is up).
 - Run on the S25 2026-11-15: a minimap tap reached the zone, sent F11, and World RPG's map opened once the element-data fix below was in.
 
+### Fixed — DX shutdown, facing arguments and macro limits
+
+- VM shutdown now resets DX before/after Lua registry destruction: shader and
+  texture/SVG handles and published/pending 3D batches cannot outlive the VM,
+  including resources created by Lua `__gc` finalizers. SVG callbacks unref while
+  their registry is alive; bitmap releases retain the existing draw order.
+- Material 3D lines preserve face-toward coordinates when the optional stage is
+  absent, following `CLuaDrawingDefs.cpp:222-320` and
+  `CScriptArgReader::ReadIfNextIsEnumString`.
+- Shader macro expansion enforces the 512 KiB source limit before each append,
+  so a small source cannot bypass the budget through chained definitions.
+- Catalog refresh includes the two control-state handlers from `c1aaeda`;
+  their native effect is currently limited to radar. The new ped query batch
+  remains unconverted.
+- Host regressions and ASan/UBSan cover the fixes. A read-only source audit ranks
+  missing/stub API usage in declared client/shared resource scripts; the next
+  proposed batch is ped death, weapon slot/type and ammo queries.
+
 ### Fixed — GUI/DX shader review
 
 - Shader image draws reject `overwrite` before bitmap allocation/queueing: the
@@ -81,7 +99,7 @@ Resource stop/reset removes DX batches and shaders, and retries failed 2DFX
 cleanup on subsequent game pulses while retaining owner identities. ARM64
 symbols/instructions are guarded before camera/count changes. The pinned MIT
 HLSL translator records upstream and the EOF/cast fixes in
-`third_party/hlslparser/UPSTREAM.md`. Host checks: 8,248 new assertions (many
+`third_party/hlslparser/UPSTREAM.md`. Host checks: 8,264 assertions (many
 sphere vertices), real Mesa/D3D12 shader pixels and EGL context preservation;
 65 binary ABI checks; existing 274 native and 24/29/34 Java regressions pass.
 The Android ARM64 library and game-free debug APK build. No device is connected;

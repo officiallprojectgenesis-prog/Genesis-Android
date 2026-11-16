@@ -12,10 +12,12 @@
 #include <mutex>
 #include <regex>
 #include <sstream>
+#include <string_view>
 
 namespace WorldRPG::DxShader {
 namespace {
 std::recursive_mutex gpuMutex;
+constexpr size_t MaxSourceBytes=512*1024;
 std::string Key(std::string name) {
     for(char& c:name)c=static_cast<char>(std::tolower(static_cast<unsigned char>(c)));return name;
 }
@@ -211,7 +213,7 @@ struct Program {
 std::shared_ptr<Program> Create(const std::string& original,const std::map<std::string,std::string>& macros,
                                std::string& technique,std::string& diagnostic) {
     diagnostic="unsupported or invalid FX source";
-    if (original.size()>512*1024 || original.find('\0')!=std::string::npos) return {};
+    if (original.size()>MaxSourceBytes || original.find('\0')!=std::string::npos) return {};
     std::string source=StripComments(original);
     auto definitions=macros;
     std::istringstream lines(source); std::string line,expanded;
@@ -223,14 +225,23 @@ std::shared_ptr<Program> Create(const std::string& original,const std::map<std::
         else expanded+=line+'\n';
     }
     source=expanded;
+    auto appendSource=[&](std::string& out,std::string_view piece) {
+        if(piece.size()>MaxSourceBytes-out.size()) {
+            diagnostic="expanded shader source exceeds the 512 KiB limit";return false;
+        }
+        out.append(piece.data(),piece.size());return true;
+    };
+    if(source.size()>MaxSourceBytes){diagnostic="expanded shader source exceeds the 512 KiB limit";return {};}
     for (const auto& [name,value]:definitions) {
         if(!std::regex_match(name,std::regex("[A-Za-z_][A-Za-z_0-9]*")) || value.size()>256) return {};
         const std::regex identifier("\\b"+name+"\\b");
-        std::string replaced;size_t end=0;
+        std::string replaced;size_t end=0;const std::string_view current(source);
         for(auto it=std::sregex_iterator(source.begin(),source.end(),identifier);it!=std::sregex_iterator();++it) {
-            replaced.append(source,end,it->position()-end);replaced+=value;end=it->position()+it->length();
+            if(!appendSource(replaced,current.substr(end,it->position()-end)) || !appendSource(replaced,value))return {};
+            end=it->position()+it->length();
         }
-        replaced.append(source,end,std::string::npos);source=std::move(replaced);
+        if(!appendSource(replaced,current.substr(end)))return {};
+        source=std::move(replaced);
     }
     std::vector<Technique> techniques;
     if (!Techniques(source,techniques)) return {};

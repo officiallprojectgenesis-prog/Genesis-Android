@@ -2754,6 +2754,7 @@ void LuaVMStub::shutdown() {
     if (!pImpl_->initialized) return;
     StopOwnedSounds();
     Projectiles::Reset();
+    DxReset();
     if (g_active == this) g_active = nullptr;
     g_imeDismissed = false;
     g_dx = DxRuntime{};
@@ -2763,6 +2764,9 @@ void LuaVMStub::shutdown() {
     if (pImpl_->L) {
         lua_close(pImpl_->L);
         pImpl_->L = nullptr;
+        // __gc handlers can call installed DX functions during lua_close.
+        // Their late handles must also be invalidated after the registry dies.
+        DxReset();
     }
 
     pImpl_->registeredFunctions.clear();

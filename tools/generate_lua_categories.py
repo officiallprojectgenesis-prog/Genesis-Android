@@ -139,6 +139,8 @@ def format_status(status):
         return "Missing"
 
 def guess_conversion_notes(name, group, status, detail):
+    if status == "implemented" and name in {"toggleControl", "isControlEnabled"}:
+        return "Stores per-control enabled state; only the radar control currently changes Android behavior. Other GTA control actions are not wired by this handler. Registration coverage does not mean complete native control compatibility."
     if status == "implemented" and group == "CLua2DFXDefs":
         return "Partial native 2DFX port: per-resource property/removal stacks, custom-index compaction, transactional commits and deferred cleanup. Verified ARM64 getter/count bridge mutates LIGHT and SUN_GLARE only. Particle/escalator data can be queried; roadsign payload is unavailable. Particle/roadsign/escalator mutations need persistent-body cleanup/restream integration and are rejected. Host state/Lua checks pass; native execution not device-verified."
     if status == "implemented" and name in {"dxDrawLine3D", "dxDrawMaterialLine3D", "dxDrawMaterialSectionLine3D", "dxDrawPrimitive3D", "dxDrawMaterialPrimitive3D", "dxDrawWiredSphere", "dxDrawModel3D"}:

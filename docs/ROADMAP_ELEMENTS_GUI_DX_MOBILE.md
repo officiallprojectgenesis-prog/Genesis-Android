@@ -4,7 +4,7 @@ Revisão em 2026-11-15 na branch `staging`.
 
 ## Progresso das funções Lua
 
-**Geral: 675 de 1.581 funções com handler não constante — 42,7%.**
+**Geral: 677 de 1.581 funções com handler não constante — 42,8%.**
 Elementos: **54/81 — 66,7%**. GUI/DX: **199/199 — 100% dos bindings**.
 
 As 24 funções antes ausentes agora têm handlers e caminhos de execução.
@@ -27,7 +27,7 @@ A dependência de tradução HLSL é MIT e está fixada por revisão em
 
 ## Validação do lote das 24
 
-- `neon_dx_conversion_tests`: **8.248 verificações passaram**, incluindo estado
+- `neon_dx_conversion_tests`: **8.264 verificações passaram**, incluindo shutdown/finalizadores, face-toward sem estágio, orçamento de macros e estado
   2DFX/rollback/recursos, geometria e fila 3D, Lua real e pixels GLES. Muitas
   verificações são de vértices/arestas da esfera, não cenários independentes.
 - Os pixels foram renderizados pelo Mesa/D3D12 no host (Intel UHD Graphics):
@@ -40,8 +40,8 @@ A dependência de tradução HLSL é MIT e está fixada por revisão em
 - A [revisão deste lote](REVIEW_GUI_DX_24.md) registra correções e limites abertos.
 - Teste dos novos caminhos no aparelho: **pendente; ADB sem dispositivo**.
 
-As [próximas conversões sugeridas](NEXT_LUA_CONVERSIONS.md) priorizam consultas
-de proximidade e colshapes, depois recursos e modelos.
+As [próximas conversões sugeridas](NEXT_LUA_CONVERSIONS.md) priorizam estado
+de peds e armas a partir do uso nos scripts; depois proximidade, colshapes e streaming.
 
 ## Implementado nos lotes anteriores
 
@@ -162,10 +162,10 @@ e o payload; não verificam os glifos ou a composição no aparelho.
 | Áudio e voz | 21/57 | **36,8%** | 1 | 35 |
 | Câmera | 47/47 | **100,0%** | 0 | 0 |
 | Armas e projéteis | 20/31 | **64,5%** | 0 | 11 |
-| Sistema e utilitários | 169/195 | **86,7%** | 2 | 24 |
+| Sistema e utilitários | 171/195 | **87,7%** | 0 | 24 |
 | Markers, blips e colshapes | 0/145 | **0,0%** | 3 | 142 |
 | Browser e compatibilidade | 4/103 | **3,9%** | 0 | 99 |
-| **TOTAL** | **675/1581** | **42,7%** | **136** | **770** |
+| **TOTAL** | **677/1581** | **42,8%** | **134** | **770** |
 
 Os números incluem as alterações locais anteriores. “Implemented” no catálogo
 significa apenas que há uma função C com corpo não constante; não significa

@@ -14,6 +14,8 @@ namespace WorldRPG::Script {
 // Installs the dx* calls of this file (lines, circles, primitives, blend mode, text size,
 // textures, fonts, dxGetStatus). A new VM starts in blend mode "blend".
 void InstallDxLua(lua_State* L);
+// Release all DX state at VM shutdown as well as session replacement.
+void DxReset();
 
 // Start of a DX frame: writes the blend mode that is still active from the last frame
 // (desktop CGraphics keeps m_ActiveBlendMode until a script changes it).

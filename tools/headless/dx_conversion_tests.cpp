@@ -2,6 +2,7 @@
 #include "shared/ModelEffects.h"
 #include "shared/LuaDx3DApi.h"
 #include "shared/LuaVMStub.h"
+#include "shared/LuaDxApi.h"
 #include "gtasa/GameTasks.h"
 #include "stubs/test_bitmaps.h"
 #include "lua.hpp"
@@ -17,6 +18,10 @@ namespace FX=WorldRPG::ModelEffects;
 namespace DX=WorldRPG::DxShader;
 namespace D3=WorldRPG::Dx3D;
 unsigned checks=0;
+uint32_t finalizerShaderId=0;
+int NoteFinalizerShader(lua_State* L) {
+    lua_getfield(L,1,"id");finalizerShaderId=uint32_t(lua_tointeger(L,-1));return 0;
+}
 bool failNextSurface=false,blockSurfaceless=false;
 extern "C" EGLSurface __real_eglCreatePbufferSurface(EGLDisplay,EGLConfig,const EGLint*);
 extern "C" EGLBoolean __real_eglMakeCurrent(EGLDisplay,EGLSurface,EGLSurface,EGLContext);
@@ -189,6 +194,56 @@ void ReviewCase(const std::string& which) {
     } else if(which=="long-source") {
         auto shader=DX::Create(std::string(200000,' ')+"float4 PS():COLOR0{return float4(1,0,0,1);}technique T{pass P{PixelShader=compile ps_2_0 PS();}}",{},name,error);
         Check(bool(shader),"large leading whitespace does not overflow native parser stack");
+    } else if(which=="shutdown") {
+        WorldRPG::Script::LuaVMStub vm;Check(vm.initialize(),"shutdown VM");
+        WorldRPG::JniBridge::EnableTestBitmaps(true);D3::SetTestAvailability(true);
+        finalizerShaderId=0;auto* state=WorldRPG::Script::ActiveVmState();
+        lua_pushcfunction(state,NoteFinalizerShader);lua_setglobal(state,"noteFinalizerShader");
+        const char* setup=R"LUA(
+            shutdownShader=dxCreateShader([[float4 PS():COLOR0{return float4(1,0,0,1);} technique T{pass P{PixelShader=compile ps_2_0 PS();}}]])
+            shutdownTexture=dxCreateTexture(4,4)
+            shutdownSvg=svgCreate(4,4)
+            assert(shutdownShader and shutdownTexture and shutdownSvg)
+            closingObject=setmetatable({}, {__gc=function()
+                local shader=dxCreateShader([[float4 PS():COLOR0{return float4(1,0,0,1);} technique T{pass P{PixelShader=compile ps_2_0 PS();}}]])
+                assert(shader);noteFinalizerShader(shader)
+            end})
+            addEventHandler('onClientRender',root,function() assert(dxDrawLine3D(0,0,0,0,0,1)) end)
+        )LUA";
+        Check(vm.executeBuffer(setup,std::strlen(setup),"shutdown-setup").success,"shutdown resources created");
+        auto* L=WorldRPG::Script::ActiveVmState();
+        auto id=[&](const char* global){lua_getglobal(L,global);lua_getfield(L,-1,"id");auto value=uint32_t(lua_tointeger(L,-1));lua_pop(L,2);return value;};
+        auto shaderId=id("shutdownShader"),textureId=id("shutdownTexture"),svgId=id("shutdownSvg");vm.pumpDx();
+        Check(DX::Exists(shaderId)&&D3::Frame()->size()==1,"native state exists before shutdown");
+        vm.shutdown();
+        Check(!DX::Exists(shaderId),"shutdown releases shader programs without a replacement VM");
+        Check(D3::Frame()->empty(),"shutdown clears published 3D batches");
+        Check(!WorldRPG::Script::DxElementType(textureId),"shutdown invalidates DX texture handles");
+        Check(!WorldRPG::Script::DxElementType(svgId),"shutdown invalidates SVG handles");
+        Check(finalizerShaderId!=0,"Lua close finalizer exercised");
+        Check(!DX::Exists(finalizerShaderId),"finalizers cannot leave late DX resources alive");
+        D3::SetTestAvailability(false);WorldRPG::JniBridge::EnableTestBitmaps(false);
+    } else if(which=="material-facing") {
+        WorldRPG::Script::LuaVMStub vm;Check(vm.initialize(),"material facing VM");
+        WorldRPG::JniBridge::EnableTestBitmaps(true);D3::SetTestAvailability(true);
+        const char* setup=R"LUA(
+            local texture=dxCreateTexture(4,4);assert(texture)
+            assert(dxDrawMaterialLine3D(0,0,0,0,0,2,texture,1,4294967295,2,3,4))
+            assert(dxDrawMaterialSectionLine3D(0,0,0,0,0,2,0,0,4,4,texture,1,4294967295,5,6,7))
+            assert(dxDrawMaterialLine3D(0,0,0,0,0,2,texture,1,4294967295,'postfx',8,9,10))
+        )LUA";
+        Check(vm.executeBuffer(setup,std::strlen(setup),"material-facing").success,"face-toward vector works without a stage placeholder");
+        D3::EndFrame();auto frame=D3::Frame();Check(frame->size()==3,"all material line calls queued");
+        Check((*frame)[0].faceSet&&(*frame)[0].face.x==2&&(*frame)[0].face.z==4,"plain line keeps all facing coordinates");
+        Check((*frame)[1].faceSet&&(*frame)[1].face.x==5&&(*frame)[1].usize==1,"section line keeps facing coordinates and UVs");
+        Check((*frame)[2].faceSet&&(*frame)[2].face.z==10,"explicit postfx still works");
+        vm.shutdown();D3::SetTestAvailability(false);WorldRPG::JniBridge::EnableTestBitmaps(false);
+    } else if(which=="macro-budget") {
+        std::map<std::string,std::string> macros;
+        for(char c='A';c<'G';++c){std::string next(1,c+1);macros[std::string(1,c)]=next+"+"+next+"+"+next+"+"+next+"+"+next+"+"+next+"+"+next+"+"+next;}
+        macros["G"]="0.01";
+        auto shader=DX::Create("A",macros,name,error);
+        Check(!shader&&error.find("limit")!=std::string::npos,"macro expansion respects the shader source budget before parsing");
     } else if(which=="projection") {
         auto shader=DX::Create("float4x4 gWorldViewProjection=float4x4(1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1);"
             "float4 PS():COLOR0{return float4(1,0,0,1);}technique T{pass P{PixelShader=compile ps_2_0 PS();}}",{},name,error);
@@ -237,5 +292,6 @@ int main(int argc,char** argv){
     if(argc==2){ReviewCase(argv[1]);return 0;}
     ReviewCase("egl");Effects();Geometry();Shaders();ContextPreservation();DeferredCleanup();
     ReviewCase("projection");ReviewCase("integer");ReviewCase("overflow");ReviewCase("overwrite");ReviewCase("long-source");
+    ReviewCase("shutdown");ReviewCase("material-facing");ReviewCase("macro-budget");
     std::printf("DX conversion checks: %u passed\n",checks);
 }

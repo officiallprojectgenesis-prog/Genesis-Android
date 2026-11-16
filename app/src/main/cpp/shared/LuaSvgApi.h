@@ -15,6 +15,8 @@ namespace WorldRPG::Script {
 // Installs svgCreate, svgGetDocumentXML, svgSetDocumentXML, svgGetSize, svgSetSize and
 // svgSetUpdateCallback, and drops the elements of the previous VM.
 void InstallSvgLua(lua_State* L);
+// Release callback refs while their state is alive; nullptr after it is gone.
+void SvgReset(lua_State* L);
 
 // The overlay bitmap name and the size of a live svg element. False when id is not one.
 bool SvgInfo(uint32_t id, std::string& bitmap, unsigned& width, unsigned& height);

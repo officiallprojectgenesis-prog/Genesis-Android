@@ -34,6 +34,7 @@ bool SetTessellation(Program&,unsigned,unsigned);
 bool SetTransform(Program&,const Transform&);
 bool Render(Program&,const Tile&,unsigned width,unsigned height,Image&);
 void InstallShaderLua(lua_State*);
+void Reset();
 bool Exists(uint32_t);
 bool Size(uint32_t,unsigned&,unsigned&);
 bool Release(uint32_t);

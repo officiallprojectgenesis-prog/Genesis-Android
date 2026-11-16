@@ -310,10 +310,15 @@ bool SvgCallbackLive(uint32_t id, int ref) {
     return svg && svg->callback == ref;
 }
 
-void InstallSvgLua(lua_State* L) {
-    // The callbacks belonged to the previous Lua state; the bitmaps are freed by the overlay.
-    for (const Svg& svg : g_svgs) DxFreeOverlayBitmap(svg.id);
+void SvgReset(lua_State* L) {
+    for (const Svg& svg : g_svgs) Destroy(L,svg);
     g_svgs.clear();
+}
+
+void InstallSvgLua(lua_State* L) {
+    // Normal shutdown already releases refs through DxReset. A standalone
+    // installation may instead follow destruction of the old registry.
+    SvgReset(nullptr);
     static const struct { const char* name; lua_CFunction fn; } binds[] = {
         {"svgCreate", SvgCreate},
         {"svgGetDocumentXML", SvgGetDocumentXML},

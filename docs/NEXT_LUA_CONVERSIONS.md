@@ -1,25 +1,76 @@
-# Próximas conversões Lua sugeridas
+# Próximo lote Lua: estado de peds e armamento
 
-Sugestão após a revisão GUI/DX de 2026-11-15. Este documento propõe trabalho;
-as funções abaixo continuam ausentes ou parciais no catálogo. A prioridade
-considera as dependências vistas neste checkout, sem um levantamento de todos
-os scripts usados pelo servidor.
+Prioridade revista em 2026-11-15 após inspecionar os scripts client/shared dos
+recursos disponíveis em `backend_mta/mods/deathmatch/resources`.
+A seleção considera chamadas reais no código, e não somente a quantidade de
+funções ausentes no catálogo. As cinco funções continuam stubs neste lote.
 
-| Ordem | Funções | Benefício | Dependências e critério de conclusão |
-|---|---|---|---|
-| 1 | `getElementsWithinRange` | Busca de jogadores, veículos e objetos próximos para interações | Portar a consulta espacial e seus filtros de tipo, interior e dimensão. Usar posições atuais, remoção/reuso de IDs e elementos locais/recebidos do servidor. Referência: `CLuaElementDefs.cpp:972-1015`; a busca desktop não equivale em todos os casos a testar só a distância do centro. |
-| 2 | `createColSphere`, `createColCuboid`, `isElementWithinColShape`, `getElementsWithinColShape` | Zonas de lojas, portas, garagens e entradas de painéis | Criar armazenamento real de formas e manter a lista de colisões, com dimensões/interiores, movimento, remoção e limpeza por recurso. Ligar `onClientColShapeHit`/`onClientColShapeLeave`. As consultas desktop usam essa lista; não basta fabricar um elemento. Referências: `CLuaColShapeDefs.cpp:152-239`, `CLuaElementDefs.cpp:875-970` e `CClientColShape*`. |
-| 3 | `createColCircle`, `createColRectangle`, `createColTube` | Completar as formas simples usando o mesmo subsistema do lote anterior | Conferir limites 2D/3D e altura, bordas e retorno dos eventos. A geometria pode ter testes determinísticos; posições/eventos ainda exigem integração. Referência: `CLuaColShapeDefs.cpp:109-150,241-286,339-386`. |
-| 4 | `call`, `downloadFile` | Comunicação entre recursos e carregamento de arquivos sob demanda | `call`: exports, ambiente, recurso parado e permissões. `downloadFile`: caminho permitido, geração do recurso, cancelamento/stop, resultado real do download e evento de conclusão. Reaproveitar os sistemas de recursos/HTTP existentes. Não há necessidade de novos offsets GTA para a parte principal desse lote. |
-| 5 | `engineLoadTXD`, `engineImportTXD`, `engineLoadDFF`, `engineReplaceModel` | Mapas, veículos, objetos e skins personalizados | Impacto alto, mas requer ciclo de vida de texturas/modelos, streaming, colisão e restauração no stop. Resolver símbolos mobile e testar carregamento, troca e descarregamento no aparelho antes de declarar compatibilidade. |
+## Evidência de uso
 
-Minha escolha para o próximo lote é **1 + 2**: cinco funções, com uma base
-coerente para proximidade e zonas de interação. O parser atual de `ENTITY_ADD`
-já reconhece as formas, mas ainda descarta parte das dimensões; é necessário
-preservar esses dados e portar o ciclo de colisão. Geometria e filtragem podem
-ser verificadas no host antes do teste de movimento/eventos no Android.
+| Função | Recursos / arquivos / chamadas estáticas, todos os recursos | Recursos / arquivos / chamadas, grupo WorldRPG |
+|---|---|---|
+| `isPedDead` | 15 / 19 / 37 | 5 / 6 / 18 |
+| `getPedWeapon` | 9 / 10 / 20 | 2 / 3 / 8 |
+| `getPedTotalAmmo` | 5 / 5 / 10 | 1 / 1 / 5 |
+| `getPedWeaponSlot` | 3 / 3 / 4 | 1 / 1 / 1 |
+| `getPedAmmoInClip` | 2 / 2 / 2 | 1 / 1 / 1 |
 
-Em paralelo às novas funções, ainda há trabalho nas já registradas: seleção e
-rolagem da GUI, máscara para `overwrite` em shaders, texturas de shader atualizadas
-ao vivo, includes/estados FX, estágios 3D e efeitos 2DFX persistentes. A cobertura
-199/199 de GUI/DX mede handlers, não encerramento dessas pendências.
+O recurso `native-ped-traffic/client.lua:1039-1054` usa arma e munição na
+verificação de convergência do estado dos grupos de NPCs. Retornar zero
+constantemente impede esse diagnóstico de representar o estado real.
+A mesma verificação consulta `getPedStat`, que já possui handler; seu backend
+também precisa ser conferido antes de considerar a validação de armas completa.
+
+A auditoria leu **312 scripts declarados** client/shared no conjunto inteiro e
+**38** no grupo WorldRPG. Encontrou **25** e **16** problemas de metadados/arquivos,
+respectivamente; nenhum arquivo Lua compilado foi contado. Portanto, o recorte
+é parcial. Comentários, strings, declarações de funções e scripts server foram
+excluídos. Aliases, OOP, nomes locais que ocultam APIs e código gerado não são resolvidos. Os números medem
+chamadas estáticas, sem confirmar recursos ativos ou frequência em execução.
+A classificação usa o catálogo regenerado com a revisão GUI/DX e o lote
+HUD/RPC commitado em `c1aaeda`; chamadas de controle já implementadas nesse
+lote saíram da lista de stubs. As cinco consultas de ped continuam pendentes.
+
+## Ordem de implementação
+
+1. **Backend comum de consulta de ped:** separar jogador local, ped remoto e
+   estado de cliente preservado quando o corpo não está carregado. Ler o corpo
+   no game thread e aproveitar o estado dos RPCs de arma; não acessar um CPed
+   livre nem fabricar zero quando faltam dados.
+2. **`isPedDead`:** portar `IsDead() || IsDying()` e a janela de morte na rede,
+   incluindo a recuperação após reviver. Saúde menor ou igual a zero, isoladamente,
+   não reproduz a função desktop. Referência: `CLuaPedDefs.cpp:2168-2198`.
+3. **`getPedWeaponSlot` e `getPedWeapon`:** slot atual e slot opcional, tipo
+   de arma e retorno `false` para argumentos inválidos. Referências:
+   `CLuaPedDefs.cpp:685-731`.
+4. **`getPedTotalAmmo` e `getPedAmmoInClip`:** estoque por slot, munição no
+   pente, slots sem munição e o cache para ped não carregado. Preservar as
+   conversões `unsigned short` e a falha indicada pelo desktop. Referências:
+   `CLuaPedDefs.cpp:733-807`.
+
+Antes de fechar o lote: testar jogador/ped, slot atual/expresso/inválido,
+stream-in/out, morte/respawn, RPC de dar/tirar arma, recarga e remoção/reuso do
+ID. A parte de estado pode ser testada no host; corpo GTA e inventário precisam
+ser conferidos no aparelho. Só marcar uma função como convertida quando a
+consulta tiver dados reais e ciclo de vida correto.
+
+## Lotes seguintes
+
+| Ordem | Funções / área | Dependências |
+|---|---|---|
+| 2 | `getElementsWithinRange`, `createColSphere`, `createColCuboid`, `isElementWithinColShape`, `getElementsWithinColShape` | Preservar geometria de colshape hoje descartada em ENTITY_ADD; manter colisores com posição atual, interior/dimensão, remoção e eventos hit/leave. No inventário atual só `getElementsWithinRange` (2 recursos) e `createColSphere` (1) tiveram chamadas globais detectadas. |
+| 3 | `acquireElementStreamingLease`, `releaseElementStreamingLease` | Aparecem em 5 recursos WorldRPG cada, com 27 e 21 chamadas. Portar referência/streaming real e liberação no stop; um token local sem impedir stream-out não resolve a dependência. |
+| 4 | `call`, depois `downloadFile` | `call` apareceu em 6 recursos; exige exports e isolamento dos ambientes. Downloads exigem conclusão real, evento e cancelamento por geração do recurso. |
+| 5 | `engineLoadTXD`, `engineImportTXD`, `engineLoadDFF`, `engineReplaceModel` | Alto impacto para mapas e skins; precisam de streaming, restauração e validação no aparelho. Não tiveram chamadas globais ausentes detectadas neste inventário; aliases/OOP podem ocultar uso. |
+
+## Reproduzir a busca
+
+```sh
+python3 tools/audit_lua_client_usage.py /caminho/do/servidor/mods/deathmatch/resources --json-out /tmp/client-api-usage.json
+python3 tools/audit_lua_client_usage.py '/caminho/do/servidor/mods/deathmatch/resources/[worldrpg]' --json-out /tmp/worldrpg-api-usage.json
+```
+
+O comando só lê fontes/metadados. O JSON inclui exemplos com arquivo/linha e
+os erros de leitura para que o recorte possa ser conferido. A cobertura GUI/DX
+199/199 continua sendo de handlers, com as limitações visuais e nativas
+registradas no roadmap.

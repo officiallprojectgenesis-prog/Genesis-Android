@@ -139,8 +139,16 @@ int MaterialLine(lua_State* L,bool section) {
     if (lua_isboolean(L,index)) draw.flipUV=lua_toboolean(L,index++)!=0;
     unsigned w=0,h=0;
     if (!Material(L,index++,draw.material,w,h)||!Number(L,index++,draw.width)||
-        !ReadColor(L,index++,draw.vertices[0].color)||!Stage(L,index++,draw.stage)) return Result(L,false);
-    if (!lua_isnoneornil(L,index)) { if (!Vector(L,index,draw.face)) return Result(L,false); draw.faceSet=true; }
+        !ReadColor(L,index++,draw.vertices[0].color)) return Result(L,false);
+    // ReadIfNextIsEnumString leaves numeric facing coordinates in place when
+    // the optional stage is omitted (CLuaDrawingDefs.cpp:246-258,296-308).
+    int stage=1;
+    if (lua_isboolean(L,index) || (lua_type(L,index)==LUA_TSTRING && Stage(L,index,stage))) {
+        if(!Stage(L,index++,draw.stage))return Result(L,false);
+    }
+    if (lua_isnumber(L,index)&&lua_isnumber(L,index+1)&&lua_isnumber(L,index+2)) {
+        if (!Vector(L,index,draw.face)) return Result(L,false);draw.faceSet=true;
+    }
     if (section) { if (!w||!h) return Result(L,false); draw.u/=w; draw.usize/=w; draw.v/=h; draw.vsize/=h; }
     return Result(L,Append(std::move(draw)));
 }
@@ -232,8 +240,11 @@ void DropResource(const std::string& owner,uint16_t net,uint32_t generation) {
 #ifndef __ANDROID__
 void SetTestAvailability(bool value) { testAvailable=value; }
 #endif
-void InstallDx3DLua(lua_State* L) {
+void Reset() {
     {std::lock_guard lock(mutex);pending.clear();vertexCount=0;published=std::make_shared<const std::vector<Draw>>();}
+}
+void InstallDx3DLua(lua_State* L) {
+    Reset();
     const struct {const char* name;lua_CFunction fn;} binds[] = {
         {"dxDrawLine3D",DxDrawLine3D},{"dxDrawMaterialLine3D",DxDrawMaterialLine3D},
         {"dxDrawMaterialSectionLine3D",DxDrawMaterialSectionLine3D},{"dxDrawPrimitive3D",DxDrawPrimitive3D},

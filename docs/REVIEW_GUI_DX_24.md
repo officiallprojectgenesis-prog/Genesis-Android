@@ -35,6 +35,18 @@ verificação de leaks do driver GLES fica desativada, sem desativar bounds/UB.
 As [próximas conversões sugeridas](NEXT_LUA_CONVERSIONS.md) registram prioridade,
 dependências e condições de conclusão.
 
+## Revisão de ciclo de vida e argumentos
+
+| Prioridade | Problema reproduzido | Correção / evidência |
+|---|---|---|
+| P1 | Encerrar a VM sem criar outra deixava shader, textura, SVG e batch 3D vivos; finalizadores Lua também podiam criar novos elementos durante o fechamento | `DxReset` centraliza a limpeza, invalida handles e limpa as filas nativas. SVG libera referências enquanto a registry existe. A limpeza é repetida após `lua_close` para recursos criados em `__gc`. Bitmaps seguem a liberação ordenada existente; 2DFX mantém repetição no game thread se necessário. Regressões de shutdown, SVG e finalizador falharam antes e passaram após a correção. |
+| P2 | Material line/section consumia o primeiro número de face-toward como estágio e recusava uma chamada válida | O parser só consome boolean/enum de estágio reconhecido, como `ReadIfNextIsEnumString` no desktop; coordenadas seguintes permanecem intactas. Testes conferem ausência/presença de estágio, UV e as três coordenadas. |
+| P2 | Expansão de macros podia ultrapassar o teto de 512 KiB aplicado somente ao arquivo original | Cada append de expansão verifica o orçamento antes de alocar/copy; excesso retorna diagnóstico antes de parse/compilação. Regressão de expansão encadeada falhava antes e agora verifica o limite. |
+
+O [próximo lote](NEXT_LUA_CONVERSIONS.md) foi repriorizado a partir dos recursos
+client/shared disponíveis. O novo auditor distingue escopo client/shared,
+comentários, strings e fontes compiladas, e não modifica os recursos.
+
 ## Limites ainda abertos após a revisão
 
 - 3D: somente `postfx`; faltam `prefx`/`postgui`, materiais shader, iluminação
@@ -58,7 +70,7 @@ dependências e condições de conclusão.
 
 ## Verificação
 
-`neon_dx_conversion_tests`: 8.248 verificações; `neon_resource_tests`: 274;
+`neon_dx_conversion_tests`: 8.264 verificações; `neon_resource_tests`: 274;
 Java: 24/29/34; ABI nativo: 65. Sem falhas. O renderer GLES do host foi
 Mesa/D3D12, Intel UHD Graphics. Muitas das verificações novas são as arestas e
 vértices das quatro subdivisões de esfera. Build ARM64 e APK debug sem arquivos
