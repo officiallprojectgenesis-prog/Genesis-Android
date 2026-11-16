@@ -450,7 +450,7 @@ int ModelOf(uint32_t id) {
     return found->second.model;
 }
 
-bool GetData(uint32_t id, const char* key, double& number, std::string& text, bool& isNumber) {
+bool GetData(uint32_t id, const char* key, double& number, std::string& text, bool& isNumber, bool* isBoolean) {
     if (!key) return false;
     std::lock_guard<std::mutex> lock(g_lock);
     auto element = g_data.find(id);
@@ -458,6 +458,7 @@ bool GetData(uint32_t id, const char* key, double& number, std::string& text, bo
     auto found = element->second.find(key);
     if (found == element->second.end()) return false;
     isNumber = found->second.number;
+    if (isBoolean) *isBoolean = found->second.boolean;
     number = found->second.value;
     text = found->second.text;
     return true;
@@ -472,6 +473,7 @@ void CopyElementData(uint32_t id, std::vector<std::pair<std::string, ElementData
     for (const auto& [key, datum] : element->second) {
         ElementDataValue value;
         value.number = datum.number;
+        value.boolean = datum.boolean;
         value.value = datum.value;
         value.text = datum.text;
         out.emplace_back(key, std::move(value));
@@ -704,8 +706,37 @@ void OnCustomData(const uint8_t* body, size_t length, size_t bits) {
     if (!reader.ReadBits(name.data(), nameLength * 8)) return;
     Datum value;
     if (!ReadLuaValue(reader, value)) return;
+    DIAG("CUSTOM_DATA id=%u local=%u name=%.*s number=%d boolean=%d value=%g", id, g_local,
+         static_cast<int>(name.size()), reinterpret_cast<const char*>(name.data()), value.number ? 1 : 0,
+         value.boolean ? 1 : 0, value.value);
     std::lock_guard<std::mutex> lock(g_lock);
     g_data[id][std::string(name.begin(), name.end())] = value;
+}
+
+bool ReadSetElementDataRpc(uint32_t id, Net::BitStreamReader& reader) {
+    uint32_t nameLength = 0;
+    // MAX_CUSTOMDATA_NAME_LENGTH is 128 (desktop logs and drops a longer name).
+    if (!ReadCompressed(reader, 2, nameLength) || nameLength > 128) return false;
+    std::vector<uint8_t> name(nameLength);
+    if (nameLength && !reader.ReadBits(name.data(), nameLength * 8)) return false;
+    Datum value;
+    if (!ReadLuaValue(reader, value)) return false;
+    std::lock_guard<std::mutex> lock(g_lock);
+    g_data[id][std::string(name.begin(), name.end())] = value;
+    return true;
+}
+
+bool ReadRemoveElementDataRpc(uint32_t id, Net::BitStreamReader& reader) {
+    uint32_t nameLength = 0;
+    if (!ReadCompressed(reader, 2, nameLength) || nameLength > 128) return false;
+    std::vector<uint8_t> name(nameLength);
+    if (nameLength && !reader.ReadBits(name.data(), nameLength * 8)) return false;
+    bool recursive = false;
+    if (!ReadFlag(reader, recursive)) return false;
+    std::lock_guard<std::mutex> lock(g_lock);
+    auto element = g_data.find(id);
+    if (element != g_data.end()) element->second.erase(std::string(name.begin(), name.end()));
+    return true;
 }
 
 void OnPlayerList(const uint8_t* body, size_t length, size_t bits) {

@@ -3,7 +3,10 @@ package com.worldrpg.neonlauncher.game;
 import android.media.AudioAttributes;
 import android.media.MediaPlayer;
 import android.content.Intent;
+import android.content.res.ColorStateList;
 import android.graphics.Color;
+import android.graphics.drawable.GradientDrawable;
+import android.graphics.drawable.StateListDrawable;
 import android.os.Bundle;
 import android.util.Log;
 import android.util.TypedValue;
@@ -26,6 +29,7 @@ import android.os.Looper;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.FrameLayout;
+import android.widget.ImageButton;
 import android.widget.LinearLayout;
 import android.widget.ProgressBar;
 import android.widget.TextView;
@@ -116,6 +120,17 @@ public final class EngineHostActivity extends GTASA {
     private LinearLayout keysRow;
     private View keysPanel;
     private boolean keyListAvailable;
+    // F11 opens the player map only while the "radar" control is enabled (toggleControl, kind 20).
+    private boolean radarControlEnabled = true;
+    // Script-drawn radar (setMobileRadarArea, kind 21). A tap inside acts like F11.
+    private View radarZone;
+    private GameSettingsView settingsView;
+    // Cog and Chat buttons; hidden with the key list while a script shows the cursor (its own panel is up).
+    private View settingsButtonView;
+    private View chatButtonView;
+    private boolean hudRowHidden;
+    private native boolean nativeSetGameSetting(int index, int value);
+    private native int[] nativeGetGameSetting(int index);
     private native void nativeDropConnection();
     private native String nativeMapSnapshot();
     // Keeps the Wi-Fi radio out of power save while the game runs. Device 2026-11-14 04:30:57 (UTC-3): traffic stopped in
@@ -183,6 +198,7 @@ public final class EngineHostActivity extends GTASA {
             installMtaPause();
             installPlayerMap();
             installTransferAndChat();
+            installSettings();
         }
     }
 
@@ -309,16 +325,35 @@ public final class EngineHostActivity extends GTASA {
         addContentView(chatLog, chatParams);
         chatLog.bringToFront();
         chatLog.setOnClickListener(v -> openChatInput());
+        installRadarZone();
+        // Cog, Chat and the key list sit in one row under the chat lines, clear of a radar drawn in the
+        // bottom-left corner. The cog opens the same menu as Back.
+        int rowTop = chatParams.topMargin + chatParams.height + dp(6);
+        ImageButton settingsButton = new ImageButton(this);
+        settingsButton.setImageResource(com.worldrpg.neonlauncher.R.drawable.ic_settings_hud);
+        settingsButton.setImageTintList(ColorStateList.valueOf(Color.WHITE));
+        settingsButton.setBackground(hudButtonBackground());
+        settingsButton.setContentDescription("Settings");
+        settingsButton.setPadding(dp(8), dp(8), dp(8), dp(8));
+        settingsButton.setScaleType(android.widget.ImageView.ScaleType.FIT_CENTER);
+        settingsButton.setOnClickListener(v -> toggleMtaPause());
+        FrameLayout.LayoutParams settingsParams = new FrameLayout.LayoutParams(dp(40), dp(40), Gravity.TOP | Gravity.START);
+        settingsParams.leftMargin = chatParams.leftMargin;
+        settingsParams.topMargin = rowTop;
+        addContentView(settingsButton, settingsParams);
         Button chatButton = new Button(this);
         chatButton.setText("Chat");
+        chatButton.setAllCaps(false);
         chatButton.setTextColor(Color.WHITE);
-        chatButton.setBackgroundColor(0xCC101820);
+        chatButton.setBackground(hudButtonBackground());
         chatButton.setOnClickListener(v -> openChatInput());
-        FrameLayout.LayoutParams buttonParams = new FrameLayout.LayoutParams(dp(88), dp(40), Gravity.BOTTOM | Gravity.START);
-        buttonParams.leftMargin = chatParams.leftMargin;
-        buttonParams.bottomMargin = dp(24);
+        FrameLayout.LayoutParams buttonParams = new FrameLayout.LayoutParams(dp(88), dp(40), Gravity.TOP | Gravity.START);
+        buttonParams.leftMargin = settingsParams.leftMargin + dp(48);
+        buttonParams.topMargin = rowTop;
         addContentView(chatButton, buttonParams);
-        installKeyList(buttonParams.leftMargin + dp(96), buttonParams.bottomMargin);
+        settingsButtonView = settingsButton;
+        chatButtonView = chatButton;
+        installKeyList(buttonParams.leftMargin + dp(96), rowTop);
 
         chatInput = new EditText(this);
         chatInput.setHint("Say:");
@@ -362,18 +397,18 @@ public final class EngineHostActivity extends GTASA {
     // The key list of the legacy SA-MP launcher (samp/gui/samp_widgets/buttonpanel.cpp): ">>" opens a
     // horizontal row and "<<" closes it. The row holds the keys that scripts bound with bindKey, read
     // when it opens. A tap is one key press (down, then up).
-    private void installKeyList(int leftMargin, int bottomMargin) {
+    private void installKeyList(int leftMargin, int topMargin) {
         keysOpenButton = new Button(this);
         keysOpenButton.setText(">>");
         keysOpenButton.setTextColor(Color.WHITE);
-        keysOpenButton.setBackgroundColor(0xCC101820);
+        keysOpenButton.setBackground(hudButtonBackground());
         keysOpenButton.setOnClickListener(v -> openKeyList());
         // Shown while connected (legacy ButtonPanel::draw returns unless GAMESTATE_CONNECTED).
         keysOpenButton.setVisibility(View.GONE);
         FrameLayout.LayoutParams openParams =
-                new FrameLayout.LayoutParams(dp(56), dp(40), Gravity.BOTTOM | Gravity.START);
+                new FrameLayout.LayoutParams(dp(56), dp(40), Gravity.TOP | Gravity.START);
         openParams.leftMargin = leftMargin;
-        openParams.bottomMargin = bottomMargin;
+        openParams.topMargin = topMargin;
         addContentView(keysOpenButton, openParams);
 
         keysRow = new LinearLayout(this);
@@ -384,10 +419,10 @@ public final class EngineHostActivity extends GTASA {
                 FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT));
         scroll.setVisibility(View.GONE);
         FrameLayout.LayoutParams rowParams = new FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.WRAP_CONTENT, dp(40), Gravity.BOTTOM | Gravity.START);
+                FrameLayout.LayoutParams.WRAP_CONTENT, dp(40), Gravity.TOP | Gravity.START);
         rowParams.leftMargin = leftMargin;
         rowParams.rightMargin = dp(12);
-        rowParams.bottomMargin = bottomMargin;
+        rowParams.topMargin = topMargin;
         addContentView(scroll, rowParams);
         keysPanel = scroll;
     }
@@ -397,7 +432,7 @@ public final class EngineHostActivity extends GTASA {
         button.setText(label);
         button.setAllCaps(false);
         button.setTextColor(Color.WHITE);
-        button.setBackgroundColor(0xCC101820);
+        button.setBackground(hudButtonBackground());
         button.setMinWidth(dp(48));
         button.setMinimumWidth(dp(48));
         button.setPadding(dp(10), 0, dp(10), 0);
@@ -438,9 +473,20 @@ public final class EngineHostActivity extends GTASA {
         keysPanel.setVisibility(View.VISIBLE);
     }
 
+    private void setHudRowHidden(boolean hidden) {
+        if (hidden == hudRowHidden) return;
+        hudRowHidden = hidden;
+        int visibility = hidden ? View.GONE : View.VISIBLE;
+        if (settingsButtonView != null) settingsButtonView.setVisibility(visibility);
+        if (chatButtonView != null) chatButtonView.setVisibility(visibility);
+        closeKeyList();
+    }
+
     private void closeKeyList() {
         if (keysPanel != null) keysPanel.setVisibility(View.GONE);
-        if (keysOpenButton != null) keysOpenButton.setVisibility(keyListAvailable ? View.VISIBLE : View.GONE);
+        if (keysOpenButton != null) {
+            keysOpenButton.setVisibility(keyListAvailable && !hudRowHidden ? View.VISIBLE : View.GONE);
+        }
     }
 
     // The key list exists only during a session, and gives way to the chat input bar, which opens
@@ -721,11 +767,16 @@ public final class EngineHostActivity extends GTASA {
                 hideDownload();
                 appendChat("#ACD5FEConnected to the server.");
                 setKeyListAvailable(true);
+                // The game loaded its own options file at boot; put the player's choices back.
+                applySavedSettings();
+                mapHandler.postDelayed(this::applySavedSettings, 3000);
             } else {
                 hideDownload();
                 // Never leave the loading screen over a disconnect (desktop ~CClientGame ends it first).
                 if (loadingView != null) loadingView.end();
                 setKeyListAvailable(false);
+                radarControlEnabled = true;
+                setRadarArea("");
                 // Native sends the desktop error box as "title<0x1F>text" (net/DisconnectMessages).
                 String title = "Disconnected";
                 String text = message == null || message.isEmpty() ? "Disconnected from the server." : message;
@@ -927,7 +978,16 @@ public final class EngineHostActivity extends GTASA {
         runOnUiThread(() -> {
             if (text == null) return;
             if (kind == 9) {
-                showPlayerMap(true);
+                // GTA asked for its pause/map menu (a tap on its own radar): same as F11.
+                pressMapKey();
+                return;
+            }
+            if (kind == 20) {
+                if (text.startsWith("radar|")) radarControlEnabled = !text.endsWith("|0");
+                return;
+            }
+            if (kind == 21) {
+                setRadarArea(text);
                 return;
             }
             if (kind == 8) {
@@ -1091,7 +1151,10 @@ public final class EngineHostActivity extends GTASA {
         final String shown = flags.contains("overlayempty") ? "X" : commands;
         runOnUiThread(() -> {
             syncScriptKeyboard(shown);
-            if (dxOverlay != null) dxOverlay.setFrame(shown);
+            if (dxOverlay != null) {
+                dxOverlay.setFrame(shown);
+                setHudRowHidden(dxOverlay.isCursorShown());
+            }
         });
     }
 
@@ -1110,62 +1173,214 @@ public final class EngineHostActivity extends GTASA {
         return value;
     }
 
-    /** Back opens this panel. It does not open the GTA story pause menu. */
+    /** Back and the cog open this panel. It does not open the GTA story pause menu. */
     private void installMtaPause() {
         FrameLayout root = new FrameLayout(this);
-        root.setBackgroundColor(0xCC101418);
+        root.setBackgroundColor(0xB3000000);
         root.setVisibility(View.GONE);
         root.setClickable(true);
+        // A tap on the dimmed area outside the card resumes, like Back.
+        root.setOnClickListener(v -> showMtaPause(false));
 
         LinearLayout panel = new LinearLayout(this);
         panel.setOrientation(LinearLayout.VERTICAL);
-        panel.setGravity(Gravity.CENTER_HORIZONTAL);
-        int pad = dp(24);
-        panel.setPadding(pad, pad, pad, pad);
+        panel.setClickable(true);
+        panel.setPadding(dp(24), dp(20), dp(24), dp(20));
+        GradientDrawable card = new GradientDrawable();
+        card.setColor(0xF2141A22);
+        card.setCornerRadius(dp(18));
+        card.setStroke(dp(1), 0x33FFFFFF);
+        panel.setBackground(card);
 
+        LinearLayout header = new LinearLayout(this);
+        header.setOrientation(LinearLayout.HORIZONTAL);
+        header.setGravity(Gravity.CENTER_VERTICAL);
+        android.widget.ImageView cog = new android.widget.ImageView(this);
+        cog.setImageResource(com.worldrpg.neonlauncher.R.drawable.ic_settings_hud);
+        cog.setImageTintList(ColorStateList.valueOf(0xFF7FB8FF));
+        header.addView(cog, new LinearLayout.LayoutParams(dp(28), dp(28)));
+        LinearLayout titles = new LinearLayout(this);
+        titles.setOrientation(LinearLayout.VERTICAL);
+        titles.setPadding(dp(12), 0, 0, 0);
         TextView title = new TextView(this);
         title.setText(BuildConfig.LAUNCHER_TITLE);
         title.setTextColor(Color.WHITE);
-        title.setTextSize(TypedValue.COMPLEX_UNIT_SP, 28);
-        title.setGravity(Gravity.CENTER);
-        panel.addView(title);
-
+        title.setTextSize(TypedValue.COMPLEX_UNIT_SP, 20);
+        title.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+        titles.addView(title);
         String server = getIntent().getStringExtra(GameActivity.EXTRA_SERVER_NAME);
         TextView subtitle = new TextView(this);
-        subtitle.setText(server == null || server.isEmpty() ? "Pause" : server);
+        subtitle.setText(server == null || server.isEmpty() ? "Paused" : server);
         subtitle.setTextColor(0xFFB7C3CE);
-        subtitle.setTextSize(TypedValue.COMPLEX_UNIT_SP, 16);
-        subtitle.setGravity(Gravity.CENTER);
-        subtitle.setPadding(0, dp(6), 0, dp(18));
-        panel.addView(subtitle);
+        subtitle.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13);
+        subtitle.setSingleLine(true);
+        subtitle.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        titles.addView(subtitle);
+        header.addView(titles, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+        panel.addView(header);
 
-        panel.addView(pauseButton("Resume", v -> showMtaPause(false)));
-        panel.addView(pauseButton("Map", v -> {
+        View divider = new View(this);
+        divider.setBackgroundColor(0x22FFFFFF);
+        LinearLayout.LayoutParams dividerParams = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(1));
+        dividerParams.topMargin = dp(16);
+        dividerParams.bottomMargin = dp(8);
+        panel.addView(divider, dividerParams);
+
+        panel.addView(pauseButton("Resume", com.worldrpg.neonlauncher.R.drawable.ic_play_hud, 0xFF2F6FD6, 0xFF2559AD,
+                v -> showMtaPause(false)));
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        Button map = pauseButton("Map", 0, 0xFF243140, 0xFF31435A, v -> {
             showMtaPause(false);
-            showPlayerMap(true);
-        }));
-        panel.addView(pauseButton("Settings", v -> Toast.makeText(this, "Ajustes ainda nao ligados.", Toast.LENGTH_SHORT).show()));
-        panel.addView(pauseButton("Disconnect", v -> finish()));
+            pressMapKey();
+        });
+        Button settings = pauseButton("Settings", com.worldrpg.neonlauncher.R.drawable.ic_settings_hud, 0xFF243140,
+                0xFF31435A, v -> {
+                    showMtaPause(false);
+                    showSettings(true);
+                });
+        LinearLayout.LayoutParams half = new LinearLayout.LayoutParams(0, dp(48), 1f);
+        half.topMargin = dp(8);
+        LinearLayout.LayoutParams half2 = new LinearLayout.LayoutParams(0, dp(48), 1f);
+        half2.topMargin = dp(8);
+        half2.leftMargin = dp(8);
+        row.addView(map, half);
+        row.addView(settings, half2);
+        panel.addView(row);
+        panel.addView(pauseButton("Disconnect", 0, 0xFF5A1F24, 0xFF7A2A31, v -> finish()));
 
         FrameLayout.LayoutParams panelParams = new FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.CENTER);
+                Math.min(dp(380), getResources().getDisplayMetrics().widthPixels - dp(32)),
+                FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.CENTER);
         root.addView(panel, panelParams);
         addContentView(root, new FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
+        root.setElevation(dp(24));
         mtaPause = root;
     }
 
-    private Button pauseButton(String label, View.OnClickListener listener) {
+    private Button pauseButton(String label, int icon, int color, int pressed, View.OnClickListener listener) {
         Button button = new Button(this);
         button.setText(label);
         button.setAllCaps(false);
         button.setTextColor(Color.WHITE);
-        button.setBackgroundColor(0xFF243140);
-        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(dp(280), dp(48));
+        button.setTextSize(TypedValue.COMPLEX_UNIT_SP, 15);
+        button.setBackground(roundedStates(color, pressed, dp(12)));
+        if (icon != 0) {
+            android.graphics.drawable.Drawable drawable = getDrawable(icon);
+            if (drawable != null) {
+                drawable = drawable.mutate();
+                drawable.setTint(Color.WHITE);
+                drawable.setBounds(0, 0, dp(20), dp(20));
+                button.setCompoundDrawables(drawable, null, null, null);
+                button.setCompoundDrawablePadding(dp(8));
+            }
+        }
+        button.setPadding(dp(16), 0, dp(16), 0);
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(48));
         params.topMargin = dp(8);
         button.setLayoutParams(params);
         button.setOnClickListener(listener);
         return button;
+    }
+
+    private static StateListDrawable roundedStates(int color, int pressed, int radius) {
+        GradientDrawable normal = new GradientDrawable();
+        normal.setColor(color);
+        normal.setCornerRadius(radius);
+        GradientDrawable down = new GradientDrawable();
+        down.setColor(pressed);
+        down.setCornerRadius(radius);
+        StateListDrawable states = new StateListDrawable();
+        states.addState(new int[] {android.R.attr.state_pressed}, down);
+        states.addState(new int[] {}, normal);
+        return states;
+    }
+
+    /** Background of the on-screen HUD buttons (cog, Chat, key list). */
+    private StateListDrawable hudButtonBackground() {
+        return roundedStates(0xCC101820, 0xEE2A3646, dp(8));
+    }
+
+    // Desktop F11 (CKeyBinds.cpp:238): the key goes to the script binds, and the player map toggles
+    // only while the "radar" control is enabled. A script that draws its own map disables the
+    // control and binds F11 itself. The radar tap, the pause-menu Map button and the hardware F11
+    // all come here.
+    private void pressMapKey() {
+        Log.i(TAG, "map key: clientReady=" + clientReady + " radarControl=" + radarControlEnabled);
+        if (clientReady) {
+            nativeKeyEvent("F11", true);
+            mapHandler.postDelayed(() -> nativeKeyEvent("F11", false), 80);
+        }
+        if (radarControlEnabled) showPlayerMap(!isPlayerMapShowing());
+    }
+
+    private boolean isPlayerMapShowing() {
+        return playerMap != null && playerMap.getTag() instanceof View
+                && ((View) playerMap.getTag()).getVisibility() == View.VISIBLE;
+    }
+
+    // A transparent view over the script's radar. While a script shows the cursor the touch goes on
+    // to the DX overlay, so the radar tap never opens the map over another panel.
+    private void installRadarZone() {
+        View zone = new View(this);
+        zone.setVisibility(View.GONE);
+        zone.setOnTouchListener(new View.OnTouchListener() {
+            private float downX, downY;
+            private long downAt;
+
+            @Override
+            public boolean onTouch(View v, android.view.MotionEvent event) {
+                if (event.getActionMasked() == android.view.MotionEvent.ACTION_DOWN) {
+                    Log.i(TAG, "radar zone touch, cursor=" + (dxOverlay != null && dxOverlay.isCursorShown()));
+                }
+                if (dxOverlay != null && dxOverlay.isCursorShown()) return false;
+                switch (event.getActionMasked()) {
+                    case android.view.MotionEvent.ACTION_DOWN:
+                        downX = event.getRawX();
+                        downY = event.getRawY();
+                        downAt = event.getEventTime();
+                        return true;
+                    case android.view.MotionEvent.ACTION_UP:
+                        float slop = android.view.ViewConfiguration.get(v.getContext()).getScaledTouchSlop();
+                        if (Math.abs(event.getRawX() - downX) <= slop && Math.abs(event.getRawY() - downY) <= slop
+                                && event.getEventTime() - downAt <= 500) {
+                            pressMapKey();
+                        }
+                        return true;
+                    default:
+                        return true;
+                }
+            }
+        });
+        addContentView(zone, new FrameLayout.LayoutParams(0, 0, Gravity.TOP | Gravity.START));
+        radarZone = zone;
+    }
+
+    /** "x|y|w|h" in DX overlay pixels, or empty to remove the zone. */
+    private void setRadarArea(String text) {
+        Log.i(TAG, "radar area: \"" + text + "\" zone=" + (radarZone != null));
+        if (radarZone == null) return;
+        String[] parts = text == null ? new String[0] : text.split("\\|");
+        if (parts.length != 4) {
+            radarZone.setVisibility(View.GONE);
+            return;
+        }
+        try {
+            float x = Float.parseFloat(parts[0]);
+            float y = Float.parseFloat(parts[1]);
+            float w = Float.parseFloat(parts[2]);
+            float h = Float.parseFloat(parts[3]);
+            FrameLayout.LayoutParams params = (FrameLayout.LayoutParams) radarZone.getLayoutParams();
+            params.leftMargin = Math.round(x);
+            params.topMargin = Math.round(y);
+            params.width = Math.max(1, Math.round(w));
+            params.height = Math.max(1, Math.round(h));
+            radarZone.setLayoutParams(params);
+            radarZone.setVisibility(View.VISIBLE);
+        } catch (NumberFormatException ignored) {
+            radarZone.setVisibility(View.GONE);
+        }
     }
 
     private int dp(int value) {
@@ -1202,19 +1417,72 @@ public final class EngineHostActivity extends GTASA {
         container.addView(close, closeParams);
         addContentView(container, new FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
+        container.setElevation(dp(24));
         playerMap.setTag(container);
     }
 
     private void showPlayerMap(boolean show) {
         if (playerMap == null) return;
         Object tag = playerMap.getTag();
-        if (tag instanceof View) ((View) tag).setVisibility(show ? View.VISIBLE : View.GONE);
+        if (tag instanceof View) {
+            ((View) tag).setVisibility(show ? View.VISIBLE : View.GONE);
+            if (show) ((View) tag).bringToFront();
+        }
         mapHandler.removeCallbacks(mapRefresh);
         if (show) mapHandler.post(mapRefresh);
     }
 
+    private final GameSettingsView.Host settingsHost = new GameSettingsView.Host() {
+        @Override public int[] get(int index) {
+            try {
+                return nativeGetGameSetting(index);
+            } catch (UnsatisfiedLinkError error) {
+                return null;
+            }
+        }
+
+        @Override public boolean set(int index, int value) {
+            try {
+                return nativeSetGameSetting(index, value);
+            } catch (UnsatisfiedLinkError error) {
+                return false;
+            }
+        }
+
+        @Override public void setChatShown(boolean shown) {
+            if (chatLog != null) chatLog.setChatVisible(shown);
+        }
+
+        @Override public void onClose() {
+            showSettings(false);
+            showMtaPause(true);
+        }
+    };
+
+    private void installSettings() {
+        settingsView = new GameSettingsView(this, settingsHost);
+        settingsView.setVisibility(View.GONE);
+        // Above the HUD buttons, whose default elevation would draw their labels over this screen.
+        settingsView.setElevation(dp(24));
+        addContentView(settingsView, new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
+    }
+
+    private void showSettings(boolean show) {
+        if (settingsView == null) return;
+        if (show) settingsView.refresh();
+        settingsView.setVisibility(show ? View.VISIBLE : View.GONE);
+        if (show) settingsView.bringToFront();
+    }
+
+    private void applySavedSettings() {
+        GameSettingsView.applySaved(this, settingsHost);
+    }
+
     private void showMtaPause(boolean show) {
-        if (mtaPause != null) mtaPause.setVisibility(show ? View.VISIBLE : View.GONE);
+        if (mtaPause == null) return;
+        mtaPause.setVisibility(show ? View.VISIBLE : View.GONE);
+        if (show) mtaPause.bringToFront();
     }
 
     private void toggleMtaPause() {
@@ -1298,12 +1566,20 @@ public final class EngineHostActivity extends GTASA {
                 showPlayerMap(false);
                 return true;
             }
+            if (settingsView != null && settingsView.getVisibility() == View.VISIBLE) {
+                showSettings(false);
+                showMtaPause(true);
+                return true;
+            }
             toggleMtaPause();
             return true;
         }
         // A hardware keyboard key for bindKey and onClientKey. Held-key repeats are not new presses.
         String key = mtaKeyName(keyCode);
         if (key != null && event.getRepeatCount() == 0) nativeKeyEvent(key, true);
+        if (keyCode == android.view.KeyEvent.KEYCODE_F11 && event.getRepeatCount() == 0 && radarControlEnabled) {
+            showPlayerMap(!isPlayerMapShowing());
+        }
         return super.onKeyDown(keyCode, event);
     }
 

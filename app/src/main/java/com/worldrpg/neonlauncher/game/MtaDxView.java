@@ -110,6 +110,11 @@ public final class MtaDxView extends View {
         cursorListener = listener;
     }
 
+    /** True while the last frame had the cursor showing (a script panel owns the touch). */
+    public boolean isCursorShown() {
+        return cursorShown;
+    }
+
     // Desktop: with showCursor(true) the mouse drives the interface and the game gets no input.
     // Here the overlay takes the touch and reports it at the coordinates the frame is drawn in.
     @Override

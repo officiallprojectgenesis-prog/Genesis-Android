@@ -10,6 +10,7 @@
 
 namespace WorldRPG::Net {
 struct ResourceStartInfo;
+class BitStreamReader;
 }
 
 namespace WorldRPG::ServerWorld {
@@ -28,11 +29,14 @@ void NotePlayerSkin(uint32_t id, int model);
 // -1 until PLAYER_LIST or ENTITY_ADD names a model.
 int ModelOf(uint32_t id);
 
-bool GetData(uint32_t id, const char* key, double& number, std::string& text, bool& isNumber);
+// isBoolean (optional) is set when the server sent a Lua boolean; number is then 1 or 0.
+bool GetData(uint32_t id, const char* key, double& number, std::string& text, bool& isNumber,
+             bool* isBoolean = nullptr);
 
 // One custom-data value as GetData reports it (number, or text when number is false).
 struct ElementDataValue {
     bool number = false;
+    bool boolean = false;
     double value = 0;
     std::string text;
 };
@@ -49,6 +53,11 @@ bool FindPlayerByNick(const std::string& nick, uint32_t& id);
 void OnEntityAdd(const uint8_t* body, size_t length, size_t bits);
 void OnEntityRemove(const uint8_t* body, size_t length, size_t bits);
 void OnCustomData(const uint8_t* body, size_t length, size_t bits);
+// CElementRPCs::SetElementData (CElementRPCs.cpp:84-102): compressed u16 name length, the name, one CLuaArgument.
+// Reads from the RPC body after the element id. False on a malformed body.
+bool ReadSetElementDataRpc(uint32_t id, Net::BitStreamReader& reader);
+// CElementRPCs::RemoveElementData (104-120): compressed u16 name length, the name, one bit (recursive, unused).
+bool ReadRemoveElementDataRpc(uint32_t id, Net::BitStreamReader& reader);
 void OnPlayerList(const uint8_t* body, size_t length, size_t bits);
 void OnResourceStart(const WorldRPG::Net::ResourceStartInfo& info);
 uint32_t LastResourceRoot();

@@ -19,6 +19,7 @@
 #include "../gtasa/RenderWareHooks.h"
 #include "../gtasa/InputHooks.h"
 #include "../gtasa/HUDRenderer.h"
+#include "../gtasa/MobileSettings.h"
 #include "../shared/ElementManager.h"
 #include "../shared/SyncManager.h"
 #include "../shared/PacketHandler.h"
@@ -852,6 +853,24 @@ Java_com_worldrpg_neonlauncher_game_EngineHostActivity_nativeKeyEvent(JNIEnv* en
     if (!name) return;
     WorldRPG::Script::KeyBindsQueueKey(name, down == JNI_TRUE);
     env->ReleaseStringUTFChars(key, name);
+}
+
+// GTA mobile options (gtasa/MobileSettings.h) for the in-game settings screen.
+JNIEXPORT jboolean JNICALL
+Java_com_worldrpg_neonlauncher_game_EngineHostActivity_nativeSetGameSetting(JNIEnv*, jobject, jint index, jint value) {
+    return WorldRPG::Game::SetMobileSetting(index, value) ? JNI_TRUE : JNI_FALSE;
+}
+
+// {value, min, max}, or null when the table is not available.
+JNIEXPORT jintArray JNICALL
+Java_com_worldrpg_neonlauncher_game_EngineHostActivity_nativeGetGameSetting(JNIEnv* env, jobject, jint index) {
+    int value = 0, min = 0, max = 0;
+    if (!WorldRPG::Game::GetMobileSetting(index, value, min, max)) return nullptr;
+    jintArray out = env->NewIntArray(3);
+    if (!out) return nullptr;
+    const jint data[3] = {value, min, max};
+    env->SetIntArrayRegion(out, 0, 3, data);
+    return out;
 }
 
 // The keys scripts have bound ("e|F1|p"), for the on-screen key list.

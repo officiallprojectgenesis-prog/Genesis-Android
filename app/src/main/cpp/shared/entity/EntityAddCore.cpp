@@ -101,6 +101,7 @@ bool ReadLuaValue(Net::BitStreamReader& reader, Datum& out) {
         bool value = false;
         if (!ReadFlag(reader, value)) LUA_FAIL();
         out.number = true;
+        out.boolean = true;
         out.value = value ? 1 : 0;
         return true;
     }

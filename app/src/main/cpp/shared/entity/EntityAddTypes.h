@@ -84,6 +84,9 @@ struct Visual {
 
 struct Datum {
     bool number = false;
+    // Lua boolean (LUA_TBOOLEAN, CLuaArgument::ReadFromBitStream): value is 1 or 0 and number is true,
+    // so readers that want a number keep working; getElementData returns true/false as desktop does.
+    bool boolean = false;
     double value = 0;
     std::string text;
 };

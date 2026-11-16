@@ -140,6 +140,11 @@ bool HandleLuaElementRPC(const uint8_t* body, size_t length, size_t bits) {
         }
     };
     switch (func) {
+        case Rpc::SetElementData:
+            // Any element type (CElementRPCs.cpp:84-102). onClientElementDataChange is not fired yet.
+            return WorldRPG::ServerWorld::ReadSetElementDataRpc(id, reader);
+        case Rpc::RemoveElementData:
+            return WorldRPG::ServerWorld::ReadRemoveElementDataRpc(id, reader);
         case Rpc::SetElementPosition: {
             // CElementRPCs::SetElementPosition (122-170): x, y, z floats, u8 time context; a player then has an
             // optional u8 warp (Teleport vs SetPosition, both place the body here).

@@ -8,6 +8,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Fixed — server element data reached Lua (2026-11-15)
+
+- **`SET_ELEMENT_DATA` (RPC 6) and `REMOVE_ELEMENT_DATA` (RPC 133)** were logged as "not ported" and dropped, so a server `setElementData` never reached client scripts. Ported `CElementRPCs::SetElementData` / `RemoveElementData` (`CElementRPCs.cpp:84-120`) as `ServerWorld::ReadSetElementDataRpc` / `ReadRemoveElementDataRpc`. `onClientElementDataChange` is not fired yet. Device evidence 2026-11-15: `DIAG LUA_ELEMENT_RPC func=6 id=644 kind=player function not ported`; World RPG's `worldrpg:loggedIn` stayed nil, so its F11 map and `/gps` menu never opened.
+- **Lua booleans in element data** came back as the numbers 1/0. `Datum` / `ElementDataValue` now keep a `boolean` flag (CLuaArgument LUA_TBOOLEAN); `getElementData` and `getAllElementData` return `true`/`false` as desktop does.
+
+### Added — in-game settings screen (2026-11-15)
+
+- **Settings** (pause menu, `GameSettingsView`): visual quality, resolution, draw distance, shadows, car reflections, brightness, frame limiter, sound effects and music volume, vibration, subtitles, and chat shown/hidden. The GTA rows write GTA SA mobile's own options table (`MobileSettings::settings`, 37 entries of 0x28 bytes, value at +0x10, range at +0x18/+0x1c; order from `setupValues` in libGTASA 2.10) through `gtasa/MobileSettings.cpp` and `nativeSetGameSetting` / `nativeGetGameSetting`. Choices are kept in the app's preferences and written again on join, because the game reloads its own file at boot. Whether each option changes the picture at once (rather than after a restart) has not been checked on a device for every row.
+- The pause menu, the player map and the settings screen have elevation 24dp, so the HUD button labels no longer draw over them.
+
+### Changed — HUD buttons, radar tap and pause menu (2026-11-15)
+
+- **Chat, key list and a new cog button moved to the top** (`EngineHostActivity.installTransferAndChat`, `installKeyList`). They sit in one row under the chat lines instead of the bottom-left corner, where they covered a script-drawn radar. The cog opens the pause menu, the same as Back.
+- **Map opens like desktop F11** (`pressMapKey`). Desktop binds F11 to the `radar` control (`CKeyBinds.cpp:238`). The pause-menu Map button, a hardware F11, a tap on a script radar and GTA's own map request (kind 9) now all send F11 to the script binds. They open the player map only while the `radar` control is enabled.
+- **`toggleControl` / `isControlEnabled`** are no longer constant `true` stubs (`LuaApiExtra.cpp`). The state is kept per control name. Only `radar` has an effect so far: kind 20 tells the activity.
+- **Android-only `setMobileRadarArea(x, y, w, h)` / `setMobileRadarArea(false)`** (kind 21). A script that draws its own radar names its rectangle. A tap there acts like F11. While a script shows the cursor, the tap goes to the DX overlay instead, so the map never opens over another panel. This function does not exist on desktop. Scripts must check `type(setMobileRadarArea) == "function"`.
+- **Pause menu layout**: rounded card with a header (cog, title, server name), Resume, Map and Settings side by side, and Disconnect. A tap outside the card resumes. The pause menu and the player map come to the front when shown, so the HUD buttons no longer draw over them. Settings still only shows "Ajustes ainda nao ligados".
+- The cog, Chat and key-list row hides while a script shows the cursor (its own panel, such as a map or login form, is up).
+- Run on the S25 2026-11-15: a minimap tap reached the zone, sent F11, and World RPG's map opened once the element-data fix below was in.
 
 ### Fixed — GUI/DX shader review
 

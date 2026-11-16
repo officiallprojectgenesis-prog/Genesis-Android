@@ -30,7 +30,9 @@ constexpr uint8_t PedTask = 101;
 
 // eElementRPCFunctions (rpc_enums.h). NUM_RPC_FUNCS is 225.
 namespace Rpc {
+constexpr uint8_t SetElementData = 6;
 constexpr uint8_t SetElementPosition = 7;
+constexpr uint8_t RemoveElementData = 133;
 constexpr uint8_t SetElementVelocity = 8;
 constexpr uint8_t SetElementInterior = 9;
 constexpr uint8_t SetElementDimension = 10;

@@ -17,6 +17,7 @@ extern "C" {
 #include <cstdio>
 #include <cstring>
 #include <limits>
+#include <set>
 #include <string>
 
 // Chat line sink (jni/JNI_OnLoad.cpp on Android, stubs/jni_bridge_stub.cpp in the headless build).
@@ -111,6 +112,56 @@ int IsChatVisible(lua_State* L) {
     return 1;
 }
 
+// toggleControl(control, enabled) / isControlEnabled(control). The state is kept for every name;
+// only "radar" acts on the phone: F11 is bound to the "radar" control (desktop CKeyBinds.cpp:238),
+// and the player map opens on F11 only while that control is enabled. Kind 20 tells the activity.
+static std::set<std::string> g_disabledControls;
+
+int ToggleControl(lua_State* L) {
+    const char* control = luaL_checkstring(L, 1);
+    luaL_checktype(L, 2, LUA_TBOOLEAN);
+    const bool enabled = lua_toboolean(L, 2) != 0;
+    if (enabled) g_disabledControls.erase(control);
+    else g_disabledControls.insert(control);
+    if (std::strcmp(control, "radar") == 0) {
+        LUA_LOGI("toggleControl radar %d", enabled ? 1 : 0);
+        WorldRPG::JniBridge::PostGameLine(20, enabled ? "radar|1" : "radar|0");
+    }
+    lua_pushboolean(L, 1);
+    return 1;
+}
+
+int IsControlEnabled(lua_State* L) {
+    const char* control = luaL_checkstring(L, 1);
+    lua_pushboolean(L, g_disabledControls.count(control) == 0 ? 1 : 0);
+    return 1;
+}
+
+// Android only: setMobileRadarArea(x, y, width, height) names the screen rectangle of a script-drawn
+// radar, in the same pixels as dxDraw*. A tap there acts like F11, as a tap on the radar does in
+// GTA SA mobile. setMobileRadarArea(false) removes it. Kind 21: "x|y|w|h", or empty to remove.
+int SetMobileRadarArea(lua_State* L) {
+    if (lua_isnoneornil(L, 1) || (lua_isboolean(L, 1) && !lua_toboolean(L, 1))) {
+        WorldRPG::JniBridge::PostGameLine(21, "");
+        lua_pushboolean(L, 1);
+        return 1;
+    }
+    const lua_Number x = luaL_checknumber(L, 1);
+    const lua_Number y = luaL_checknumber(L, 2);
+    const lua_Number w = luaL_checknumber(L, 3);
+    const lua_Number h = luaL_checknumber(L, 4);
+    if (!(std::isfinite(x) && std::isfinite(y) && std::isfinite(w) && std::isfinite(h)) || w <= 0 || h <= 0) {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+    char line[96];
+    std::snprintf(line, sizeof(line), "%.1f|%.1f|%.1f|%.1f", x, y, w, h);
+    LUA_LOGI("setMobileRadarArea %s", line);
+    WorldRPG::JniBridge::PostGameLine(21, line);
+    lua_pushboolean(L, 1);
+    return 1;
+}
+
 int ClearChatBox(lua_State* L) {
     WorldRPG::JniBridge::PostGameLine(8, "");
     lua_pushboolean(L, 1);
@@ -161,11 +212,13 @@ int GetElementData(lua_State* L) {
     double number = 0;
     std::string text;
     bool isNumber = false;
-    if (!WorldRPG::ServerWorld::GetData(id, key, number, text, isNumber)) {
+    bool isBoolean = false;
+    if (!WorldRPG::ServerWorld::GetData(id, key, number, text, isNumber, &isBoolean)) {
         lua_pushnil(L);
         return 1;
     }
-    if (isNumber) lua_pushnumber(L, number);
+    if (isBoolean) lua_pushboolean(L, number != 0 ? 1 : 0);
+    else if (isNumber) lua_pushnumber(L, number);
     else lua_pushlstring(L, text.data(), text.size());
     return 1;
 }
@@ -539,6 +592,9 @@ void InstallExtraBindings(lua_State* L) {
     SetGlobal(L, "showChat", ShowChat);
     SetGlobal(L, "isChatVisible", IsChatVisible);
     SetGlobal(L, "clearChatBox", ClearChatBox);
+    SetGlobal(L, "toggleControl", ToggleControl);
+    SetGlobal(L, "isControlEnabled", IsControlEnabled);
+    SetGlobal(L, "setMobileRadarArea", SetMobileRadarArea);
     SetGlobal(L, "iprint", Iprint);
     SetGlobal(L, "debugMessage", DebugMessage);
     SetGlobal(L, "getElementData", GetElementData);
@@ -596,7 +652,7 @@ void InstallExtraBindings(lua_State* L) {
         {"setPedExitVehicle", kTrue}, {"setPedTaskSequence", kTrue}, {"setPedCanBeDraggedOut", kTrue},
         {"restorePedNativeVehicleResponse", kTrue}, {"releasePedNativePointArm", kTrue},
         {"acquirePedNativePointArm", kFalse}, {"isLineOfSightClear", kFalse}, {"getWaterLevel", kNil},
-        {"getScreenFromWorldPosition", kNil}, {"isControlEnabled", kTrue}, {"toggleControl", kTrue},
+        {"getScreenFromWorldPosition", kNil},
         // Physical attachment has no mobile hook yet; do not report a successful mutation.
         {"executeCommandHandler", kFalse}, {"attachElements", kFalse}, {"detachElements", kFalse},
         {"setObjectMaterial", kTrue},
