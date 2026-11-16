@@ -112,6 +112,7 @@ static std::atomic<bool> g_cameraRotValid{false};
 static TeleportFn g_teleport = nullptr;
 static EndUserPauseFn g_endPause = nullptr;
 static RemoveTopFn g_removeTop = nullptr;
+static void (*g_processMenuPending)(void*) = nullptr;
 static SwitchOffFn g_switchOff = nullptr;
 static void* g_mobileMenu = nullptr;
 using ScriptProcessFn = void (*)(void*);
@@ -151,6 +152,7 @@ static void ResolvePlayerFns() {
     g_teleport = reinterpret_cast<TeleportFn>(dlsym(handle, "_ZN4CPed8TeleportE7CVectorh"));
     g_endPause = reinterpret_cast<EndUserPauseFn>(dlsym(handle, "_ZN6CTimer12EndUserPauseEv"));
     g_removeTop = reinterpret_cast<RemoveTopFn>(dlsym(handle, "_ZN10MobileMenu15RemoveTopScreenEbb"));
+    g_processMenuPending = reinterpret_cast<void (*)(void*)>(dlsym(handle, "_ZN10MobileMenu14ProcessPendingEv"));
     g_switchOff = reinterpret_cast<SwitchOffFn>(dlsym(handle, "_Z20Menu_SwitchOffToGamev"));
 }
 
@@ -3593,25 +3595,33 @@ WorldFns& WorldApi() {
     return api;
 }
 
-void ApplyScriptClothes(void* ped, const ScriptPedSlot& slot) {
+bool ApplyScriptClothes(void* ped, const ScriptPedSlot& slot) {
+    if (!StreamingIdle()) return false;
     auto& api = Clothes();
     if (!api.rebuild || !api.setTex) {
         ENGINE_LOGI("DIAG addPedClothes: rebuild=%p set=%p",
             reinterpret_cast<void*>(api.rebuild), reinterpret_cast<void*>(api.setTex));
-        return;
+        return false;
     }
     void* data = EnsurePlayerData(ped, true);
     if (data && api.allocData) api.allocData(data);
     void* desc = data ? *reinterpret_cast<void**>(static_cast<unsigned char*>(data) + 8) : nullptr;
     if (!desc) {
         ENGINE_LOGI("DIAG addPedClothes: clothes desc missing");
-        return;
+        return false;
     }
     for (int i = 0; i < kClothesSlots; ++i) {
-        if (!slot.slotOn[i]) api.setTex(desc, nullptr, nullptr, i);
+        // CClientPlayerClothes::RemoveClothes / AddAllToModel (384-452)
+        // uses the first clothing in slots 0-3 for bare torso/face/legs/feet.
+        // Clearing them to null produces texture key 0: S25 2026-11-16
+        // 04:37:25, GetClothesTexture+268 -> strlen(nullptr) in the preview.
+        const auto& bare = PlayerClothesTable::kTable[i].items[0];
+        if (!slot.slotOn[i]) api.setTex(desc, bare.texture, bare.model, i);
         else api.setTex(desc, slot.texture[i], slot.cloth[i], i);
     }
     api.rebuild(ped, false);
+    ENGINE_LOGI("WARDROBE clothes rebuilt id=%u (bare slots preserved)", slot.id);
+    return true;
 }
 
 void ServiceScriptStage() {
@@ -3699,7 +3709,12 @@ void ServiceScriptStage() {
         PlaceRemotePlayerPed(pose.body, pose.x, pose.y, pose.z, pose.heading);
         SetPhysicalFrozen(pose.body, pose.frozen);
     }
-    if (doDress && dress.body) ApplyScriptClothes(dress.body, dress);
+    if (doDress && dress.body && !ApplyScriptClothes(dress.body, dress)) {
+        std::lock_guard<std::mutex> lock(g_scriptMu);
+        for (auto& slot : g_scriptPeds)
+            if (slot.used && !slot.drop && slot.id == dress.id && slot.body == dress.body)
+                slot.clothes = true;
+    }
     if (timeOn) {
         auto& api = WorldApi();
         if (api.clock) api.clock(static_cast<unsigned char>(hour), static_cast<unsigned char>(minute), 0);
@@ -3777,6 +3792,16 @@ bool ScriptPedAlive(uint32_t id) {
 
 void NoteScriptClothes(uint32_t id, const char* texture, const char* model, int type, bool remove) {
     if (type < 0 || type >= kClothesSlots) return;
+    if (!remove) {
+        // Desktop CClientPlayerClothes::GetClothing (524-544) ignores
+        // unlisted pairs instead of passing unknown names into PLAYER.IMG.
+        const auto& choices = PlayerClothesTable::kTable[type];
+        bool listed = false;
+        for (int i = 0; texture && model && i < choices.count; ++i)
+            if (strcasecmp(texture, choices.items[i].texture) == 0 && strcasecmp(model, choices.items[i].model) == 0)
+                listed = true;
+        if (!listed) return;
+    }
     std::lock_guard<std::mutex> lock(g_scriptMu);
     for (auto& slot : g_scriptPeds) {
         if (!slot.used || slot.id != id) continue;
@@ -4200,10 +4225,97 @@ static void InstallRenderQueueFlush(std::uintptr_t base) {
 
 // Set once GTA has been in the playing state for 120 frames with no menu up. The
 // connection loading screen uses it as desktop CClientGame::m_bGameLoaded.
-static bool leftMenu = false;
+static std::atomic<bool> leftMenu{false};
 bool ServerSessionLive() { return leftMenu; }
 
+static std::atomic<bool> g_serverSessionRequested{false};
+static void (*g_originalDoGameState)() = nullptr;
+static bool BeginServerSessionOnGameThread();
+
+static void ServerSessionGameState() {
+    // Desktop CCore::DoPreFramePulse / DoPostFramePulse (CCore.cpp 2743-2759,
+    // 2886-2893) runs game and connect work on the game frame. Android's
+    // mta-net thread must not close MobileMenu: Menu_SwitchOffToGame creates
+    // touch widgets and submits texture commands to the single-producer RQ.
+    // S25, 2026-11-16 04:24:05: TextureListingContainer::CreateRaster ->
+    // CTouchInterface::CreateAll -> Menu_SwitchOffToGame -> BeginServerSession
+    // ran on mta-net while MainThread also wrote the queue (RenderQueue faults).
+    g_originalDoGameState();
+    if (g_serverSessionRequested.load(std::memory_order_acquire)) {
+        static bool announced = false;
+        if (!announced) {
+            announced = true;
+            ENGINE_LOGI("Server session entering on GTA game thread tid=%d", gettid());
+        }
+        BeginServerSessionOnGameThread();
+    }
+}
+
+bool InstallServerSessionHook() {
+    if (g_originalDoGameState) return true;
+    void* handle = dlopen("libGTASA.so", RTLD_NOLOAD | RTLD_GLOBAL);
+    if (!handle) return false;  // not the isolated engine process
+    void* fn = dlsym(handle, "_Z11DoGameStatev");
+    // libGTASA 2.10 arm64 DoGameState at 0x70a208. Its fourth instruction
+    // is PC-relative ADRP, so do not copy this prologue into a trampoline.
+    constexpr std::array<uint32_t, 4> expected{0xa9be4ff4, 0xa9017bfd, 0x910043fd, 0xf0000a33};
+    Dl_info library{};
+    if (!fn || !dladdr(fn, &library) || std::memcmp(fn, expected.data(), sizeof(expected)) != 0) {
+        ENGINE_LOGE("DIAG server session: missing or unverified DoGameState; game-thread dispatch not installed");
+        dlclose(handle);
+        return false;
+    }
+    // readelf -r: R_AARCH64_JUMP_SLOT at 0x847f80 names _Z11DoGameStatev.
+    // MainGameFunc calls it via PLT 0x22dda0 at 0x70ac9c. Replace the GOT
+    // pointer before any GTA thread exists, preserving the original function.
+    auto* slot = reinterpret_cast<void**>(reinterpret_cast<uintptr_t>(library.dli_fbase) + 0x847f80);
+    const long pageSize = sysconf(_SC_PAGESIZE);
+    if (*slot != fn || pageSize <= 0) {
+        ENGINE_LOGE("DIAG server session: DoGameState GOT entry does not match its symbol");
+        dlclose(handle);
+        return false;
+    }
+    void* page = reinterpret_cast<void*>(reinterpret_cast<uintptr_t>(slot) & ~(static_cast<uintptr_t>(pageSize) - 1));
+    if (mprotect(page, pageSize, PROT_READ | PROT_WRITE) != 0) {
+        ENGINE_LOGE("DIAG server session: cannot write DoGameState GOT entry");
+        dlclose(handle);
+        return false;
+    }
+    g_originalDoGameState = reinterpret_cast<void (*)()>(fn);
+    __atomic_store_n(slot, reinterpret_cast<void*>(&ServerSessionGameState), __ATOMIC_RELEASE);
+    if (mprotect(page, pageSize, PROT_READ) != 0)
+        ENGINE_LOGE("DIAG server session: cannot restore DoGameState GOT protection");
+    dlclose(handle);
+    ENGINE_LOGI("Server session dispatcher installed before GTA threads (DoGameState)");
+    return true;
+}
+
 bool BeginServerSession() {
+    if (!g_originalDoGameState) return false;
+    g_serverSessionRequested.store(true, std::memory_order_release);
+    return true;
+}
+
+static void CloseMobileMenuOnGameThread(void* menu) {
+    // InitForPause (0x3571b8) stores the pending screen at +0x30 before
+    // it is on the +0x24 screen stack. RemoveTopScreen (0x354758) returns
+    // immediately for an empty stack, leaving that pending screen alive.
+    // ProcessPending (0x3569c0-0x356a28) pushes it and clears +0x30. Do
+    // that first, then pop normally; never leave the loader waiting forever
+    // on a pending pause screen that has zero stacked screens.
+    if (*reinterpret_cast<uintptr_t*>(static_cast<unsigned char*>(menu) + 0x30)) {
+        if (!g_processMenuPending) {
+            ENGINE_LOGE("DIAG server session: MobileMenu::ProcessPending missing");
+            return;
+        }
+        g_processMenuPending(menu);
+    }
+    for (int i = 0; i < 8 && *reinterpret_cast<int32_t*>(static_cast<unsigned char*>(menu) + 0x24) > 0; ++i)
+        g_removeTop(menu, 1, 1);
+    if (g_switchOff) g_switchOff();
+}
+
+static bool BeginServerSessionOnGameThread() {
     const uintptr_t base = Hook::MemoryPatcher::getLibraryBaseAddress("libGTASA.so");
     if (leftMenu) {
         if (!base) return true;
@@ -4218,9 +4330,7 @@ bool BeginServerSession() {
             *pending = 0;
             if (menuUp && g_removeTop) {
                 g_mobileMenu = reinterpret_cast<void*>(menu);
-                for (int i = 0; i < 8 && *reinterpret_cast<int32_t*>(menu + 0x24) > 0; ++i)
-                    g_removeTop(g_mobileMenu, 1, 1);
-                if (g_switchOff) g_switchOff();
+                CloseMobileMenuOnGameThread(g_mobileMenu);
             }
             ::WorldRPG::JniBridge::PostGameLine(9, "open");
         }
@@ -4320,9 +4430,7 @@ bool BeginServerSession() {
     // Unload only frees menu textures. The pause screen stays until
     // RemoveTopScreen pops it, which is what the Resume button does.
     if (menuUp && g_removeTop && g_mobileMenu) {
-        for (int i = 0; i < 8 && *reinterpret_cast<int32_t*>(menu + 0x24) > 0; ++i)
-            g_removeTop(g_mobileMenu, 1, 1);
-        if (g_switchOff) g_switchOff();
+        CloseMobileMenuOnGameThread(g_mobileMenu);
         if (seenPlaying < 4) ENGINE_LOGI("Closed the GTA pause menu");
     }
     if (g_endPause) g_endPause();
@@ -4931,6 +5039,7 @@ bool ConsumeLocalShot(LocalShot& out) {
 }
 
 #else
+bool InstallServerSessionHook() { return false; }
 bool BeginServerSession() { return false; }
 bool ServerSessionLive() { return false; }
 void ApplyServerSpawn(float, float, float) {}

@@ -32,6 +32,7 @@ class NativeAssetBridge(private val context: Context) {
     private val storage = File(context.filesDir, "game_assets")
     private val generations = File(storage, "generations")
     private val active = File(storage, "active")
+    private val cdnRoot = BuildConfig.CDN_ROOT_URL.trim().trimEnd('/').ifBlank { DEFAULT_CDN_ROOT }
 
     sealed interface DownloadState {
         data object FetchingManifest : DownloadState
@@ -41,8 +42,10 @@ class NativeAssetBridge(private val context: Context) {
         data class Error(val message: String) : DownloadState
     }
 
-    /** Search for a local GTA San Andreas Mobile 2.10 assets folder on device or external storage. */
+    /** Local developer installs are available only when no CDN is configured. */
     fun findLocalAssetsFolder(): File? {
+        // A leftover backup must never override the CDN, including library loading at boot.
+        if (cdnRoot.isNotBlank()) return null
         val candidates = listOfNotNull(
             BuildConfig.DEVICE_ASSETS_PATH.takeIf { it.isNotBlank() }?.let { File(it) },
             context.getExternalFilesDir(null)?.let { File(it, "game_assets") },
@@ -63,11 +66,11 @@ class NativeAssetBridge(private val context: Context) {
         }
     }
 
-    /** Fast startup gate. Returns installed generation path or direct local assets path. */
+    /** Fast startup gate. CDN builds never fall back to an external folder or local import. */
     fun getReadyStoragePath(): String? {
         return try {
             val generation = activeGeneration()
-            if (generation != null) {
+            if (generation != null && (cdnRoot.isBlank() || !generation.name.startsWith("local-"))) {
                 val entries = installedEntries(generation)
                 if (entries != null && entries.filter { it.path in REQUIRED_FILES }.all { entry ->
                         val file = assetFile(generation, entry.path)
@@ -92,7 +95,7 @@ class NativeAssetBridge(private val context: Context) {
         }
 
         try {
-            // Priority 1: Check for local assets folder on device
+            // findLocalAssetsFolder is disabled when a CDN is configured.
             val localSource = findLocalAssetsFolder()
             if (localSource != null) {
                 emit(DownloadState.FetchingManifest)
@@ -100,8 +103,7 @@ class NativeAssetBridge(private val context: Context) {
                 return@flow
             }
 
-            // Priority 2: Check for configured CDN / Local HTTP Server URL
-            val cdnRoot = BuildConfig.CDN_ROOT_URL.ifBlank { DEFAULT_CDN_ROOT }
+            // Sync the configured CDN into private storage before engine startup.
             if (cdnRoot.isBlank()) {
                 val expectedPath = context.getExternalFilesDir(null)?.let { File(it, "game_assets").absolutePath }
                     ?: BuildConfig.DEVICE_ASSETS_PATH
@@ -116,13 +118,20 @@ class NativeAssetBridge(private val context: Context) {
 
             emit(DownloadState.FetchingManifest)
             val manifest = fetchManifest(cdnRoot)
-            val previous = activeGeneration()
+            // Recover the already downloaded CDN generation if a legacy local import
+            // replaced the active pointer. Every file is still verified below.
+            val previous = activeGeneration()?.takeUnless { it.name.startsWith("local-") }
+                ?: generations.listFiles()?.firstOrNull {
+                    it.isDirectory && GENERATION.matches(it.name) && !it.name.startsWith("local-") &&
+                        installedEntries(it) == manifest.entries
+                }
             val unchanged = previous != null && installedEntries(previous) == manifest.entries &&
                 manifest.entries.withIndex().all { (index, entry) ->
                     emit(DownloadState.Verifying(index + 1, manifest.entries.size))
                     matches(assetFile(previous, entry.path), entry)
                 }
             if (unchanged) {
+                activateGeneration(previous!!)
                 emit(DownloadState.Complete(manifest.entries.size))
                 return@flow
             }
@@ -167,8 +176,7 @@ class NativeAssetBridge(private val context: Context) {
                 val installed = File(generations, "${manifest.revision}-${UUID.randomUUID()}")
                 writeSynced(File(staging, MANIFEST_NAME), manifest.json)
                 atomicMove(staging, installed)
-                writeSynced(partial, installed.name)
-                atomicMove(partial, active)
+                activateGeneration(installed)
             } finally {
                 partial.delete()
             }
@@ -190,6 +198,11 @@ class NativeAssetBridge(private val context: Context) {
     ) {
         val files = mutableListOf<File>()
         sourceDir.walkTopDown().filter { it.isFile && it.name != MANIFEST_NAME }.forEach { files.add(it) }
+        val readablePaths = files.filter { it.canRead() }
+            .map { it.relativeTo(sourceDir).path.replace('\\', '/') }.toSet()
+        if (!readablePaths.containsAll(REQUIRED_FILES)) {
+            throw IOException("Local game assets are incomplete or unreadable; the installed game was not replaced.")
+        }
 
         val entries = mutableListOf<Entry>()
         val total = files.size
@@ -226,9 +239,7 @@ class NativeAssetBridge(private val context: Context) {
         val installed = File(generations, "local-${UUID.randomUUID()}")
         writeSynced(File(staging, MANIFEST_NAME), manifestObj.toString())
         atomicMove(staging, installed)
-        val partial = assetFile(storage, "asset-download.part")
-        writeSynced(partial, installed.name)
-        atomicMove(partial, active)
+        activateGeneration(installed)
 
         emitState(DownloadState.Complete(entries.size))
     }
@@ -336,6 +347,16 @@ class NativeAssetBridge(private val context: Context) {
         }
     }
 
+    private fun activateGeneration(directory: File) {
+        val partial = assetFile(storage, "asset-activation.part")
+        try {
+            writeSynced(partial, directory.name)
+            atomicMove(partial, active)
+        } finally {
+            partial.delete()
+        }
+    }
+
     private fun atomicMove(from: File, to: File) {
         Files.move(from.toPath(), to.toPath(), StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
     }
@@ -431,7 +452,7 @@ class NativeAssetBridge(private val context: Context) {
         val SHA256 = Regex("[0-9a-f]{64}")
         val GENERATION = Regex("([0-9a-f]{40}|local)-[0-9a-f-]{36}")
         val PATH_PART = Regex("[A-Za-z0-9_ .()\\-]{1,255}")
-        val REQUIRED_FILES = setOf("data/gta.dat", "data/handling.cfg", "texdb/gta3.img", "texdb/menu/menu.pvr.dat")
+        val REQUIRED_FILES = setOf("data/default.dat", "data/gta.dat", "data/handling.cfg", "texdb/gta3.img", "texdb/menu/menu.pvr.dat")
         val REDIRECTS = setOf(301, 302, 303, 307, 308)
         val installationLock = Mutex()
     }

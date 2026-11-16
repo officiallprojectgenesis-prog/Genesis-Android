@@ -137,6 +137,8 @@ private:
 // CRunningScript::Process and never runs the story; MobileSA does the same
 // through that function. The menu flag only starts a new game, which is the
 // single-player path.
+// Install before GTA starts its threads; the network pulse only requests entry.
+bool InstallServerSessionHook();
 bool BeginServerSession();
 // True once BeginServerSession left the frontend and the game is playing (read-only).
 bool ServerSessionLive();

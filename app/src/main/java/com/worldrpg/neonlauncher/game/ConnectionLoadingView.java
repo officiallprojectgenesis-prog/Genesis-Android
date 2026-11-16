@@ -13,6 +13,9 @@ import android.util.Log;
 import android.view.View;
 
 import java.io.File;
+import java.io.FileInputStream;
+import java.io.IOException;
+import java.io.InputStream;
 
 /**
  * The connection loading screen of the Neon desktop client, drawn the same way:
@@ -21,9 +24,9 @@ import java.io.File;
  * Artwork: one of MTA/cgui/images/loadscreens/loadsc1..14.jpg per connection
  * (BeginConnectionLoading picks 1 + tick % 14), aspect-filled. Status font:
  * "BankGothic Md BT" 30 px from MTA/cgui/sabankgothic.ttf (CGraphics.cpp:1469, 1480).
- * Both are read from the game folder on the device, the same relative paths as
- * CalcMTASAPath on desktop. They are not in the APK. Without them the screen is
- * the plain 0xFF020303 background and a bold system font.
+ * Synced artwork overrides the fourteen images bundled in the APK, using the
+ * same relative paths as CalcMTASAPath on desktop. The font is read from the
+ * game folder, with a bold system font as fallback.
  */
 public final class ConnectionLoadingView extends View {
     private static final String TAG = "ConnectionLoading";
@@ -123,21 +126,43 @@ public final class ConnectionLoadingView extends View {
             artwork.recycle();
             artwork = null;
         }
-        File file = gameFile("MTA/cgui/images/loadscreens/loadsc" + index + ".jpg");
-        if (file == null) {
-            Log.i(TAG, "loadsc" + index + ".jpg not in the game folder; plain background");
-            return;
+        String relative = "MTA/cgui/images/loadscreens/loadsc" + index + ".jpg";
+        File file = gameFile(relative);
+        if (file != null) {
+            try {
+                artwork = decodeArtwork(relative, file);
+            } catch (IOException | SecurityException e) {
+                Log.w(TAG, "Cannot read synced loading artwork; using bundled image", e);
+            }
         }
+        if (artwork != null) return;
+        try {
+            artwork = decodeArtwork(relative, null);
+        } catch (IOException e) {
+            Log.w(TAG, "Cannot read bundled loading artwork: " + relative, e);
+        }
+    }
+
+    private InputStream openArtwork(String relative, File file) throws IOException {
+        return file != null ? new FileInputStream(file) : getContext().getAssets().open(relative);
+    }
+
+    private Bitmap decodeArtwork(String relative, File file) throws IOException {
         BitmapFactory.Options bounds = new BitmapFactory.Options();
         bounds.inJustDecodeBounds = true;
-        BitmapFactory.decodeFile(file.getPath(), bounds);
-        int target = Math.max(getResources().getDisplayMetrics().widthPixels,
-                getResources().getDisplayMetrics().heightPixels);
+        try (InputStream input = openArtwork(relative, file)) {
+            BitmapFactory.decodeStream(input, null, bounds);
+        }
+        if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null;
+        int target = Math.max(1, Math.max(getResources().getDisplayMetrics().widthPixels,
+                getResources().getDisplayMetrics().heightPixels));
         int sample = 1;
-        while (bounds.outWidth / (sample * 2) >= target) sample *= 2;
+        while (bounds.outWidth / 2 / sample >= target) sample *= 2;
         BitmapFactory.Options opts = new BitmapFactory.Options();
         opts.inSampleSize = sample;
-        artwork = BitmapFactory.decodeFile(file.getPath(), opts);
+        try (InputStream input = openArtwork(relative, file)) {
+            return BitmapFactory.decodeStream(input, null, opts);
+        }
     }
 
     private void rect(Canvas canvas, float x, float y, float w, float h, int argb) {

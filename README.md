@@ -19,7 +19,9 @@ A high-performance, native ARM64 (aarch64) Android client port of **Multi Theft 
 
 ## Install the Release APK (players)
 
-The APK on the [Releases page](https://github.com/samuk190/mta-sa-neon-android/releases) contains **only this project's code**. It does not include any GTA San Andreas file. You copy those from your own copy of the game into one folder on the phone, and the app runs the game from there.
+When the build has `CDN_ROOT_URL` configured, use **Settings → Sync game assets** before playing or using **Test GTA**. The app downloads and verifies the CDN manifest into private storage. It does not use external folders such as `Download/WorldRPG_backup`, even when those folders are present. The manual installation instructions below apply only to builds without a configured CDN.
+
+The APK on the [Releases page](https://github.com/samuk190/mta-sa-neon-android/releases) includes the launcher and the MTA loading images, without GTA San Andreas files. You copy those from your own copy of the game into one folder on the phone, and the app runs the game from there.
 
 ### What you need
 
@@ -77,7 +79,9 @@ adb push gta_sa/. /sdcard/Android/data/com.worldrpg.neonlauncher/files/game_asse
 
 Open the app, pick a server, tap **Join**, enter your nickname and tap **Play**. If the three libraries are missing, the app names them and the folder it expects them in. If a required data file is missing (`data/gta.dat`, `data/handling.cfg`, `texdb/gta3.img`, `texdb/menu/menu.pvr.dat`), the game does not start: check the layout above.
 
-Optional, for the loading screen artwork and font of the MTA desktop client: copy `MTA/cgui/images/loadscreens/loadsc1.jpg` ... `loadsc14.jpg` and `MTA/cgui/sabankgothic.ttf` from an MTA:SA desktop installation into `game_assets/MTA/cgui/` (same sub-folders). Without them the loading screen is plain black.
+The fourteen MTA desktop loading images (`MTA/cgui/images/loadscreens/loadsc1.jpg` ... `loadsc14.jpg`) are bundled in the APK. An image in the installed game folder takes precedence; if it is missing or cannot be decoded, the bundled image is used. The optional desktop font, `MTA/cgui/sabankgothic.ttf`, is read from that folder, with a bold system font as fallback.
+
+For CDN builds, publish image overrides and the font under `game_files_android_mta/MTA/cgui/` and list their sizes and SHA-256 hashes in `manifest_android_mta.json`, then sync again. Copying them into an external backup folder does not update the installed CDN generation. The bundled loading images work before that sync.
 
 > [!NOTE]
 > Uninstalling the app deletes `Android/data/com.worldrpg.neonlauncher/`, including the game folder. Keep your extracted copy on the PC.
