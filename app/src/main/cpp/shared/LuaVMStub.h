@@ -135,6 +135,9 @@ const std::string& ActiveVmOwner();
 // Net id of the resource whose code is running, or 0 outside a resource.
 uint16_t ActiveVmOwnerNet();
 uint32_t ActiveVmOwnerGeneration();
+// Runs fn as that resource (OwnerScope), as timers and event handlers run. Used by
+// callbacks that complete later on the VM thread, for example the crypt worker.
+void ActiveVmRunAsOwner(const std::string& owner, uint16_t netId, uint32_t generation, const std::function<void()>& fn);
 bool ActiveVmChatHooked();
 // Client root id, or 0 before the element bindings are installed.
 uint32_t ClientRootElement();

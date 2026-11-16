@@ -431,6 +431,46 @@ void CheckCrypto(WorldRPG::Script::LuaVMStub& vm) {
         assert(r.verify == true, 'async verify result')
         assert(type(r.keys[1]) == 'string' and decodeString('rsa', encodeString('rsa', 'k', {key = r.keys[2]}), {key = r.keys[1]}) == 'k', 'async keys result')
     )LUA");
+
+    // A callback runs as the resource that asked (desktop: its own CLuaMain), and a stopped
+    // resource's pending callback is dropped.
+    auto start = [](const char* name, uint16_t netId, uint32_t entity) {
+        WorldRPG::Net::ResourceStartInfo info;
+        info.name = name;
+        info.resourceId = netId;
+        info.entityId = entity;
+        info.dynamicEntityId = entity + 1;
+        info.noClientCacheScripts = 1;
+        info.startCounter = 1;
+        WorldRPG::Script::ActiveVmOnResourceStart(info);
+    };
+    start("cryptowner", 90, 0x3900);
+    start("cryptstopped", 91, 0x3910);
+    const std::vector<uint8_t> ownerBody = NoCacheScriptBody(90, R"LUA(
+        encodeString('base64', 'owner', function(r)
+            local res = getThisResource()
+            _G.cryptOwner = {result = r, name = res and getResourceName(res)}
+        end)
+    )LUA");
+    const std::vector<uint8_t> stoppedBody = NoCacheScriptBody(91, R"LUA(
+        encodeString('base64', 'late', function() _G.cryptStoppedRan = true end)
+    )LUA");
+    CHECK(WorldRPG::Script::ActiveVmFeedScripts(ownerBody.data(), ownerBody.size(), ownerBody.size() * 8));
+    CHECK(WorldRPG::Script::ActiveVmFeedScripts(stoppedBody.data(), stoppedBody.size(), stoppedBody.size() * 8));
+    WorldRPG::Script::ActiveVmPulseResources();
+    WorldRPG::Script::CryptWaitIdleForTests();
+    WorldRPG::Net::BitStreamWriter stop;
+    stop.Write(static_cast<uint16_t>(91));
+    WorldRPG::Script::ActiveVmOnResourceStop(stop.GetData(), stop.GetByteLength(), stop.GetBitLength());
+    WorldRPG::Script::CryptDeliverCompletions();
+    RunLua(vm, "crypt-callback-owner", R"LUA(
+        assert(_G.cryptOwner and _G.cryptOwner.result == 'b3duZXI=', 'resource callback ran')
+        assert(_G.cryptOwner.name == 'cryptowner', 'callback runs as its resource: ' .. tostring(_G.cryptOwner.name))
+        assert(_G.cryptStoppedRan == nil, 'stopped resource callback dropped')
+    )LUA");
+    WorldRPG::Net::BitStreamWriter stopOwner;
+    stopOwner.Write(static_cast<uint16_t>(90));
+    WorldRPG::Script::ActiveVmOnResourceStop(stopOwner.GetData(), stopOwner.GetByteLength(), stopOwner.GetBitLength());
 }
 
 // createWeapon and the CClientWeapon element functions (CLuaWeaponDefs.cpp:150-695).

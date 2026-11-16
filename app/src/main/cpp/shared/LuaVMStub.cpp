@@ -3076,6 +3076,11 @@ uint16_t ActiveVmOwnerNet() {
 uint32_t ActiveVmOwnerGeneration() {
     return g_dx.ownerGeneration;
 }
+
+void ActiveVmRunAsOwner(const std::string& owner, uint16_t netId, uint32_t generation, const std::function<void()>& fn) {
+    OwnerScope scope(owner, netId, generation);
+    fn();
+}
 void ActiveVmQueueCursor(int action, float x, float y) {
     std::lock_guard<std::mutex> lock(g_cursorMutex);
     if (g_cursorQueue.size() < 256) g_cursorQueue.push_back(CursorEvent{action, x, y});

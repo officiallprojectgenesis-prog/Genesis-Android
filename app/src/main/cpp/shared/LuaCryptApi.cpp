@@ -712,10 +712,13 @@ void CryptDeliverCompletions() {
         batch.swap(worker.done);
     }
     lua_State* L = g_L;
-    for (auto& [id, outcome] : batch) {
-        auto found = g_pending.find(id);
+    for (auto& item : batch) {
+        // A plain reference, not a structured binding: clang 14 (NDK 25) cannot capture one.
+        Outcome& outcome = item.second;
+        auto found = g_pending.find(item.first);
         if (found == g_pending.end()) continue;  // dropped with its resource
-        const int ref = found->second.ref;
+        const Pending pending = std::move(found->second);
+        const int ref = pending.ref;
         g_pending.erase(found);
         if (!outcome.warning.empty()) LUA_LOGE("WARNING: %s", outcome.warning.c_str());
         if (!outcome.customError.empty()) LUA_LOGE("%s", outcome.customError.c_str());
@@ -730,10 +733,14 @@ void CryptDeliverCompletions() {
             if (value.isString) PushString(L, value.text);
             else lua_pushboolean(L, value.boolean ? 1 : 0);
         }
-        if (lua_pcall(L, static_cast<int>(outcome.values.size()), 0, 0) != LUA_OK) {
-            const char* message = lua_tostring(L, -1);
-            LUA_LOGE("crypt callback failed: %s", message ? message : "");
-        }
+        // Desktop calls back in the resource's own CLuaMain; here the call runs as that
+        // resource, so getThisResource and resource-owned elements work in the callback.
+        ActiveVmRunAsOwner(pending.owner, pending.netId, pending.generation, [&] {
+            if (lua_pcall(L, static_cast<int>(outcome.values.size()), 0, 0) != LUA_OK) {
+                const char* message = lua_tostring(L, -1);
+                LUA_LOGE("crypt callback failed: %s", message ? message : "");
+            }
+        });
         lua_settop(L, base);
     }
 }
