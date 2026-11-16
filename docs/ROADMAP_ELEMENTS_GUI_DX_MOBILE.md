@@ -1,33 +1,49 @@
 # Elementos, GUI e DX no mobile
 
-Revisão em 2026-11-15 na branch `staging`. Os lotes usam a árvore de trabalho
-completa, que já continha alterações locais de DX, SVG e motor.
+Revisão em 2026-11-15 na branch `staging`.
 
 ## Progresso das funções Lua
 
-**Geral: 651 de 1.581 funções com implementação no catálogo — 41,2%.**
-Elementos: **54/81 — 66,7%**. GUI/DX: **175/199 — 87,9%**.
+**Geral: 675 de 1.581 funções com handler não constante — 42,7%.**
+Elementos: **54/81 — 66,7%**. GUI/DX: **199/199 — 100% dos bindings**.
 
-O lote anterior corrigiu **5 de 5 problemas da revisão**. O lote atual amplia
-fontes de GUI e layout/medidas de labels em sete funções já registradas.
-A cobertura do catálogo permanece igual: **175/199 em GUI/DX, com 24 ausentes**.
-A classificação conta handlers com
-corpo não constante; não comprova paridade completa nem validação no aparelho.
+As 24 funções antes ausentes agora têm handlers e caminhos de execução.
+**Isso não significa 100% de compatibilidade com o desktop.** Os três novos
+backends são parciais e ainda não foram executados no aparelho. O catálogo
+mede presença de código; não mede equivalência visual, desempenho ou cobertura
+completa de argumentos, tipos e estados do motor.
 
-**Este lote não leva GUI/DX a 100%.** O estado atual é:
+| Lote das 24 funções | Caminho implementado | Pendências de compatibilidade |
+|---|---|---|
+| 7 de desenho 3D | Câmera principal e chamadas RenderWare nativas, profundidade da cena, primitivas coloridas/texturizadas, linhas em billboard, esfera por octaedro subdividido e instâncias de modelos atomic/clump carregados | Só `postfx`; `prefx`/`postgui`, material shader, iluminação de modelo diferente de zero e ordenação `DRAW_LAST` não estão portados. Chamadas sem backend/modelo válido retornam falha. Aparência, ciclo de câmera e desempenho precisam de aparelho. |
+| 4 de shader | Subconjunto FX/HLSL de uma passagem traduzido para GLSL ES 100, compilação/link GLES reais em contexto EGL isolado e saída usada por `dxDrawImage`/`dxDrawImageSection`; parâmetros numéricos/bool/textura, valores iniciais constantes, tesselação de quad e transformação | Sem includes, condicionais do preprocessador, múltiplas passagens, aplicação no mundo/3D e estados não suportados. Estes casos falham; não geram sucesso simulado. O modo `overwrite` é recusado por depender de máscara de cobertura. Texturas são snapshots de pixels. Leitura completa da imagem e cópia para Canvas precisam de medição no Android. |
+| 13 de modelo 2DFX | Parsing/retornos Lua, pilhas de propriedades e remoções por recurso, índices customizados compactados, publicação transacional e limpeza com repetição no game thread. Getter e contador nativos verificados em ARM64 | Mutação nativa só de `LIGHT` e `SUN_GLARE`. Consultas de partícula e escada leem os campos disponíveis; payload de placa não é exposto. Partículas, placas e escadas precisam de limpeza/recriação dos corpos persistentes e restream antes de liberar mutação. |
 
-| Medida | Estado após a revisão |
-|---|---|
-| Cobertura de funções registradas com corpo não constante | **175/199 — 87,9%** |
-| Funções ausentes | **24/199 — 12,1%**: 7 de desenho 3D, 4 de shaders e 13 de modelo 2DFX |
-| Compatibilidade de comportamento/visual com o desktop | **Parcial; sem percentual auditado.** Há pendências também nas funções registradas. |
-| Validação visual no aparelho deste lote | **Pendente** |
+Os símbolos e instruções usados pelo novo código nativo são verificados por
+`tools/headless/verify_dx_native_abi.py`; **65 verificações passaram** no binário
+GTA 2.10 ARM64 local. Isso confere o ABI esperado, sem executar os hooks.
+A dependência de tradução HLSL é MIT e está fixada por revisão em
+`app/src/main/cpp/third_party/hlslparser/UPSTREAM.md`.
 
-Para chegar a 100% de cobertura é necessário implementar as 24 ausentes.
-Para afirmar compatibilidade completa também é necessário resolver as
-pendências de comportamento e validar o resultado no aparelho.
+## Validação do lote das 24
 
-## Implementado neste lote
+- `neon_dx_conversion_tests`: **8.248 verificações passaram**, incluindo estado
+  2DFX/rollback/recursos, geometria e fila 3D, Lua real e pixels GLES. Muitas
+  verificações são de vértices/arestas da esfera, não cenários independentes.
+- Os pixels foram renderizados pelo Mesa/D3D12 no host (Intel UHD Graphics):
+  cores, textura, valores iniciais, troca de uniformes, shader de vértice,
+  tesselação que altera a curvatura, rotação, fallback de técnica e preservação
+  do contexto/superfícies/viewport do chamador. Não é execução no Android.
+- Regressões anteriores: **274 verificações nativas**, **24 de texto Java**,
+  **29 de estado Java** e **34 da view Java**, sem falhas.
+- A biblioteca Android ARM64 compila e linka com o NDK; o APK debug sem arquivos do jogo também foi gerado.
+- A [revisão deste lote](REVIEW_GUI_DX_24.md) registra correções e limites abertos.
+- Teste dos novos caminhos no aparelho: **pendente; ADB sem dispositivo**.
+
+As [próximas conversões sugeridas](NEXT_LUA_CONVERSIONS.md) priorizam consultas
+de proximidade e colshapes, depois recursos e modelos.
+
+## Implementado nos lotes anteriores
 
 | Área | Alteração | Limite atual |
 |---|---|---|
@@ -58,7 +74,7 @@ O cursor inicial de um edit continua em zero, conforme CEGUI. Alterar seu índic
 agora afeta a digitação e o backspace. O máximo padrão corresponde à capacidade
 CEGUI exposta como `unsigned int`; um valor Lua negativo segue essa conversão.
 
-## Validação
+## Validação dos lotes anteriores
 
 - `neon_resource_tests`: **274 verificações, zero falhas**. Inclui referências
   futuras, ordem dos filhos, remoção/reuso de ID, offsets em graus, Unicode,
@@ -79,7 +95,7 @@ CEGUI exposta como `unsigned int`; um valor Lua negativo segue essa conversão.
 - Classes Java do jogo: compilaram, incluindo o gradiente de linhas.
 - `git diff --check`: sem erros de whitespace.
 
-Não houve teste visual no aparelho nem geração de APK novo neste lote.
+Esses lotes anteriores não tiveram teste visual no aparelho nem geração de APK novo.
 A compilação nativa usa as alterações anteriores do motor presentes na árvore
 de trabalho; a limitação do checkout isolado está em [REVIEW_LUA_MOBILE.md](REVIEW_LUA_MOBILE.md).
 
@@ -119,7 +135,7 @@ O relatório detalhado está em [REVIEW_ELEMENTS_GUI_DX.md](REVIEW_ELEMENTS_GUI_
    Conferir faces nativas, geometria dos controles com fontes grandes e
    diferenças de quebra/métricas dos labels no aparelho.
 3. **DX:** comparar métricas e quebras de texto no aparelho, ampliar fontes
-   nativas e portar desenho 3D com câmera/profundidade, shaders e efeitos de modelo 2DFX.
+   nativas e completar os limites de 3D, shader e modelo 2DFX descritos na tabela deste lote.
 4. **Aparelho:** verificar cursor no meio do texto, acentos/emoji, composição
    com transparência, gradientes, GUI antes/depois do DX e desenho em texturas.
 
@@ -127,7 +143,7 @@ O relatório detalhado está em [REVIEW_ELEMENTS_GUI_DX.md](REVIEW_ELEMENTS_GUI_
 
 A [revisão dos lotes](REVIEW_ELEMENTS_GUI_DX.md) registra problemas
 corrigidos, evidências e limites de validação. Os lotes seguintes completam
-comportamentos de funções já registradas; a contagem de bindings permanece igual.
+comportamentos de funções já registradas; este lote adicionou os 24 bindings ausentes, com suporte parcial explicitado.
 
 O layout DX usa o comando `X`, separado do comando `T` da GUI. Seu texto é
 escapado antes de atravessar a ponte JNI; seleção de fonte e reset seguem na
@@ -141,7 +157,7 @@ e o payload; não verificam os glifos ou a composição no aparelho.
 | Peds e jogadores | 27/206 | **13,1%** | 77 | 102 |
 | Mundo e objetos | 124/227 | **54,6%** | 11 | 92 |
 | Elementos | 54/81 | **66,7%** | 8 | 19 |
-| GUI e DX | 175/199 | **87,9%** | 0 | 24 |
+| GUI e DX | 199/199 | **100,0%** | 0 | 0 |
 | Motor e modelos | 1/125 | **0,8%** | 15 | 109 |
 | Áudio e voz | 21/57 | **36,8%** | 1 | 35 |
 | Câmera | 47/47 | **100,0%** | 0 | 0 |
@@ -149,7 +165,7 @@ e o payload; não verificam os glifos ou a composição no aparelho.
 | Sistema e utilitários | 169/195 | **86,7%** | 2 | 24 |
 | Markers, blips e colshapes | 0/145 | **0,0%** | 3 | 142 |
 | Browser e compatibilidade | 4/103 | **3,9%** | 0 | 99 |
-| **TOTAL** | **651/1581** | **41,2%** | **136** | **794** |
+| **TOTAL** | **675/1581** | **42,7%** | **136** | **770** |
 
 Os números incluem as alterações locais anteriores. “Implemented” no catálogo
 significa apenas que há uma função C com corpo não constante; não significa

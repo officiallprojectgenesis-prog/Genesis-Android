@@ -49,6 +49,7 @@ add_subdirectory(lua53)
 # ---------------------------------------------------------------------------
 add_subdirectory(opus)
 add_subdirectory(speex)
+add_subdirectory(third_party/hlslparser)
 
 add_library(WorldRPGNeon SHARED ${NATIVE_SOURCES})
 
@@ -70,6 +71,7 @@ target_link_libraries(WorldRPGNeon
     lua53
     opus
     neon_speex
+    neon_hlsl
 )
 
 # Resolve every native dependency during the Android link

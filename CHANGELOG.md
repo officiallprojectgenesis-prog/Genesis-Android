@@ -8,6 +8,67 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+
+### Fixed — GUI/DX shader review
+
+- Shader image draws reject `overwrite` before bitmap allocation/queueing: the
+  fullscreen bake otherwise clears target pixels outside the shader geometry.
+  Correct overwrite support still needs a fragment coverage mask.
+- Common camera matrices override custom/default values, following
+  `CTileBatcher.cpp:217-222` and `CRenderItem.EffectParameters.cpp:477-532`.
+- Derived shader matrices/vertices are checked for finite values before upload.
+- Integer uniforms use matching GLSL ES precision across stages; defaults and
+  setters reject values outside their safe integer conversion range.
+- EGL initialization releases partial state and can recover after surface/context
+  creation fails. Host fault injection, pixel/Lua regressions and ASan/UBSan cover
+  the fixes; native engine execution remains unverified on a device.
+
+### Added — partial GUI/DX conversion
+
+The 24 previously missing names now have nonconstant Lua handlers: seven 3D,
+four shader and thirteen model-2DFX APIs. This is **199/199 binding coverage**,
+not complete desktop compatibility. Native 3D currently accepts `postfx` only;
+model lighting must be zero. 2DFX mutation supports light and sun glare; persistent
+particle/roadsign/escalator cleanup/restream remains unported. Image shaders
+support a single-pass FX subset, reject unsupported directives/states and use
+GPU readback plus Canvas copies; world/3D shader application is unavailable.
+
+- **`dxDrawLine3D`**: camera-facing triangles through native RenderWare, desktop width/75, following `CLuaDrawingDefs.cpp:189-220`. Partial backend; not yet run on a device.
+- **`dxDrawMaterialLine3D`**: textured billboards with flipUV and optional facing point, following `CLuaDrawingDefs.cpp:222-268`. Partial backend; not yet run on a device.
+- **`dxDrawMaterialSectionLine3D`**: pixel sections normalized to material dimensions, following `CLuaDrawingDefs.cpp:270-320`. Partial backend; not yet run on a device.
+- **`dxDrawPrimitive3D`**: colored vertex primitives with typed parsing and immutable frame publication, following `CLuaDrawingDefs.cpp:596-646`. Partial backend; not yet run on a device.
+- **`dxDrawMaterialPrimitive3D`**: textured vertex primitives through RenderWare, following `CLuaDrawingDefs.cpp:648-704`. Partial backend; not yet run on a device.
+- **`dxDrawWiredSphere`**: cached normalized-octahedron subdivision and unique wire edges, following `CLuaDrawingDefs.cpp:2137-2149`. Partial backend; not yet run on a device.
+- **`dxDrawModel3D`**: loaded atomic/clump model instances, transform, reference lifetime and depth writes, following `CLuaDrawingDefs.cpp:2151-2173`. Partial backend; not yet run on a device.
+- **`dxCreateShader`**: supported single-pass FX/HLSL translated and really compiled/linked in isolated EGL/GLES; raw/file source, simple macros and technique fallback, following `CLuaDrawingDefs.cpp:1119-1225`. Partial backend; not yet run on a device.
+- **`dxSetShaderValue`**: case-insensitive reflected numeric/bool/texture parameters, constant initializers and pixel snapshots retained per draw, following `CLuaDrawingDefs.cpp:1335-1446`. Partial backend; not yet run on a device.
+- **`dxSetShaderTessellation`**: CPU quad grid used before the vertex shader, 1..64 subdivisions per axis, following `CLuaDrawingDefs.cpp:1448-1471`. Partial backend; not yet run on a device.
+- **`dxSetShaderTransform`**: rotation/rotation-center/perspective matrices following CTileBatcher.cpp:418-474, following `CLuaDrawingDefs.cpp:1473-1500`. Partial backend; not yet run on a device.
+- **`addModel2DFX`**: validated resource-owned custom effects; native LIGHT/SUN_GLARE only, following `CLua2DFXDefs.cpp:579-606`. Partial backend; not yet run on a device.
+- **`removeModel2DFX`**: resource removal stacks and custom-index compaction, following `CLua2DFXDefs.cpp:608-615`. Partial backend; not yet run on a device.
+- **`restoreModel2DFX`**: restores only the caller resource removal, following `CLua2DFXDefs.cpp:617-624`. Partial backend; not yet run on a device.
+- **`resetModel2DFXEffects`**: drops caller overrides/custom effects and restores lower resource layers, following `CLua2DFXDefs.cpp:626-634`. Partial backend; not yet run on a device.
+- **`setModel2DFXPosition`**: transactional position override, following `CLua2DFXDefs.cpp:636-647`. Partial backend; not yet run on a device.
+- **`setModel2DFXProperty`**: validated typed property overrides with native commit rollback, following `CLua2DFXDefs.cpp:649-666`. Partial backend; not yet run on a device.
+- **`resetModel2DFXProperty`**: restores the previous resource property or native baseline, following `CLua2DFXDefs.cpp:668-676`. Partial backend; not yet run on a device.
+- **`resetModel2DFXPosition`**: caller position reset with desktop return count, following `CLua2DFXDefs.cpp:678-685`. Partial backend; not yet run on a device.
+- **`getModel2DFXPosition`**: effective position with three Lua returns, following `CLua2DFXDefs.cpp:687-697`. Partial backend; not yet run on a device.
+- **`getModel2DFXProperty`**: typed scalar/vector/color/flags/string returns where native payload is available, following `CLua2DFXDefs.cpp:699-741`. Partial backend; not yet run on a device.
+- **`getModel2DFXEffects`**: typed effective-effect tables, following `CLua2DFXDefs.cpp:743-769`. Partial backend; not yet run on a device.
+- **`getModel2DFXCount`**: native original count and optional custom count, following `CLua2DFXDefs.cpp:771-779`. Partial backend; not yet run on a device.
+- **`getModel2DFXType`**: effective native/custom type and invalid-index failure, following `CLua2DFXDefs.cpp:781-789`. Partial backend; not yet run on a device.
+
+Resource stop/reset removes DX batches and shaders, and retries failed 2DFX
+cleanup on subsequent game pulses while retaining owner identities. ARM64
+symbols/instructions are guarded before camera/count changes. The pinned MIT
+HLSL translator records upstream and the EOF/cast fixes in
+`third_party/hlslparser/UPSTREAM.md`. Host checks: 8,248 new assertions (many
+sphere vertices), real Mesa/D3D12 shader pixels and EGL context preservation;
+65 binary ABI checks; existing 274 native and 24/29/34 Java regressions pass.
+The Android ARM64 library and game-free debug APK build. No device is connected;
+new native execution, visual ordering and performance remain unverified.
+
+
 ### Changed
 - **Desktop error popup for every connection failure** (`net/DisconnectMessages.{h,cpp}`, `net/NeonJoinProtocol.cpp`, `game/EngineHostActivity.java`, `game/DisconnectDialog.java`, `assets/ui/disconnect.html`): every refusal, kick, ban, timeout, drop and bad packet now opens a popup. Before, a failure before the first join only wrote a chat line. Title and text are the desktop's own words and codes:
   - Server disconnects: `CPacketHandler::Packet_ServerDisconnected` (`CPacketHandler.cpp:545-750`), "Disconnected [CD30..CD50]", with the server's message and "Time Remaining" for bans.

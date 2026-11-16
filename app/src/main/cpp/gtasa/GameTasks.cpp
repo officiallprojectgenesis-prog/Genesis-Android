@@ -14,6 +14,7 @@ struct Task {
 };
 std::mutex queueMutex;
 std::deque<std::shared_ptr<Task>> queue;
+std::deque<std::function<bool()>> deferred;
 thread_local bool gameThread = false;
 }
 void Service() {
@@ -30,6 +31,14 @@ void Service() {
         { std::lock_guard lock(task->mutex); task->done = true; }
         task->cv.notify_one();
     }
+    std::deque<std::function<bool()>> cleanup;
+    { std::lock_guard lock(queueMutex); cleanup.swap(deferred); }
+    for(auto& action:cleanup) {
+        if(!action()) { std::lock_guard lock(queueMutex);deferred.push_back(std::move(action)); }
+    }
+}
+void Defer(std::function<bool()> cleanup) {
+    std::lock_guard lock(queueMutex);deferred.push_back(std::move(cleanup));
 }
 bool Run(std::function<void()> action) {
     if (gameThread) { action(); return true; }

@@ -22,6 +22,9 @@ void DxBeginFrame(std::string& frame);
 // Queue a complete draw command (including any font selection/reset). Screen
 // calls capture blend state and honor postGUI; active render targets draw in order.
 void DxAppendDraw(const std::string& commands, bool postGUI);
+// Current viewport, including a selected render target.
+void DxDestinationSize(int& width,int& height);
+bool DxIsOverwriteBlend();
 
 // Elements made by dxCreateTexture ("texture", desktop CClientTexture) and dxCreateFont
 // ("dx-font", CClientDxFont). A texture's pixels stay in its file; the overlay decodes it when a
@@ -32,6 +35,8 @@ const char* DxElementType(uint32_t id);
 bool DxElementRelease(uint32_t id);
 // The cached image file of a live texture. False when id is not a texture.
 bool DxTextureFile(uint32_t id, std::string& file);
+// Resolve a texture/SVG or resource image path for the 3D material queue.
+bool DxResolveMaterial(lua_State*,int,std::string& file,unsigned& width,unsigned& height);
 // A stopped resource loses its textures and fonts. netId or generation 0 matches any.
 void DxDropResource(const std::string& owner, uint16_t netId, uint32_t generation);
 

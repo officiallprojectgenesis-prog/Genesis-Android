@@ -3,6 +3,9 @@
 #include "LuaApiExtra.h"
 #include "LuaGuiApi.h"
 #include "LuaSvgApi.h"
+#include "ModelEffects.h"
+#include "LuaDx3DApi.h"
+#include "DxShader.h"
 #include "LuaVMStub.h"
 
 #include "lua.hpp"
@@ -736,7 +739,7 @@ int DxGetMaterialSize(lua_State* L) {
     if (!texture) {
         std::string bitmap;
         unsigned width = 0, height = 0;
-        if (!lua_istable(L, 1) || !SvgInfo(ElementIdOf(L, 1), bitmap, width, height))
+        if (!lua_istable(L, 1) || (!SvgInfo(ElementIdOf(L, 1), bitmap, width, height) && !DxShader::Size(ElementIdOf(L,1),width,height)))
             return Fail(L, "dxGetMaterialSize", "material", 1);
         lua_pushinteger(L, width);
         lua_pushinteger(L, height);
@@ -1269,6 +1272,7 @@ int DxGetTextSize(lua_State* L) {
 }  // namespace
 
 const char* DxElementType(uint32_t id) {
+    if (DxShader::Exists(id)) return "shader";
     if (FindTexture(id)) return "texture";
     if (const Font* font = FindFont(id)) return font->gui ? "gui-font" : "dx-font";
     std::string bitmap;
@@ -1287,9 +1291,24 @@ bool DxTextureFile(uint32_t id, std::string& file) {
     return SvgInfo(id, file, width, height);
 }
 
+bool DxResolveMaterial(lua_State* L,int index,std::string& file,unsigned& width,unsigned& height) {
+    if (lua_istable(L,index)) {
+        const uint32_t id=ElementIdOf(L,index);
+        if (const Texture* texture=FindTexture(id)) {
+            file=texture->file; width=texture->width; height=texture->height; return true;
+        }
+        return SvgInfo(id,file,width,height);
+    }
+    if (lua_type(L,index)!=LUA_TSTRING) return false;
+    size_t length=0; const char* path=lua_tolstring(L,index,&length);
+    file=ActiveVmResourceFile(std::string(path,length));
+    return !file.empty() && ImageSize(file,width,height);
+}
+
 void DxFreeOverlayBitmap(uint32_t id) { g_deadTargets.push_back(id); }
 
 bool DxElementRelease(uint32_t id) {
+    if (DxShader::Release(id)) return true;
     for (auto it = g_textures.begin(); it != g_textures.end(); ++it) {
         if (it->id != id) continue;
         ForgetTarget(*it);
@@ -1309,6 +1328,9 @@ bool DxElementRelease(uint32_t id) {
 }
 
 void DxDropResource(const std::string& owner, uint16_t netId, uint32_t generation) {
+    DxShader::DropResource(owner,netId,generation);
+    Dx3D::DropResource(owner,netId,generation);
+    ModelEffects::DropResource(owner,netId,generation);
     auto mine = [&](const std::string& itemOwner, uint16_t itemNet, uint32_t itemGeneration) {
         return itemOwner == owner && (netId == 0 || itemNet == 0 || itemNet == netId) &&
                (generation == 0 || itemGeneration == 0 || itemGeneration == generation);
@@ -1442,6 +1464,7 @@ double DxMeasureLine(const std::string& text, const DxFont& font) {
 }
 
 void DxBeginFrame(std::string& frame) {
+    Dx3D::BeginFrame();
     // Every frame starts on the screen (desktop restores the default target after the render events).
     g_activeTarget = 0;
     for (uint32_t id : g_deadTargets) {
@@ -1458,14 +1481,25 @@ void DxBeginFrame(std::string& frame) {
 }
 
 void DxAppendDraw(const std::string& commands, bool postGUI) { AppendOrdered(commands, postGUI); }
+bool DxIsOverwriteBlend() { return g_blendMode==3; }
+void DxDestinationSize(int& width,int& height) {
+    if(const Texture* texture=FindTexture(g_activeTarget);texture && texture->renderTarget) {
+        width=texture->width;height=texture->height;
+    } else ActiveVmScreenSize(width,height);
+}
 
 void DxEndRender(std::string& frame) {
+    Dx3D::EndFrame();
     if (g_activeTarget == 0) return;
     g_activeTarget = 0;
     frame += "G\n";
 }
 
 void InstallDxLua(lua_State* L) {
+    DxShader::InstallShaderLua(L);
+    Dx3D::InstallDx3DLua(L);
+    ModelEffects::Reset();
+    ModelEffects::InstallModelEffectsLua(L);
     g_blendMode = 0;
     g_testMode = 0;
     for (const Texture& texture : g_textures)

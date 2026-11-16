@@ -60,6 +60,13 @@ set(NATIVE_SOURCES
     "${NATIVE_DIR}/shared/LuaEventRegistry.cpp"
     "${NATIVE_DIR}/shared/LuaKeyBindApi.cpp"
     "${NATIVE_DIR}/shared/LuaDxApi.cpp"
+    "${NATIVE_DIR}/shared/DxShader.cpp"
+    "${NATIVE_DIR}/shared/LuaDxShaderApi.cpp"
+    "${NATIVE_DIR}/shared/LuaModelEffects.cpp"
+    "${NATIVE_DIR}/shared/LuaDx3DApi.cpp"
+    "${NATIVE_DIR}/shared/ModelEffects.cpp"
+    "${NATIVE_DIR}/gtasa/ModelEffectsNative.cpp"
+    "${NATIVE_DIR}/gtasa/Dx3DNative.cpp"
     "${NATIVE_DIR}/shared/LuaSvgApi.cpp"
     "${NATIVE_DIR}/net/Checksums.cpp"
     "${NATIVE_DIR}/net/HttpDownloader.cpp"
@@ -123,6 +130,7 @@ target_include_directories(neon_core PRIVATE ${HEADLESS_INCLUDE_DIRS})
 
 # Vendored Lua 5.3.6 (static, built into the headless build directory only).
 add_subdirectory("${NATIVE_DIR}/lua53" "${CMAKE_CURRENT_BINARY_DIR}/lua53")
+add_subdirectory("${NATIVE_DIR}/third_party/hlslparser" "${CMAKE_CURRENT_BINARY_DIR}/hlslparser")
 
 find_package(Threads REQUIRED)
 find_package(ZLIB REQUIRED)
@@ -167,13 +175,19 @@ target_link_libraries(neon_core PRIVATE lua53 ZLIB::ZLIB)
 # PacketReliability, PacketOrdering); the calls come from NeonJoinProtocol.cpp.
 add_executable(neon_headless "${HEADLESS_DIR}/main.cpp" $<TARGET_OBJECTS:neon_core>)
 add_executable(neon_resource_tests "${HEADLESS_DIR}/resource_tests.cpp" $<TARGET_OBJECTS:neon_core>)
+add_executable(neon_dx_conversion_tests "${HEADLESS_DIR}/dx_conversion_tests.cpp" $<TARGET_OBJECTS:neon_core>)
+target_link_options(neon_dx_conversion_tests PRIVATE
+    "-Wl,--wrap=eglCreatePbufferSurface" "-Wl,--wrap=eglMakeCurrent")
 
-foreach(headless_target neon_headless neon_resource_tests)
+foreach(headless_target neon_headless neon_resource_tests neon_dx_conversion_tests)
     target_include_directories(${headless_target} PRIVATE ${HEADLESS_INCLUDE_DIRS})
     target_link_options(${headless_target} PRIVATE
         "-Wl,--wrap=_ZN8WorldRPG3Net13RakNetWrapper10SendPacketEhRKNS0_15BitStreamWriterENS0_14PacketPriorityENS0_17PacketReliabilityENS0_14PacketOrderingE")
     target_link_libraries(${headless_target} PRIVATE
         lua53
+        neon_hlsl
+        EGL
+        GLESv2
         ZLIB::ZLIB
         Threads::Threads
         ${CMAKE_DL_LIBS}

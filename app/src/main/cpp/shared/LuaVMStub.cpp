@@ -13,6 +13,7 @@
 #include "LuaEventRegistry.h"
 #include "LuaKeyBindApi.h"
 #include "LuaDxApi.h"
+#include "DxShader.h"
 #include "LuaSvgApi.h"
 #include "LuaApiExtra.h"
 #include "LuaGuiApi.h"
@@ -852,8 +853,9 @@ static int AppendImageDraw(lua_State* L, bool section) {
     const int pathIndex = section ? 9 : 5;
     // A texture element (dxCreateTexture) or a file path (desktop MixedReadMaterialString).
     std::string file;
+    const uint32_t shader=lua_istable(L,pathIndex)?ElementIdOf(L,pathIndex):0;
     if (lua_istable(L, pathIndex)) {
-        if (!DxTextureFile(ElementIdOf(L, pathIndex), file)) {
+        if (!WorldRPG::DxShader::Exists(shader) && !DxTextureFile(ElementIdOf(L, pathIndex), file)) {
             lua_pushboolean(L, 0);
             return 1;
         }
@@ -862,7 +864,7 @@ static int AppendImageDraw(lua_State* L, bool section) {
         const char* path = lua_tolstring(L, pathIndex, &pathLength);
         file = DxImageFile(std::string(path ? path : "", pathLength));
     }
-    if (file.empty()) {
+    if (file.empty() && !WorldRPG::DxShader::Exists(shader)) {
         lua_pushboolean(L, 0);
         return 1;
     }
@@ -874,6 +876,13 @@ static int AppendImageDraw(lua_State* L, bool section) {
         !ReadDrawOptional(L,rotIndex,0,rotation) || !ReadDrawOptional(L,rotIndex+1,0,ox) ||
         !ReadDrawOptional(L,rotIndex+2,0,oy) || !ReadDrawOptional(L,rotIndex+3,4294967295.0,color) ||
         !ReadDrawBool(L,rotIndex+4,postGUI)) return DrawResult(L,false);
+    if (WorldRPG::DxShader::Exists(shader)) {
+        WorldRPG::DxShader::Tile tile;
+        tile.x=x;tile.y=y;tile.width=w;tile.height=h;tile.rotation=rotation;
+        tile.offsetX=ox;tile.offsetY=oy;tile.color=DrawColor(color);
+        if(section){tile.u=sx;tile.v=sy;tile.usize=sw;tile.vsize=sh;}
+        return DrawResult(L,WorldRPG::DxShader::DrawImage(shader,tile,section,postGUI));
+    }
     char head[768];
     std::snprintf(head, sizeof(head), "I %.1f %.1f %.1f %.1f %.1f %.1f %.1f %.1f %u %.1f %.1f %.1f ",
                   x, y, w, h, sx, sy, sw, sh, DrawColor(color), rotation, ox, oy);
