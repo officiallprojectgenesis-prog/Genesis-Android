@@ -5,8 +5,8 @@ Ped animations, tasks, fighting styles, bone transforms, clothes, stats, voice, 
 ## Parity Status
 
 - **Total Functions:** 206
-- **Implemented:** 27 (13.1%)
-- **Stubs:** 77
+- **Implemented:** 32 (15.5%)
+- **Stubs:** 72
 - **Missing:** 102
 
 > **Technical Requirement:** Requires hooking libGTASA.so `CPed` / `CPlayerPed` (`_ZN10CPlayerPed...`), `CPedIK`, `CTask` hierarchy (wander, fight, duck), and clothing pools.
@@ -40,7 +40,7 @@ Ped animations, tasks, fighting styles, bone transforms, clothes, stats, voice, 
 | `getElementBoneQuaternion` | Missing | `CLuaPedDefs.cpp:377` | `ArgumentParserWarn<false, GetElementBoneQuaternion>` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
 | `getElementBoneRotation` | Missing | `CLuaPedDefs.cpp:376` | `ArgumentParserWarn<false, GetElementBoneRotation>` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
 | `getLocalPlayer` | **Implemented** | `CLuaPlayerDefs.cpp:100` | `GetLocalPlayer` | Operational on Android. (l_getLocalPlayer) |
-| `getPedAmmoInClip` | *Stub* | `CLuaPedDefs.cpp:421` | `GetPedAmmoInClip` | Currently stubbed: `l_num0: lua_pushinteger(L, 0)`. Needs native engine wiring. |
+| `getPedAmmoInClip` | **Implemented** | `CLuaPedDefs.cpp:421` | `GetPedAmmoInClip` | Game-thread GTA ped snapshot plus per-element client cache seeded by ENTITY_ADD/PLAYER_LIST and weapon RPCs. Queries preserve death tasks/network revival, optional weapon slot and uint16 ammo semantics; clip ammo requires a streamed body. Stream-out saves inventory and offscreen RPCs update the cache before body restoration; generation guards reject removed/reused IDs. ARM64 layout is instruction-guarded. Native reload, sync-driven weapons and streaming still need device validation; this is handler coverage, not full gameplay parity. |
 | `getPedAnalogControlState` | Missing | `CLuaPedDefs.cpp:389` | `GetPedAnalogControlState` | Needs reading/writing CPed / CPlayerPed struct fields in libGTASA.so. |
 | `getPedAnimation` | Missing | `CLuaPedDefs.cpp:382` | `GetPedAnimation` | Needs reading/writing CPed / CPlayerPed struct fields in libGTASA.so. |
 | `getPedAnimationLength` | Missing | `CLuaPedDefs.cpp:385` | `ArgumentParser<GetPedAnimationLength>` | Needs reading/writing CPed / CPlayerPed struct fields in libGTASA.so. |
@@ -74,13 +74,13 @@ Ped animations, tasks, fighting styles, bone transforms, clothes, stats, voice, 
 | `getPedTargetStart` | Missing | `CLuaPedDefs.cpp:415` | `GetPedTargetStart` | Needs reading/writing CPed / CPlayerPed struct fields in libGTASA.so. |
 | `getPedTask` | *Stub* | `CLuaPedDefs.cpp:412` | `GetPedTask` | Currently stubbed: `l_false: lua_pushboolean(L, 0)`. Needs native engine wiring. |
 | `getPedTaskSequenceProgress` | *Stub* | `CLuaPedDefs.cpp:425` | `ArgumentParser<GetPedTaskSequenceProgress>` | Currently stubbed: `DefaultValue(kZero)`. Needs native engine wiring. |
-| `getPedTotalAmmo` | *Stub* | `CLuaPedDefs.cpp:422` | `GetPedTotalAmmo` | Currently stubbed: `l_num0: lua_pushinteger(L, 0)`. Needs native engine wiring. |
+| `getPedTotalAmmo` | **Implemented** | `CLuaPedDefs.cpp:422` | `GetPedTotalAmmo` | Game-thread GTA ped snapshot plus per-element client cache seeded by ENTITY_ADD/PLAYER_LIST and weapon RPCs. Queries preserve death tasks/network revival, optional weapon slot and uint16 ammo semantics; clip ammo requires a streamed body. Stream-out saves inventory and offscreen RPCs update the cache before body restoration; generation guards reject removed/reused IDs. ARM64 layout is instruction-guarded. Native reload, sync-driven weapons and streaming still need device validation; this is handler coverage, not full gameplay parity. |
 | `getPedVoice` | Missing | `CLuaPedDefs.cpp:374` | `GetPedVoice` | Needs reading/writing CPed / CPlayerPed struct fields in libGTASA.so. |
 | `getPedWalkingStyle` | Missing | `CLuaPedDefs.cpp:386` | `GetPedMoveAnim` | Needs reading/writing CPed / CPlayerPed struct fields in libGTASA.so. |
-| `getPedWeapon` | *Stub* | `CLuaPedDefs.cpp:418` | `GetPedWeapon` | Currently stubbed: `l_num0: lua_pushinteger(L, 0)`. Needs native engine wiring. |
+| `getPedWeapon` | **Implemented** | `CLuaPedDefs.cpp:418` | `GetPedWeapon` | Game-thread GTA ped snapshot plus per-element client cache seeded by ENTITY_ADD/PLAYER_LIST and weapon RPCs. Queries preserve death tasks/network revival, optional weapon slot and uint16 ammo semantics; clip ammo requires a streamed body. Stream-out saves inventory and offscreen RPCs update the cache before body restoration; generation guards reject removed/reused IDs. ARM64 layout is instruction-guarded. Native reload, sync-driven weapons and streaming still need device validation; this is handler coverage, not full gameplay parity. |
 | `getPedWeaponAccuracy` | *Stub* | `CLuaPedDefs.cpp:420` | `ArgumentParser<GetPedWeaponAccuracy>` | Currently stubbed: `l_num0: lua_pushinteger(L, 0)`. Needs native engine wiring. |
 | `getPedWeaponShootingRate` | *Stub* | `CLuaPedDefs.cpp:419` | `ArgumentParser<GetPedWeaponShootingRate>` | Currently stubbed: `l_num0: lua_pushinteger(L, 0)`. Needs native engine wiring. |
-| `getPedWeaponSlot` | *Stub* | `CLuaPedDefs.cpp:380` | `GetPedWeaponSlot` | Currently stubbed: `l_num0: lua_pushinteger(L, 0)`. Needs native engine wiring. |
+| `getPedWeaponSlot` | **Implemented** | `CLuaPedDefs.cpp:380` | `GetPedWeaponSlot` | Game-thread GTA ped snapshot plus per-element client cache seeded by ENTITY_ADD/PLAYER_LIST and weapon RPCs. Queries preserve death tasks/network revival, optional weapon slot and uint16 ammo semantics; clip ammo requires a streamed body. Stream-out saves inventory and offscreen RPCs update the cache before body restoration; generation guards reject removed/reused IDs. ARM64 layout is instruction-guarded. Native reload, sync-driven weapons and streaming still need device validation; this is handler coverage, not full gameplay parity. |
 | `getPlayerFromName` | **Implemented** | `CLuaPlayerDefs.cpp:108` | `GetPlayerFromName` | Operational on Android. (GetPlayerFromName) |
 | `getPlayerFromNick` | **Implemented** | `CLuaPlayerDefs.cpp:107` | `GetPlayerFromName` | Operational on Android. (GetPlayerFromName) |
 | `getPlayerHudComponentProperty` | Missing | `CLuaPlayerDefs.cpp:137` | `ArgumentParser<GetPlayerHudComponentProperty>` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
@@ -100,7 +100,7 @@ Ped animations, tasks, fighting styles, bone transforms, clothes, stats, voice, 
 | `givePlayerMoney` | Missing | `CLuaPlayerDefs.cpp:119` | `GivePlayerMoney` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
 | `isPedBleeding` | Missing | `CLuaPedDefs.cpp:409` | `ArgumentParser<IsPedBleeding>` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
 | `isPedChoking` | Missing | `CLuaPedDefs.cpp:435` | `IsPedChoking` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `isPedDead` | *Stub* | `CLuaPedDefs.cpp:437` | `IsPedDead` | Currently stubbed: `l_false: lua_pushboolean(L, 0)`. Needs native engine wiring. |
+| `isPedDead` | **Implemented** | `CLuaPedDefs.cpp:437` | `IsPedDead` | Game-thread GTA ped snapshot plus per-element client cache seeded by ENTITY_ADD/PLAYER_LIST and weapon RPCs. Queries preserve death tasks/network revival, optional weapon slot and uint16 ammo semantics; clip ammo requires a streamed body. Stream-out saves inventory and offscreen RPCs update the cache before body restoration; generation guards reject removed/reused IDs. ARM64 layout is instruction-guarded. Native reload, sync-driven weapons and streaming still need device validation; this is handler coverage, not full gameplay parity. |
 | `isPedDoingGangDriveby` | *Stub* | `CLuaPedDefs.cpp:390` | `IsPedDoingGangDriveby` | Currently stubbed: `DefaultValue(kFalse)`. Needs native engine wiring. |
 | `isPedDoingTask` | *Stub* | `CLuaPedDefs.cpp:434` | `IsPedDoingTask` | Currently stubbed: `DefaultValue(kFalse)`. Needs native engine wiring. |
 | `isPedDucked` | Missing | `CLuaPedDefs.cpp:436` | `IsPedDucked` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |

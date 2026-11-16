@@ -6,6 +6,7 @@
 #include <vector>
 
 #include "../shared/entity/PedSpawn.h"
+#include "../shared/PedQueries.h"
 
 #ifdef __ANDROID__
 #include <android/log.h>
@@ -187,6 +188,8 @@ bool ConsumeDamage(uint32_t& attacker, uint8_t& weapon);
 // stick Y negative is forward along that camera, matching CNetAPI / CClientPed.
 void NoteRemoteAim(uint32_t id, float heading, float camera, int stickX, int stickY, bool fire, bool duck);
 void NoteRemoteWeapon(uint32_t id, int weapon);
+// One game-thread snapshot; false on unavailable native data or a stale element.
+bool CopyPedQuery(uint32_t id, PedQueries::Snapshot& out);
 // True when the remote ped is in front of itself and within melee reach of us.
 bool RemoteFacingLocal(uint32_t id, float facing, float reach);
 // Buttons the local ped is actually using, so outgoing keysync can set them.
@@ -326,6 +329,7 @@ struct PedRpcOp {
         SetWeaponAmmo,     // CWeaponRPCs::SetWeaponAmmo body
         SetWeaponSlot,     // CClientPed::SetCurrentWeaponSlot
     };
+    uint64_t queryGeneration = 0; // packet cache receipt, not an internal restore op
     Kind kind = Kind::Animation;
     std::string block;
     std::string name;

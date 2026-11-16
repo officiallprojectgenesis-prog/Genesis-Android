@@ -19,7 +19,9 @@
 
 #include "gtasa/GameEngine.h"
 #include "shared/ServerWorld.h"
+#include "stubs/test_ped_queries.h"
 
+#include <unordered_map>
 #include <algorithm>
 #include <atomic>
 #include <chrono>
@@ -280,6 +282,19 @@ void BodyPose(float& x, float& y, float& z, float& heading, float& vx, float& vy
 // ---------------------------------------------------------------------------
 
 namespace WorldRPG::Headless {
+namespace { std::unordered_map<uint32_t, PedQueries::Snapshot> queryNative; }
+void SetPedQueryNative(uint32_t id, const PedQueries::Snapshot& snapshot) { queryNative[id] = snapshot; }
+void ClearPedQueryNative() { queryNative.clear(); }
+bool CopyPedQueryNative(uint32_t id, PedQueries::Snapshot& snapshot) {
+    auto it = queryNative.find(id);
+    if (it == queryNative.end() || snapshot.generation != it->second.generation) return false;
+    snapshot.streamed = true;
+    snapshot.weapons = it->second.weapons;
+    snapshot.currentSlot = it->second.currentSlot;
+    snapshot.taskType = it->second.taskType;
+    snapshot.health = it->second.health;
+    return true;
+}
 
 void SetMode(Mode mode) { g_mode = mode; }
 
@@ -379,6 +394,11 @@ void NoteDamage(uint32_t, float, uint8_t) {}
 bool ConsumeDamage(uint32_t&, uint8_t&) { return false; }
 void NoteRemoteAim(uint32_t, float, float, int, int, bool, bool) {}
 void NoteRemoteWeapon(uint32_t, int) {}
+bool CopyPedQuery(uint32_t id, PedQueries::Snapshot& out) {
+    if (!PedQueries::Copy(id, out)) return false;
+    Headless::CopyPedQueryNative(id, out);
+    return true;
+}
 bool RemoteFacingLocal(uint32_t, float, float) { return false; }
 void CopyOnFoot(float, float, float, OnFootKeys& keys) { keys = {}; }
 void ConsumeLocalJump() {}
@@ -518,6 +538,11 @@ void SetPedOnFire(uint32_t, bool) {}
 void SetPedInWater(uint32_t, bool) {}
 void KillPedAnimation(uint32_t) {}
 void LockPedHealth(uint32_t, float) {}
+bool CopyPedVitalsLock(uint32_t, bool& healthLocked, float& health, bool& armorLocked, float& armor) {
+    healthLocked = armorLocked = false;
+    health = armor = 0.f;
+    return false; // the host has no native health/armor locks
+}
 void LockPedArmor(uint32_t, float) {}
 void LockPedHealthCurrent(uint32_t) {}
 void LockPedArmorCurrent(uint32_t) {}
@@ -536,7 +561,9 @@ void RpcSetRotation(uint32_t, float) {}
 void RpcSetInterior(uint32_t, uint8_t) {}
 void RpcSetHealth(uint32_t, float) {}
 void RpcSetArmor(uint32_t, float) {}
-void QueuePedRpc(uint32_t, const PedRpcOp&) {}
+void QueuePedRpc(uint32_t id, const PedRpcOp& op) {
+    if (op.queryGeneration && PedQueries::Current(id, op.queryGeneration)) PedQueries::WeaponRpc(id, op);
+}
 void RpcSetAlpha(uint32_t, uint8_t) {}
 void RpcSetCollisions(uint32_t, bool) {}
 

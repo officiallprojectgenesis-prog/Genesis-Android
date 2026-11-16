@@ -1,4 +1,5 @@
 #include "ServerWorld.h"
+#include "PedQueries.h"
 #include "ResourceFiles.h"
 #include "ConnectionLoading.h"
 #include "../gtasa/GameEngine.h"
@@ -232,6 +233,8 @@ void Remember(uint32_t id, const Visual& visual) {
     const int oldBlip = stored.blipHandle;
     const bool live = stored.blipLive;
     stored = visual;
+    if (visual.kind == 14) PedQueries::Create(id, false, visual.ped.get());
+    else if (visual.kind == 1) PedQueries::Ensure(id, true);
     stored.blipHandle = oldBlip;
     stored.blipLive = live;
     if (visual.model >= 0) stored.model = visual.model;
@@ -264,6 +267,7 @@ void ResetSession() {
             if (visual.kind == 14) peds.push_back(id);
         }
         g_visuals.clear();
+        PedQueries::Reset();
         g_attachments.clear();
         g_attachmentOrder.clear();
         g_data.clear();
@@ -279,7 +283,7 @@ void ResetSession() {
     SW_LOGI("ServerWorld reset for a new session (%zu ped state(s) forgotten)", peds.size());
 }
 
-void SetLocalPlayer(uint32_t id) { g_local = id; }
+void SetLocalPlayer(uint32_t id) { g_local = id; PedQueries::Ensure(id, true); }
 uint32_t LocalPlayer() { return g_local; }
 uint32_t LastResourceRoot() { return g_resourceRoot; }
 
@@ -440,6 +444,7 @@ void NotePlayerSkin(uint32_t id, int model) {
     std::lock_guard<std::mutex> lock(g_lock);
     auto& stored = g_visuals[id];
     stored.kind = 1;
+    PedQueries::Ensure(id, true);
     stored.model = model;
 }
 
@@ -484,6 +489,7 @@ void NotePlayerNick(uint32_t id, const std::string& nick) {
     if (id == 0 || id == 0xFFFFFFFFu) return;
     std::lock_guard<std::mutex> lock(g_lock);
     g_nicks[id] = nick;
+    PedQueries::Ensure(id, true);
 }
 
 bool CopyPlayerNick(uint32_t id, std::string& out) {
@@ -607,6 +613,7 @@ void OnEntityRemove(const uint8_t* body, size_t length, size_t bits) {
                 return;
             }
             g_visuals.erase(id);
+            PedQueries::Forget(id);
             g_data.erase(id);
             g_nicks.erase(id);
             ForgetElementReferences(id);
@@ -670,6 +677,7 @@ void NotePlayerSeen(uint32_t id) {
     std::lock_guard<std::mutex> lock(g_lock);
     auto& stored = g_visuals[id];
     if (stored.kind == 0) stored.kind = 1;
+    PedQueries::Ensure(id, true);
 }
 
 bool IsKnownPlayer(uint32_t id) {
@@ -685,6 +693,7 @@ void OnPlayerQuit(uint32_t id) {
     {
         std::lock_guard<std::mutex> lock(g_lock);
         g_visuals.erase(id);
+        PedQueries::Forget(id);
         g_data.erase(id);
         g_nicks.erase(id);
         ForgetElementReferences(id);
@@ -805,7 +814,8 @@ void OnPlayerList(const uint8_t* body, size_t length, size_t bits) {
     bool showInChat = false;
     if (!ReadFlag(reader, showInChat)) return;
     (void)showInChat;
-    std::lock_guard<std::mutex> lock(g_lock);
+    std::vector<std::pair<uint32_t, Game::PedRpcOp>> weapons;
+    std::unique_lock<std::mutex> lock(g_lock);
     int players = 0;
     while (reader.GetRemainingBits() > 40 && players < 64) {
         uint32_t id = 0;
@@ -831,6 +841,8 @@ void OnPlayerList(const uint8_t* body, size_t length, size_t bits) {
         if (!reader.Read(moveAnim)) { DIAG("PLAYER_LIST id=%u stop at moveAnim bit=%zu", id, reader.GetReadOffsetBits()); break; }
         // bIsSpawned (0x40, the second flag bit): the model, team, pose, dimension, style, alpha, interior, weapons and
         // animation are only on the wire for a spawned player (CPacketHandler.cpp 934-995 and 1043-1104).
+        PedQueries::Ensure(id, true);
+        if (flags & 0x80) PedQueries::Wasted(id);
         if (!(flags & 0x40)) {
             g_nicks[id] = nick;
             DIAG("PLAYER_LIST id=%u not spawned; record ends after moveAnim", id);
@@ -877,6 +889,12 @@ void OnPlayerList(const uint8_t* body, size_t length, size_t bits) {
             if (occupied) {
                 uint8_t weapon = 0;
                 if (!reader.ReadBits(&weapon, 6)) { animated = true; break; }
+                Game::PedRpcOp give;
+                give.kind = Game::PedRpcOp::Kind::GiveWeapon;
+                give.weapon = weapon & 0x3F;
+                give.ammo = 1;
+                give.queryGeneration = PedQueries::Generation(id);
+                weapons.emplace_back(id, give);
             }
         }
         if (animated || !ReadFlag(reader, animated)) { DIAG("PLAYER_LIST id=%u stop at weapons bit=%zu", id, reader.GetReadOffsetBits()); break; }
@@ -899,6 +917,9 @@ void OnPlayerList(const uint8_t* body, size_t length, size_t bits) {
             DIAG("PLAYER_LIST id=%u animation %s/%s (not applied)", id, block.c_str(), anim.c_str());
         }
     }
+    lock.unlock();
+    // Never acquire the game registry lock while holding the world registry.
+    for (const auto& [id, give] : weapons) Game::QueuePedRpc(id, give);
     if (players > 0) SW_LOGI("PLAYER_LIST stored %d player model(s), %zu bits left", players, reader.GetRemainingBits());
 }
 

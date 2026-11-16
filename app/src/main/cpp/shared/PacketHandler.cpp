@@ -12,6 +12,7 @@
 #include "../gtasa/RemoteVehicle.h"
 #include "VehicleSync.h"
 #include "ServerWorld.h"
+#include "PedQueries.h"
 #include "CombatSync.h"
 #include "ResourceFiles.h"
 #include "../gtasa/RemoteCombat.h"
@@ -175,6 +176,11 @@ bool HandleLuaElementRPC(const uint8_t* body, size_t length, size_t bits) {
             WorldRPG::ServerWorld::SetSyncTimeContext(id, context);
             if (!pedLike) { logUnported("health on a non-ped element not ported"); return true; }
             if (id == WorldRPG::ServerWorld::LocalPlayer()) logUnported("local SetHealth / LockHealth not ported");
+            bool healthLocked = false, armorLocked = false;
+            float lockedHealth = 0.f, lockedArmor = 0.f;
+            WorldRPG::Game::CopyPedVitalsLock(id, healthLocked, lockedHealth, armorLocked, lockedArmor);
+            // LockHealth stores the value; only SetHealth clears m_bDead (CClientPed.cpp:3655-3675,3745-3749).
+            WorldRPG::PedQueries::Health(id, health, !healthLocked);
             WorldRPG::Game::RpcSetHealth(id, health);
             return true;
         }
@@ -307,6 +313,7 @@ bool HandleLuaElementRPC(const uint8_t* body, size_t length, size_t bits) {
             op.weapon = weapon;
             op.ammo = ammo > 9999 ? 9999 : ammo;
             op.setCurrent = setCurrent;
+            op.queryGeneration = WorldRPG::PedQueries::Generation(id);
             WorldRPG::Game::QueuePedRpc(id, op);
             return true;
         }
@@ -328,6 +335,7 @@ bool HandleLuaElementRPC(const uint8_t* body, size_t length, size_t bits) {
             } else {
                 return true;
             }
+            op.queryGeneration = WorldRPG::PedQueries::Generation(id);
             WorldRPG::Game::QueuePedRpc(id, op);
             return true;
         }
@@ -336,6 +344,7 @@ bool HandleLuaElementRPC(const uint8_t* body, size_t length, size_t bits) {
             if (!pedLike) return true;
             WorldRPG::Game::PedRpcOp op;
             op.kind = WorldRPG::Game::PedRpcOp::Kind::TakeAllWeapons;
+            op.queryGeneration = WorldRPG::PedQueries::Generation(id);
             WorldRPG::Game::QueuePedRpc(id, op);
             return true;
         }
@@ -354,6 +363,7 @@ bool HandleLuaElementRPC(const uint8_t* body, size_t length, size_t bits) {
             op.weapon = weapon;
             op.ammo = ammo;
             op.ammoInClip = clip;
+            op.queryGeneration = WorldRPG::PedQueries::Generation(id);
             WorldRPG::Game::QueuePedRpc(id, op);
             return true;
         }
@@ -365,6 +375,7 @@ bool HandleLuaElementRPC(const uint8_t* body, size_t length, size_t bits) {
             WorldRPG::Game::PedRpcOp op;
             op.kind = WorldRPG::Game::PedRpcOp::Kind::SetWeaponSlot;
             op.slot = slot & 0x0F;
+            op.queryGeneration = WorldRPG::PedQueries::Generation(id);
             WorldRPG::Game::QueuePedRpc(id, op);
             return true;
         }
@@ -415,6 +426,7 @@ bool HandleWasted(const uint8_t* body, size_t length, size_t bits, uint8_t packe
         PKT_LOGI("DIAG WASTED packet %u short (bits=%zu)", static_cast<unsigned>(packet), bits);
         return false;
     }
+    WorldRPG::PedQueries::Wasted(id);
     WorldRPG::ServerWorld::SetSyncTimeContext(id, context);
     PKT_LOGI("Wasted: packet %u id=%u killer=%u weapon=%u part=%u stealth=%d anim=%u/%u", static_cast<unsigned>(packet), id,
              killer, static_cast<unsigned>(weapon & 0x3Fu), static_cast<unsigned>(part & 0x7u), stealth ? 1 : 0, group, anim);
@@ -501,6 +513,12 @@ bool HandlePlayerSpawn(const uint8_t* body, size_t length, size_t bits) {
     // recorded; once it is known, a spawn is ours only when its id matches.
     const uint32_t local = WorldRPG::ServerWorld::LocalPlayer();
     const bool mine = local == 0 || playerId == local;
+    WorldRPG::PedQueries::Ensure(playerId, true);
+    WorldRPG::PedQueries::Spawn(playerId);
+    WorldRPG::Game::PedRpcOp clearWeapons;
+    clearWeapons.kind = WorldRPG::Game::PedRpcOp::Kind::TakeAllWeapons;
+    clearWeapons.queryGeneration = WorldRPG::PedQueries::Generation(playerId);
+    WorldRPG::Game::QueuePedRpc(playerId, clearWeapons);
     if (mine) {
         if (local == 0) WorldRPG::ServerWorld::SetLocalPlayer(playerId);
         if (haveDimension) WorldRPG::ServerWorld::SetLocalDimension(spawnDimension);

@@ -9,7 +9,7 @@ Each document lists every single function, its current Android implementation st
 | Category | Documentation File | Total | Implemented | Stub | Missing | Parity % |
 |---|---|---|---|---|---|---|
 | **Vehicles (CLuaVehicleDefs)** | [VEHICLES.md](VEHICLES.md) | 165 | 9 | 19 | 137 | 5.5% |
-| **Peds & Players (CLuaPedDefs, CLuaPlayerDefs)** | [PEDS_AND_PLAYERS.md](PEDS_AND_PLAYERS.md) | 206 | 27 | 77 | 102 | 13.1% |
+| **Peds & Players (CLuaPedDefs, CLuaPlayerDefs)** | [PEDS_AND_PLAYERS.md](PEDS_AND_PLAYERS.md) | 206 | 32 | 72 | 102 | 15.5% |
 | **World, Objects & Environment** | [WORLD_AND_OBJECTS.md](WORLD_AND_OBJECTS.md) | 227 | 124 | 11 | 92 | 54.6% |
 | **Element Tree & Data (CLuaElementDefs)** | [ELEMENTS.md](ELEMENTS.md) | 81 | 54 | 8 | 19 | 66.7% |
 | **GUI & 2D/3D Drawing (DX & CEGUI)** | [GUI_AND_DX.md](GUI_AND_DX.md) | 199 | 199 | 0 | 0 | 100.0% |
@@ -20,7 +20,7 @@ Each document lists every single function, its current Android implementation st
 | **Core System, Networking & Utilities** | [CORE_AND_UTILITY.md](CORE_AND_UTILITY.md) | 195 | 171 | 0 | 24 | 87.7% |
 | **Markers, Blips, ColShapes & Spatial** | [MARKERS_AND_SPATIAL.md](MARKERS_AND_SPATIAL.md) | 145 | 0 | 3 | 142 | 0.0% |
 | **Web Browser & Compatibility (CEF / Discord)** | [BROWSER_AND_COMPATIBILITY.md](BROWSER_AND_COMPATIBILITY.md) | 103 | 4 | 0 | 99 | 3.9% |
-| **TOTAL** | **All Categories** | **1581** | **677** | **134** | **770** | **42.8%** |
+| **TOTAL** | **All Categories** | **1581** | **682** | **129** | **770** | **43.1%** |
 
 ## Implementation Priority Tiers
 

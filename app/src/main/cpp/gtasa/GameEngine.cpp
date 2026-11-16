@@ -335,6 +335,7 @@ static constexpr size_t kMaxPedRpcOps = 32;
 static std::atomic<int> g_localAlpha{255};
 static std::atomic<int> g_localCollisions{1};
 struct RemoteBody {
+    uint64_t queryGeneration = 0;
     void* ped = nullptr;
     std::unique_ptr<std::byte[]> owned;
     int weapon = -1;
@@ -1945,6 +1946,7 @@ static void NoteHostedDeath(uint32_t id, void* event, void* ped, RemoteBody& sto
     stored.lastHealth = current;
     if (!wasAlive || stored.wastedSent) return;
     stored.wastedSent = true;
+    PedQueries::Wasted(id);
     static void (*computeDeathAnim)(void*, void*, bool) = nullptr;
     static bool looked = false;
     if (!looked) {
@@ -2027,23 +2029,7 @@ static void ApplyPedSpawnRecord(uint32_t id, RemotePed& live) {
         // SetAlpha (4073) and SetUsesCollision (4148): element state, written to the body by ApplyRemotePeds.
         live.alpha = spawn.alpha;
         live.collisions = spawn.collisions;
-        // GiveWeapon per slot (4130-4135), SetCurrentWeaponSlot (4145), then SetPedAnimation (4151-4184), in that
-        // order through the RPC queue (the weapon model and the anim block stream in first). SetAmmoTotal after each
-        // give is the same value GiveWeapon wrote on a fresh body and is not repeated.
         auto& queue = g_pedRpcOps[id];
-        for (const auto& weapon : spawn.weapons) {
-            PedRpcOp give;
-            give.kind = PedRpcOp::Kind::GiveWeapon;
-            give.weapon = weapon.type;
-            give.ammo = weapon.totalAmmo;
-            if (weapon.type != 0) queue.push_back(give);
-        }
-        if (!spawn.weapons.empty()) {
-            PedRpcOp slot;
-            slot.kind = PedRpcOp::Kind::SetWeaponSlot;
-            slot.slot = spawn.currentSlot;
-            queue.push_back(slot);
-        }
         if (spawn.animation.present && !spawn.animation.block.empty() && !spawn.animation.name.empty()) {
             PedRpcOp anim;
             anim.kind = PedRpcOp::Kind::Animation;
@@ -2253,6 +2239,42 @@ static int& WeaponType(unsigned char* w) { return *reinterpret_cast<int*>(w); }
 static int& WeaponClip(unsigned char* w) { return *reinterpret_cast<int*>(w + 0x8); }
 static int& WeaponTotal(unsigned char* w) { return *reinterpret_cast<int*>(w + 0xC); }
 static int CurrentWeaponSlot(void* ped) { return *(reinterpret_cast<signed char*>(ped) + 0x8dc); }
+
+// Read-only Lua inventory queries use the same verified 2.10 layout as the RPCs.
+// SetCurrentWeapon+0x1c/0x24 (0x59b7cc/0x59b7d4) loads slot/type;
+// CWeapon::Reload+0x10/+0x50 (0x700a3c/0x700a7c) loads total/stores clip.
+// Refuse other layouts instead of reading a guessed CPed structure.
+static bool ReadPedInventory(void* ped, PedQueries::Snapshot& out) {
+    static const bool layout = [] {
+        void* h = dlopen("libGTASA.so", RTLD_NOLOAD | RTLD_GLOBAL);
+        auto* set = h ? static_cast<const unsigned char*>(dlsym(h, "_ZN4CPed16SetCurrentWeaponEi")) : nullptr;
+        auto* reload = h ? static_cast<const unsigned char*>(dlsym(h, "_ZN7CWeapon6ReloadEP4CPed")) : nullptr;
+        const bool ok = set && reload && *reinterpret_cast<const uint32_t*>(set + 0x1c) == 0x39a37268 &&
+            *reinterpret_cast<const uint32_t*>(set + 0x24) == 0xb9473120 &&
+            *reinterpret_cast<const uint32_t*>(reload + 0x10) == 0xb9400e68 &&
+            *reinterpret_cast<const uint32_t*>(reload + 0x50) == 0xb9000a68;
+        if (!ok) ENGINE_LOGI("DIAG ped query: unsupported weapon layout");
+        return ok;
+    }();
+    if (!ped || !layout) return false;
+    const int slot = CurrentWeaponSlot(ped);
+    if (slot < 0 || slot >= kWeaponSlots) return false;
+    out.currentSlot = slot;
+    for (unsigned i = 0; i < PedQueries::Slots; ++i) {
+        auto* w = PedWeaponAt(ped, i);
+        if (WeaponType(w) < 0 || WeaponType(w) > 46) return false;
+        out.weapons[i] = {static_cast<uint32_t>(WeaponType(w)), static_cast<uint32_t>(WeaponTotal(w)),
+            static_cast<uint32_t>(WeaponClip(w))};
+    }
+    out.streamed = true;
+    return true;
+}
+static void SavePedInventory(uint32_t id, const RemoteBody& body) {
+    if (!body.ped || IsPlaceableVtable(body.ped)) return;
+    PedQueries::Snapshot state;
+    if (!PedQueries::Copy(id, state) || state.generation != body.queryGeneration) return;
+    if (ReadPedInventory(body.ped, state)) PedQueries::StreamOut(id, state);
+}
 
 // CWeaponInfo for the standard skill, or null.
 static const unsigned char* WeaponInfoOf(int type) {
@@ -2600,17 +2622,37 @@ static void RunPedRpcOps(uint32_t id, void* ped, bool local, RemoteBody* stored)
             auto queue = g_pedRpcOps.find(id);
             if (queue == g_pedRpcOps.end() || queue->second.empty()) return;
             op = queue->second.front();
+            queue->second.pop_front(); // network arrival cannot evict the op currently executing
         }
-        const bool done = RunPedRpcOp(id, ped, op, local, stored);
-        std::lock_guard<std::mutex> lock(g_remoteMutex);
-        auto queue = g_pedRpcOps.find(id);
-        if (queue == g_pedRpcOps.end() || queue->second.empty()) return;
+        const bool stale = op.queryGeneration && !PedQueries::Current(id, op.queryGeneration);
+        const bool done = stale || RunPedRpcOp(id, ped, op, local, stored);
         if (!done) {
-            queue->second.front().waits = op.waits;
-            queue->second.front().requested = op.requested;
+            std::lock_guard<std::mutex> lock(g_remoteMutex);
+            g_pedRpcOps[id].push_front(op);
             return;
         }
-        queue->second.pop_front();
+        if (!stale && op.queryGeneration) PedQueries::WeaponRpc(id, op);
+    }
+}
+
+// Offscreen CClientPed weapon RPCs update the client inventory without a GTA
+// weapon. Applying them later to an old native inventory changes replacement
+// and shared-ammo semantics. Consume their cache branch before _CreateModel.
+// Called on the game thread; all queue access remains under the registry lock.
+static void ApplyUnstreamedWeaponRpcs(uint32_t id) {
+    std::lock_guard lock(g_remoteMutex);
+    auto found = g_pedRpcOps.find(id);
+    if (found == g_pedRpcOps.end()) return;
+    auto& queue = found->second;
+    for (auto it = queue.begin(); it != queue.end();) {
+        using K = PedRpcOp::Kind;
+        if (it->kind >= K::GiveWeapon && it->kind <= K::SetWeaponSlot) {
+            if (it->queryGeneration && PedQueries::Current(id, it->queryGeneration))
+                PedQueries::WeaponRpc(id, *it);
+            // Internal restoration commands have no receipt token; replacing a
+            // body restores the client inventory again, rather than duplicating them.
+            it = queue.erase(it);
+        } else ++it;
     }
 }
 
@@ -2780,11 +2822,28 @@ static void ApplyRemotePeds() {
                 g_remoteCars.erase(car);
             }
             g_remotePeds.erase(id);
-            g_pedRpcOps.erase(id);
+            // ENTITY_REMOVE is deferred to this game pulse. Keep weapon RPCs
+            // already received for a new element reusing this ID; discard the
+            // old generation and internal restoration commands with its body.
+            auto queued = g_pedRpcOps.find(id);
+            if (queued != g_pedRpcOps.end()) {
+                auto& ops = queued->second;
+                std::erase_if(ops, [id](const PedRpcOp& op) {
+                    return !op.queryGeneration || !PedQueries::Current(id, op.queryGeneration);
+                });
+                if (ops.empty()) g_pedRpcOps.erase(queued);
+            }
         }
         g_forget.clear();
         (void)api;
     }
+    std::vector<uint32_t> unstreamed;
+    {
+        std::lock_guard lock(g_remoteMutex);
+        for (const auto& [id, queue] : g_pedRpcOps)
+            if (id != ServerWorld::LocalPlayer() && !g_remoteBodies.count(id)) unstreamed.push_back(id);
+    }
+    for (uint32_t id : unstreamed) ApplyUnstreamedWeaponRpcs(id);
     std::unordered_map<uint32_t, RemotePed> pending;
     {
         std::lock_guard<std::mutex> lock(g_remoteMutex);
@@ -2805,6 +2864,7 @@ static void ApplyRemotePeds() {
                 ENGINE_LOGI("DIAG ped %u streamed out: dimension %u, local %u", id,
                     static_cast<unsigned>(ServerWorld::DimensionOf(id)), static_cast<unsigned>(ServerWorld::LocalDimension()));
                 ClearRemoteStick(out->second.ped);
+                SavePedInventory(id, out->second);
                 DropBody(out->second.ped, false);
                 g_remoteBodies.erase(out);
                 live->second.shown = false;
@@ -2857,9 +2917,11 @@ static void ApplyRemotePeds() {
                 auto far = g_remoteBodies.find(farId);
                 if (far == g_remoteBodies.end()) continue;
                 ClearRemoteStick(far->second.ped);
+                SavePedInventory(farId, far->second);
                 DropBody(far->second.ped, false);
                 g_remoteBodies.erase(far);
             }
+            ApplyUnstreamedWeaponRpcs(id);
             spawnedFrame = g_gameFrame;
             // CClientPed::SetPosition (CClientPed.cpp 1064-1098) and Packet_EntityAdd
             // (CPacketHandler.cpp 4054) write the network position. No ground offset.
@@ -2875,6 +2937,28 @@ static void ApplyRemotePeds() {
             // ENTITY_ADD state first: the fence early-outs read frozen (CClientPed.cpp 5917).
             const bool restreamed = live->second.spawnApplied;
             ApplyPedSpawnRecord(id, live->second);
+            // _CreateModel restores the last body inventory before any RPCs waiting
+            // for this body. Do not replay ENTITY_ADD after later weapon changes.
+            PedQueries::Snapshot restore;
+            if (PedQueries::CopyRestore(id, restore)) {
+                stored.queryGeneration = restore.generation;
+                std::deque<PedRpcOp> base;
+                for (const auto& w : restore.weapons) if (w.type) {
+                    PedRpcOp give;
+                    give.kind = PedRpcOp::Kind::GiveWeapon;
+                    give.weapon = w.type;
+                    give.ammo = w.total;
+                    base.push_back(give);
+                }
+                PedRpcOp slot;
+                slot.kind = PedRpcOp::Kind::SetWeaponSlot;
+                slot.slot = restore.currentSlot;
+                base.push_back(slot);
+                std::lock_guard lock(g_remoteMutex);
+                auto& queue = g_pedRpcOps[id];
+                queue.insert(queue.begin(), base.begin(), base.end());
+            }
+
             // _CreateModel -> RunAnimationFromCache: a body made again replays the element's last animation.
             // The cached start time / progress is not restored (the animation starts from the beginning).
             if (restreamed) {
@@ -2933,6 +3017,7 @@ static void ApplyRemotePeds() {
                 changedFrame = g_gameFrame;
                 ENGINE_LOGI("DIAG ped %u model %d -> %d: body replaced", id, found->second.model, model);
                 ClearRemoteStick(body);
+                SavePedInventory(id, found->second);
                 DropBody(body, false);
                 g_remoteBodies.erase(found);
                 live->second.shown = false;
@@ -3664,6 +3749,7 @@ uint32_t NoteScriptPed(int model, float x, float y, float z, float rotationDegre
         slot.y = y;
         slot.z = z;
         slot.heading = rad;
+        PedQueries::Create(slot.id, false);
         return slot.id;
     }
     return 0;
@@ -3674,6 +3760,7 @@ bool ReleaseScriptPed(uint32_t id) {
     for (auto& slot : g_scriptPeds) {
         if (!slot.used || slot.id != id) continue;
         slot.drop = true;
+        PedQueries::Forget(id);
         slot.used = slot.body != nullptr;
         if (!slot.body) slot.used = false;
         return true;
@@ -3766,6 +3853,50 @@ bool CopyScriptWeather(int& weather) {
     return true;
 }
 
+bool CopyPedQuery(uint32_t id, PedQueries::Snapshot& out) {
+    PedQueries::Snapshot result;
+    bool copied = false;
+    if (!GameTasks::Run([&] {
+        if (!PedQueries::Copy(id, result)) return;
+        void* body = nullptr;
+        const bool local = id == ServerWorld::LocalPlayer();
+        if (local) body = g_findPlayer ? g_findPlayer(0) : nullptr;
+        else {
+            std::lock_guard lock(g_scriptMu);
+            for (const auto& ped : g_scriptPeds)
+                if (ped.used && !ped.drop && ped.id == id) body = ped.body;
+        }
+        if (!body && !local) {
+            std::lock_guard lock(g_remoteMutex);
+            auto found = g_remoteBodies.find(id);
+            if (found != g_remoteBodies.end() && found->second.queryGeneration == result.generation)
+                body = found->second.ped;
+        }
+        if (body) {
+            if (IsPlaceableVtable(body) || !ReadPedInventory(body, result)) return;
+            result.health = *reinterpret_cast<const float*>(static_cast<const unsigned char*>(body) + 0x6AC);
+            if (!std::isfinite(result.health)) return;
+            bool hl = false, al = false;
+            float health = 0, armor = 0;
+            CopyPedVitalsLock(id, hl, health, al, armor);
+            if (hl) result.health = health;
+            // CPedIntelligence +8 is CTaskManager, primary[2] is the
+            // event-response-nontemp root (SetTask 0x64e098/0x64e0c0).
+            if (void* intel = PedIntel(body)) {
+                void* task = reinterpret_cast<void**>(static_cast<unsigned char*>(intel) + 8)[2];
+                if (task) {
+                    using TypeFn = int (*)(void*);
+                    result.taskType = reinterpret_cast<TypeFn>((*reinterpret_cast<void***>(task))[0x28 / 8])(task);
+                }
+            }
+        }
+        PedQueries::Snapshot latest;
+        copied = PedQueries::Copy(id, latest) && latest.generation == result.generation;
+    }) || !copied) return false;
+    out = result;
+    return true;
+}
+
 bool CopyScriptPedFacts(uint32_t id, int& model, float& headingRadians, bool& frozen) {
     std::lock_guard<std::mutex> lock(g_scriptMu);
     for (const auto& slot : g_scriptPeds) {
@@ -3787,6 +3918,7 @@ void NoteLocalHealth(float health) {
     if (health > 200.f) health = 200.f;
     g_health = health;
     g_healthOwned = true;
+    PedQueries::Health(ServerWorld::LocalPlayer(), health);
 }
 
 
@@ -4524,6 +4656,7 @@ void RpcSetArmor(uint32_t id, float armor) {
 
 void QueuePedRpc(uint32_t id, const PedRpcOp& op) {
     if (id == 0 || id == 0xFFFFFFFFu) return;
+    if (op.queryGeneration && !PedQueries::Current(id, op.queryGeneration)) return;
     std::lock_guard<std::mutex> lock(g_remoteMutex);
     // m_AnimationCache: SetPedAnimation stores the animation, KillAnimation clears it (also for the local player, whose
     // body is never re-created here; the cache is then unused).
@@ -4814,6 +4947,7 @@ void NoteDamage(uint32_t, float, uint8_t) {}
 bool ConsumeDamage(uint32_t&, uint8_t&) { return false; }
 void NoteRemoteAim(uint32_t, float, float, int, int, bool, bool) {}
 void NoteRemoteWeapon(uint32_t, int) {}
+bool CopyPedQuery(uint32_t id, PedQueries::Snapshot& out) { return PedQueries::Copy(id, out); }
 bool RemoteFacingLocal(uint32_t, float, float) { return false; }
 void CopyOnFoot(float, float, float, OnFootKeys& keys) { keys = {}; }
 void ConsumeLocalJump() {}

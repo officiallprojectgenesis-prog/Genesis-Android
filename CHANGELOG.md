@@ -8,6 +8,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added — ped and weapon queries (2026-11-16)
+
+- **`isPedDead`** follows `Client/mods/deathmatch/logic/luadefs/CLuaPedDefs.cpp:2168-2198` and `CClientPed.cpp:3774-3804`: death/dying task, cached dead state and player network-death window with revival protection. Invalid arguments return nil. Native task execution has not been tested on a device.
+- **`getPedWeapon`** follows `Client/mods/deathmatch/logic/luadefs/CLuaPedDefs.cpp:685-709` and `CClientPed.cpp:4174-4189`: current/explicit slot and streamed native or cached client weapon type. Native inventory queries have not been tested on a device.
+- **`getPedWeaponSlot`** follows `Client/mods/deathmatch/logic/luadefs/CLuaPedDefs.cpp:711-731` and `CClientPed.cpp:4137-4144`: actual current slot on the game thread, cached slot when unstreamed. Not yet device-tested.
+- **`getPedAmmoInClip`** follows `Client/mods/deathmatch/logic/luadefs/CLuaPedDefs.cpp:733-761`: uint16 native clip ammo, false without a streamed body or for an invalid slot. Native reload is not yet device-tested.
+- **`getPedTotalAmmo`** follows `Client/mods/deathmatch/logic/luadefs/CLuaPedDefs.cpp:763-807` and `CWeaponNames.h:20-35`: uint16 native ammo, one for non-ammo slots, nonzero ped cache when unstreamed. Native ammo consumption/streaming is not yet device-tested.
+- **Inventory lifecycle** follows `CPacketHandler.cpp:1037-1076,4121-4145`, `CWeaponRPCs.cpp:26-260`, `CClientPed.cpp:1261-1313,5794-5818,6258-6274`: seed ENTITY_ADD/PLAYER_LIST inventories, apply weapon RPC cache changes, save native ammo on stream-out, consume offscreen weapon RPCs into the client cache before body restoration, clear weapons on spawn, and reject old generations after removal/ID reuse. Queries use guarded libGTASA 2.10 ARM64 offsets and run on the game thread. Host state/Lua checks and ARM64 APK build do not replace device acceptance.
+
 ### Fixed — server element data reached Lua (2026-11-15)
 
 - **`SET_ELEMENT_DATA` (RPC 6) and `REMOVE_ELEMENT_DATA` (RPC 133)** were logged as "not ported" and dropped, so a server `setElementData` never reached client scripts. Ported `CElementRPCs::SetElementData` / `RemoveElementData` (`CElementRPCs.cpp:84-120`) as `ServerWorld::ReadSetElementDataRpc` / `ReadRemoveElementDataRpc`. `onClientElementDataChange` is not fired yet. Device evidence 2026-11-15: `DIAG LUA_ELEMENT_RPC func=6 id=644 kind=player function not ported`; World RPG's `worldrpg:loggedIn` stayed nil, so its F11 map and `/gps` menu never opened.

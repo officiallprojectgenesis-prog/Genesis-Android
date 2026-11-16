@@ -1,10 +1,9 @@
-// Ped model and player Lua queries that do not call into CPed / CPlayerPed.
-// Ped, clothes, bone, weapon, task, voice, jetpack and mission-text functions stay
-// unregistered: those hooks are not wired, and a stored flag would not be the desktop call.
+// Ped/player queries. Native ped snapshots are collected on the game thread.
 
 #include "LuaApiExtra.h"
 #include "LuaVMStub.h"
 #include "ServerWorld.h"
+#include "PedQueries.h"
 #include "../gtasa/GameEngine.h"
 #include "../gtasa/RemoteVehicle.h"
 #include "../net/raknet/RakNetWrapper.h"
@@ -13,7 +12,9 @@ extern "C" {
 #include "lua.h"
 }
 
+#include <algorithm>
 #include <cmath>
+#include <cfloat>
 #include <cstdint>
 #include <cstring>
 #include <string>
@@ -58,6 +59,67 @@ int Fail(lua_State* L, const char* name, const char* message) {
 
 int PushFalse(lua_State* L) {
     lua_pushboolean(L, 0);
+    return 1;
+}
+
+bool ReadPed(lua_State* L, uint32_t& id) {
+    if (!lua_istable(L, 1)) return false;
+    id = ElementIdOf(L, 1);
+    if (!id || id == UINT32_MAX) return false;
+    const char* kind = ServerWorld::ElementKindName(id);
+    return (kind && (!std::strcmp(kind, "ped") || !std::strcmp(kind, "player"))) ||
+        Game::ScriptPedAlive(id) || ServerWorld::IsKnownPlayer(id);
+}
+// CScriptArgReader::ReadNumber<unsigned char>: nil/omitted use 255, numeric
+// strings are accepted and negative/NaN values fail. Narrow without float-cast UB.
+bool ReadWeaponSlot(lua_State* L, unsigned& slot) {
+    slot = 255;
+    if (lua_isnoneornil(L, 2)) return true;
+    if (!lua_isnumber(L, 2)) return false;
+    const double value = lua_tonumber(L, 2);
+    if (!std::isfinite(value) || value < -FLT_EPSILON) return false;
+    slot = static_cast<unsigned>(std::fmod(std::trunc(std::max(0.0, value)), 256.0));
+    return true;
+}
+
+// CLuaPedDefs.cpp:685-709; CClientPed::GetWeaponType:4174-4189.
+int GetPedWeapon(lua_State* L) {
+    uint32_t id = 0;
+    unsigned slot = 255;
+    PedQueries::Snapshot state;
+    if (!ReadPed(L, id) || !ReadWeaponSlot(L, slot) || !Game::CopyPedQuery(id, state)) return PushFalse(L);
+    if (slot == 255) slot = state.currentSlot;
+    lua_pushnumber(L, slot < PedQueries::Slots ? state.weapons[slot].type : 0);
+    return 1;
+}
+// CLuaPedDefs.cpp:711-731.
+int GetPedWeaponSlot(lua_State* L) {
+    uint32_t id = 0;
+    PedQueries::Snapshot state;
+    if (!ReadPed(L, id) || !Game::CopyPedQuery(id, state)) return PushFalse(L);
+    lua_pushnumber(L, state.currentSlot);
+    return 1;
+}
+int PedAmmo(lua_State* L, bool clip) {
+    uint32_t id = 0;
+    unsigned slot = 255;
+    PedQueries::Snapshot state;
+    if (!ReadPed(L, id) || !ReadWeaponSlot(L, slot) || !Game::CopyPedQuery(id, state)) return PushFalse(L);
+    if (slot == 255) slot = state.currentSlot;
+    uint16_t ammo = 0;
+    if (!PedQueries::Ammo(state, slot, clip, ammo)) return PushFalse(L);
+    lua_pushnumber(L, ammo);
+    return 1;
+}
+// CLuaPedDefs.cpp:733-761 and 763-807 respectively.
+int GetPedAmmoInClip(lua_State* L) { return PedAmmo(L, true); }
+int GetPedTotalAmmo(lua_State* L) { return PedAmmo(L, false); }
+// CLuaPedDefs.cpp:2168-2198. Invalid arguments return nil here, unlike the weapon queries.
+int IsPedDead(lua_State* L) {
+    uint32_t id = 0;
+    PedQueries::Snapshot state;
+    if (!ReadPed(L, id) || !Game::CopyPedQuery(id, state)) lua_pushnil(L);
+    else lua_pushboolean(L, PedQueries::IsDead(state));
     return 1;
 }
 
@@ -417,6 +479,11 @@ void BindPedLua(lua_State* L) {
         const char* name;
         lua_CFunction fn;
     } binds[] = {
+        {"isPedDead", IsPedDead},
+        {"getPedWeapon", GetPedWeapon},
+        {"getPedWeaponSlot", GetPedWeaponSlot},
+        {"getPedTotalAmmo", GetPedTotalAmmo},
+        {"getPedAmmoInClip", GetPedAmmoInClip},
         {"getValidPedModels", GetValidPedModels},
         {"getPedOccupiedVehicle", GetPedOccupiedVehicle},
         {"getPedOccupiedVehicleSeat", GetPedOccupiedVehicleSeat},

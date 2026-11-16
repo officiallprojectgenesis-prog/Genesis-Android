@@ -139,6 +139,8 @@ def format_status(status):
         return "Missing"
 
 def guess_conversion_notes(name, group, status, detail):
+    if status == "implemented" and name in {"isPedDead", "getPedWeapon", "getPedWeaponSlot", "getPedTotalAmmo", "getPedAmmoInClip"}:
+        return "Game-thread GTA ped snapshot plus per-element client cache seeded by ENTITY_ADD/PLAYER_LIST and weapon RPCs. Queries preserve death tasks/network revival, optional weapon slot and uint16 ammo semantics; clip ammo requires a streamed body. Stream-out saves inventory and offscreen RPCs update the cache before body restoration; generation guards reject removed/reused IDs. ARM64 layout is instruction-guarded. Native reload, sync-driven weapons and streaming still need device validation; this is handler coverage, not full gameplay parity."
     if status == "implemented" and name in {"toggleControl", "isControlEnabled"}:
         return "Stores per-control enabled state; only the radar control currently changes Android behavior. Other GTA control actions are not wired by this handler. Registration coverage does not mean complete native control compatibility."
     if status == "implemented" and group == "CLua2DFXDefs":

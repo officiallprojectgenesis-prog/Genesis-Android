@@ -1,9 +1,11 @@
-# Próximo lote Lua: estado de peds e armamento
+# Lotes Lua: consultas de peds e próximas conversões
 
-Prioridade revista em 2026-11-15 após inspecionar os scripts client/shared dos
+Prioridade revista em 2026-11-16 após inspecionar os scripts client/shared dos
 recursos disponíveis em `backend_mta/mods/deathmatch/resources`.
 A seleção considera chamadas reais no código, e não somente a quantidade de
-funções ausentes no catálogo. As cinco funções continuam stubs neste lote.
+funções ausentes no catálogo. As cinco consultas abaixo já têm handlers e
+backend nativo/cache na `staging`; validação no aparelho permanece pendente.
+Detalhes e limites: [revisão do lote](REVIEW_PED_WEAPON_QUERIES.md).
 
 ## Evidência de uso
 
@@ -29,9 +31,10 @@ excluídos. Aliases, OOP, nomes locais que ocultam APIs e código gerado não s�
 chamadas estáticas, sem confirmar recursos ativos ou frequência em execução.
 A classificação usa o catálogo regenerado com a revisão GUI/DX e o lote
 HUD/RPC commitado em `c1aaeda`; chamadas de controle já implementadas nesse
-lote saíram da lista de stubs. As cinco consultas de ped continuam pendentes.
+lote saíram da lista de stubs. As cinco consultas de ped também saíram dos
+stubs após esta conversão.
 
-## Ordem de implementação
+## Lote implementado: consultas de peds e armamento
 
 1. **Backend comum de consulta de ped:** separar jogador local, ped remoto e
    estado de cliente preservado quando o corpo não está carregado. Ler o corpo
@@ -48,13 +51,23 @@ lote saíram da lista de stubs. As cinco consultas de ped continuam pendentes.
    conversões `unsigned short` e a falha indicada pelo desktop. Referências:
    `CLuaPedDefs.cpp:733-807`.
 
-Antes de fechar o lote: testar jogador/ped, slot atual/expresso/inválido,
-stream-in/out, morte/respawn, RPC de dar/tirar arma, recarga e remoção/reuso do
-ID. A parte de estado pode ser testada no host; corpo GTA e inventário precisam
-ser conferidos no aparelho. Só marcar uma função como convertida quando a
-consulta tiver dados reais e ciclo de vida correto.
+No host foram verificados os retornos Lua, slots, morte/revival, RPCs de arma,
+cache de stream-out, RPCs fora de streaming antes da restauração do corpo e reuso de ID.
+O APK ARM64 sem arquivos do jogo compila. Corpo GTA, recarga, troca de arma
+pela interface e streaming real precisam de aparelho; não há dispositivo ADB
+conectado. O catálogo registra handlers, sem afirmar paridade completa.
 
-## Lotes seguintes
+## Próximo lote selecionado: proximidade e colshapes
+
+Começar por `getElementsWithinRange`; em seguida preservar a geometria de
+colshapes de `ENTITY_ADD` antes de converter `createColSphere`,
+`createColCuboid`, `isElementWithinColShape` e `getElementsWithinColShape`.
+As consultas devem considerar movimento, dimensão/interior, remoção e os
+limites geométricos do desktop. Criação não pode ser contada como pronta sem
+os eventos de entrada/saída correspondentes. Nenhuma destas cinco funções
+foi contabilizada como convertida neste lote.
+
+## Fila de conversão
 
 | Ordem | Funções / área | Dependências |
 |---|---|---|

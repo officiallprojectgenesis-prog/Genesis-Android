@@ -1,10 +1,10 @@
 # Elementos, GUI e DX no mobile
 
-Revisão em 2026-11-15 na branch `staging`.
+Revisão em 2026-11-16 na branch `staging`.
 
 ## Progresso das funções Lua
 
-**Geral: 677 de 1.581 funções com handler não constante — 42,8%.**
+**Geral: 682 de 1.581 funções com handler não constante — 43,1%.**
 Elementos: **54/81 — 66,7%**. GUI/DX: **199/199 — 100% dos bindings**.
 
 As 24 funções antes ausentes agora têm handlers e caminhos de execução.
@@ -40,8 +40,11 @@ A dependência de tradução HLSL é MIT e está fixada por revisão em
 - A [revisão deste lote](REVIEW_GUI_DX_24.md) registra correções e limites abertos.
 - Teste dos novos caminhos no aparelho: **pendente; ADB sem dispositivo**.
 
-As [próximas conversões sugeridas](NEXT_LUA_CONVERSIONS.md) priorizam estado
-de peds e armas a partir do uso nos scripts; depois proximidade, colshapes e streaming.
+O [lote de consultas de peds e armas](REVIEW_PED_WEAPON_QUERIES.md) adicionou
+`isPedDead`, `getPedWeapon`, `getPedWeaponSlot`, `getPedTotalAmmo` e
+`getPedAmmoInClip`, com leitura nativa no thread do jogo e cache por elemento.
+Essas cinco funções saíram dos stubs; validação no aparelho continua pendente.
+O [próximo lote](NEXT_LUA_CONVERSIONS.md) é proximidade/colshapes; depois, streaming.
 
 ## Implementado nos lotes anteriores
 
@@ -154,7 +157,7 @@ e o payload; não verificam os glifos ou a composição no aparelho.
 | Categoria | Implementadas/total no catálogo | Cobertura | Stubs | Ausentes |
 |---|---:|---:|---:|---:|
 | Veículos | 9/165 | **5,5%** | 19 | 137 |
-| Peds e jogadores | 27/206 | **13,1%** | 77 | 102 |
+| Peds e jogadores | 32/206 | **15,5%** | 72 | 102 |
 | Mundo e objetos | 124/227 | **54,6%** | 11 | 92 |
 | Elementos | 54/81 | **66,7%** | 8 | 19 |
 | GUI e DX | 199/199 | **100,0%** | 0 | 0 |
@@ -165,7 +168,7 @@ e o payload; não verificam os glifos ou a composição no aparelho.
 | Sistema e utilitários | 171/195 | **87,7%** | 0 | 24 |
 | Markers, blips e colshapes | 0/145 | **0,0%** | 3 | 142 |
 | Browser e compatibilidade | 4/103 | **3,9%** | 0 | 99 |
-| **TOTAL** | **677/1581** | **42,8%** | **134** | **770** |
+| **TOTAL** | **682/1581** | **43,1%** | **129** | **770** |
 
 Os números incluem as alterações locais anteriores. “Implemented” no catálogo
 significa apenas que há uma função C com corpo não constante; não significa
