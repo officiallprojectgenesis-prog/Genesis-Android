@@ -8,6 +8,7 @@
 #include "LuaStoredElementApi.h"
 #include "LuaClothesApi.h"
 #include "LuaWeaponApi.h"
+#include "LuaCryptApi.h"
 #include "LuaResourceApi.h"
 #include "LuaMtaWindowApi.h"
 #include "LuaEventRegistry.h"
@@ -2933,6 +2934,7 @@ static void DropResourceState(lua_State* L, const std::string& name, uint16_t ne
     CommandHandlersDropResource(L, name, netId, generation);
     DxDropResource(name, netId, generation);
     WeaponsDropOwner(name, netId, generation);
+    CryptDropOwner(name, netId, generation);
     for (auto& [event, refs] : g_dx.handlers) {
         refs.erase(std::remove_if(refs.begin(), refs.end(), [&](const DxRuntime::Handler& handler) {
             if (OwnerOfHandler(handler.ref) != name) return false;

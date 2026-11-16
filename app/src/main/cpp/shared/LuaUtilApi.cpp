@@ -1,4 +1,5 @@
 #include "LuaUtilApi.h"
+#include "LuaCryptApi.h"
 
 #include "LuaVMStub.h"
 #include "Checksums.h"
@@ -1259,6 +1260,8 @@ void InstallUtilLua(lua_State* L) {
         lua_pushcfunction(L, bind.fn);
         lua_setglobal(L, bind.name);
     }
+    // encodeString, decodeString, passwordHash, passwordVerify, generateKeyPair.
+    InstallCryptLua(L);
 }
 
 }  // namespace WorldRPG::Script

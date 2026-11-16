@@ -8,6 +8,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added — encodeString, decodeString, passwordHash, passwordVerify, generateKeyPair (2026-11-16)
+
+- **Vendored the desktop crypto libraries**: Crypto++ 8.9.0 (`third_party/cryptopp`, the desktop `premake5.lua` file list, Boost licence) and crypt_blowfish (`third_party/bcrypt`, public domain), both copied from `mta_neon_source/vendor`. `CRYPTOPP_DISABLE_ASM` is the desktop ARM setting and is used for the host build too. On Android, Crypto++'s `cpu.cpp` needs the NDK `cpufeatures` helper, built from the NDK path. In the release build the crypto code is about 1.1 MB of `libWorldRPGNeon.so` (sum of symbol sizes).
+- **`shared/SharedCrypto.cpp`** ports `SharedUtil.Crypto.h` (Base64/Base32 with variants, RSA key pair / OAEP encode / decode, AES-128 CTR, zlib compress / uncompress) and `SharedUtil.Hash.hpp:511-551, 745-910` (bcrypt hash / verify, raw XTEA) line for line.
+- **`shared/LuaCryptApi.cpp`** ports `CLuaCryptDefs::EncodeString` (399-836), `DecodeString` (838-1264), `PasswordHash` (162-234), `PasswordVerify` (236-316) and `GenerateKeyPair` (318-397), with the desktop argument rules (CScriptArgReader string maps, ArgumentParserWarn / ArgumentParser errors) and messages. The callback forms run on a worker thread, as `CLuaShared::GetAsyncTaskScheduler`, and call back on the VM thread from `ResourceLoader::Pump`; pending callbacks are dropped on RESOURCE_STOP and on session reset.
+- Deviations: the async `encodeString("aes128")` returns only `true` (desktop returns two values with one pushed); `generateKeyPair` without `size` is an error (desktop reads an uninitialised value).
+- Tests: `CheckCrypto` in `tools/headless/resource_tests.cpp`: crypt_blowfish reference vector, `encodeString("tea")` equals `teaEncode` bytes, AES / RSA / zlib / base64 / base32 round trips, argument errors, and every callback form. Not device-tested.
+
 ### Added — custom weapon elements (2026-11-16)
 
 Completes the Weapons roadmap section (`docs/lua-functions/WEAPONS_AND_COMBAT.md`, 31/31). The state machine is `shared/ClientWeapon.h` (header only), the Lua glue is `shared/LuaWeaponApi.cpp`. No native `CObject` / `CWeapon` is created yet, so nothing is drawn or hit; those steps log `DIAG` once. Host-tested (`neon_resource_tests` `CheckCustomWeapons`), arm64 build compiles, not device-tested.

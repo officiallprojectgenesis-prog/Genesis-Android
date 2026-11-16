@@ -17,6 +17,7 @@
 #include "LuaMtaWindowApi.h"
 #include "LuaVMStub.h"
 #include "LuaWeaponApi.h"
+#include "LuaCryptApi.h"
 #include "ClientWeapon.h"
 #include "MtaCipher.h"
 #include "MtaOfflineCodec.h"
@@ -344,6 +345,92 @@ void CheckWeaponSnapshots(WorldRPG::Script::LuaVMStub& vm) {
     ServerWorld::OnEntityRemove(removed.GetData(), removed.GetByteLength(), removed.GetBitLength());
     RunLua(vm, "weapon-removed", "assert(getWeaponAmmo({id = 1001}) == false and getWeaponTarget({id = 1002}) == false)");
     ServerWorld::OnPlayerQuit(903);
+}
+
+// encodeString / decodeString / passwordHash / passwordVerify / generateKeyPair (CLuaCryptDefs.cpp).
+void CheckCrypto(WorldRPG::Script::LuaVMStub& vm) {
+    RunLua(vm, "crypt-sync", R"LUA(
+        assert(encodeString('base64', 'hello') == 'aGVsbG8=', 'base64')
+        assert(decodeString('base64', 'aGVsbG8=') == 'hello', 'base64 decode')
+        local url = encodeString('base64', '\251\255\254', {variant = 'url'})
+        assert(url and not url:find('[+/]') and decodeString('base64', url, {variant = 'URL'}) == '\251\255\254', 'base64 url')
+        assert(encodeString('base64', 'x', {variant = 'hex'}) == false, 'bad base64 variant')
+        local b32 = encodeString('base32', 'hello world')
+        assert(b32 and decodeString('base32', b32) == 'hello world', 'base32')
+        local b32hex = encodeString('base32', 'hello', {variant = 'hex'})
+        assert(b32hex and b32hex ~= encodeString('base32', 'hello') and decodeString('base32', b32hex, {variant = 'hex'}) == 'hello', 'base32 hex')
+
+        local text = string.rep('zlib round trip ', 50)
+        local gz = encodeString('zlib', text)
+        assert(gz and gz:byte(1) == 0x1F and gz:byte(2) == 0x8B and #gz < #text, 'gzip by default')
+        assert(decodeString('zlib', gz) == text, 'auto-detected gzip')
+        local raw = encodeString('zlib', text, {format = 'raw', compression = 1, strategy = 'rle'})
+        assert(raw and decodeString('zlib', raw, {format = 'raw'}) == text, 'raw deflate')
+        assert(decodeString('zlib', encodeString('zlib', text, {format = 'zlib'})) == text, 'zlib header')
+        assert(encodeString('zlib', text, {compression = 10}) == false, 'compression range')
+        assert(encodeString('zlib', text, {format = 'nope'}) == false, 'bad format')
+        assert(encodeString('zlib', text, {strategy = 'nope'}) == false, 'bad strategy')
+        assert(decodeString('zlib', 'not compressed data') == false, 'zlib error')
+
+        -- encodeString tea is the raw SharedUtil::TeaEncode; teaEncode is the same bytes in base64.
+        local tea = encodeString('tea', 'secret message', {key = 'k3y'})
+        assert(tea and base64Encode(tea) == teaEncode('secret message', 'k3y'), 'tea matches teaEncode')
+        assert(decodeString('tea', tea, {key = 'k3y'}):sub(1, 14) == 'secret message', 'tea decode')
+        assert(encodeString('tea', 'x', {}) == false and encodeString('tea', 'x') == false, 'tea needs key and table')
+
+        local key = '0123456789abcdef'
+        local cipher, iv = encodeString('aes128', 'aes payload', {key = key})
+        assert(#cipher == #'aes payload' and #iv == 16, 'aes128 ctr: same size and a 16 byte iv')
+        assert(decodeString('aes128', cipher, {key = key, iv = iv}) == 'aes payload', 'aes128 round trip')
+        assert(encodeString('aes128', 'x', {key = 'short'}) == false, 'aes key length')
+        assert(decodeString('aes128', cipher, {key = key, iv = 'short'}) == false, 'aes iv length')
+
+        local private, public = generateKeyPair('rsa', {size = 1024})
+        assert(type(private) == 'string' and type(public) == 'string' and #private > #public, 'rsa key pair (DER)')
+        local sealed = encodeString('rsa', 'rsa payload', {key = public})
+        assert(sealed and #sealed == 128 and decodeString('rsa', sealed, {key = private}) == 'rsa payload', 'rsa oaep round trip')
+        assert(encodeString('rsa', 'x', {key = 'not a key'}) == false, 'bad rsa key')
+        assert(encodeString('rsa', 'x', {}) == false, 'rsa needs key')
+        assert(pcall(generateKeyPair, 'rsa', {}) == false, 'missing size is an error')
+        assert(pcall(generateKeyPair, 'dsa', {size = 1024}) == false, 'unknown algorithm is an error')
+        assert(generateKeyPair('rsa', {size = 8}) == false, 'too small key: warning and false')
+
+        -- crypt_blowfish reference vector ("U*U", salt CCC...).
+        local reference = '$2a$05$CCCCCCCCCCCCCCCCCCCCC.E5YPO9kmyuRGyh0XouQYb4YMJKvyOeW'
+        assert(passwordVerify('U*U', reference) == nil, '2a needs insecureBcrypt')
+        assert(passwordVerify('U*U', reference, {insecureBcrypt = true}) == true, '2a reference verifies')
+        assert(passwordVerify('U*V', reference, {insecureBcrypt = true}) == false, 'wrong password')
+        local salted = passwordHash('U*U', 'bcrypt', {cost = 5, salt = 'CCCCCCCCCCCCCCCCCCCCC.'})
+        assert(salted == '$2y$05$CCCCCCCCCCCCCCCCCCCCC.E5YPO9kmyuRGyh0XouQYb4YMJKvyOeW', 'custom salt hash: ' .. tostring(salted))
+        local hash = passwordHash('pw', 'bcrypt', {cost = 4})
+        assert(hash and #hash == 60 and hash:sub(1, 7) == '$2y$04$', 'random salt hash')
+        assert(passwordHash('pw', 'bcrypt', {cost = 4}) ~= hash, 'salts differ')
+        assert(passwordVerify('pw', hash) == true and passwordVerify('px', hash) == false, 'verify')
+        assert(passwordVerify('pw', 'plain') == nil and passwordVerify('pw') == nil, 'unknown hash / bad args')
+        assert(passwordHash('pw', 'bcrypt', {cost = 'abc'}) == false, 'bad cost')
+        assert(passwordHash('pw', 'bcrypt', {cost = 99}) == false, 'cost out of range')
+        assert(passwordHash('pw', 'md5', {}) == false and passwordHash('pw', 'bcrypt') == false, 'bad algorithm / missing table')
+
+        _G.cryptAsync = {}
+        assert(encodeString('base64', 'hi', function(r) _G.cryptAsync.b64 = r end) == true, 'async base64')
+        assert(decodeString('zlib', 'bad', function(r) _G.cryptAsync.zlib = r end) == true, 'async zlib error')
+        assert(encodeString('aes128', 'async aes', {key = key}, function(c, v) _G.cryptAsync.aes = {c, v} end) == true, 'async aes')
+        assert(passwordHash('pw', 'bcrypt', {cost = 4}, function(h) _G.cryptAsync.hash = h end) == true, 'async hash')
+        assert(passwordVerify('pw', hash, function(ok) _G.cryptAsync.verify = ok end) == true, 'async verify')
+        assert(generateKeyPair('rsa', {size = 1024}, function(a, b) _G.cryptAsync.keys = {a, b} end) == true, 'async keys')
+        assert(encodeString('base64', 'x', 5) == false, 'callback must be a function')
+    )LUA");
+    WorldRPG::Script::CryptWaitIdleForTests();
+    WorldRPG::Script::CryptDeliverCompletions();
+    RunLua(vm, "crypt-async", R"LUA(
+        local r = _G.cryptAsync
+        assert(r.b64 == 'aGk=', 'async base64 result')
+        assert(r.zlib == false, 'async zlib error result')
+        assert(decodeString('aes128', r.aes[1], {key = '0123456789abcdef', iv = r.aes[2]}) == 'async aes', 'async aes result')
+        assert(type(r.hash) == 'string' and passwordVerify('pw', r.hash) == true, 'async hash result')
+        assert(r.verify == true, 'async verify result')
+        assert(type(r.keys[1]) == 'string' and decodeString('rsa', encodeString('rsa', 'k', {key = r.keys[2]}), {key = r.keys[1]}) == 'k', 'async keys result')
+    )LUA");
 }
 
 // createWeapon and the CClientWeapon element functions (CLuaWeaponDefs.cpp:150-695).
@@ -2674,6 +2761,7 @@ int main(int argc, char** argv) {
     CheckSvg(vm);
     CheckStopLifecycle(vm);
     CheckCustomWeapons(vm);
+    CheckCrypto(vm);
     CheckDxImage(vm);
     CheckGuiFonts(vm);
     CheckNetworkCalls(vm);

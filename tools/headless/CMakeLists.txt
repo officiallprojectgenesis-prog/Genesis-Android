@@ -48,6 +48,8 @@ set(NATIVE_SOURCES
     "${NATIVE_DIR}/shared/LuaCameraApi.cpp"
     "${NATIVE_DIR}/shared/LuaFieldApi.cpp"
     "${NATIVE_DIR}/shared/LuaUtilApi.cpp"
+    "${NATIVE_DIR}/shared/LuaCryptApi.cpp"
+    "${NATIVE_DIR}/shared/SharedCrypto.cpp"
     "${NATIVE_DIR}/shared/LuaFileApi.cpp"
     "${NATIVE_DIR}/shared/LuaXmlApi.cpp"
     "${NATIVE_DIR}/shared/LuaStoredElementApi.cpp"
@@ -132,6 +134,8 @@ target_include_directories(neon_core PRIVATE ${HEADLESS_INCLUDE_DIRS})
 # Vendored Lua 5.3.6 (static, built into the headless build directory only).
 add_subdirectory("${NATIVE_DIR}/lua53" "${CMAKE_CURRENT_BINARY_DIR}/lua53")
 add_subdirectory("${NATIVE_DIR}/third_party/hlslparser" "${CMAKE_CURRENT_BINARY_DIR}/hlslparser")
+add_subdirectory("${NATIVE_DIR}/third_party/cryptopp" "${CMAKE_CURRENT_BINARY_DIR}/cryptopp")
+add_subdirectory("${NATIVE_DIR}/third_party/bcrypt" "${CMAKE_CURRENT_BINARY_DIR}/bcrypt")
 
 find_package(Threads REQUIRED)
 find_package(ZLIB REQUIRED)
@@ -170,7 +174,7 @@ if(Java_FOUND)
     endif()
 endif()
 # Usage requirements only (Lua and zlib headers): the objects are linked by the executables below.
-target_link_libraries(neon_core PRIVATE lua53 ZLIB::ZLIB)
+target_link_libraries(neon_core PRIVATE lua53 ZLIB::ZLIB neon_cryptopp neon_bcrypt)
 # Link-time wrap of the one RakNetWrapper send entry point (see send_tap.cpp). The
 # symbol is RakNetWrapper::SendPacket(uint8_t, BitStreamWriter const&, PacketPriority,
 # PacketReliability, PacketOrdering); the calls come from NeonJoinProtocol.cpp.
@@ -188,6 +192,8 @@ foreach(headless_target neon_headless neon_resource_tests neon_dx_conversion_tes
     target_link_libraries(${headless_target} PRIVATE
         lua53
         neon_hlsl
+        neon_cryptopp
+        neon_bcrypt
         EGL
         GLESv2
         ZLIB::ZLIB

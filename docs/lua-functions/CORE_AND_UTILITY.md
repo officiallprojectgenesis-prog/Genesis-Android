@@ -5,9 +5,9 @@ Timers, event handling, network latent transfers, file I/O, XML parsing, JSON se
 ## Parity Status
 
 - **Total Functions:** 195
-- **Implemented:** 171 (87.7%)
+- **Implemented:** 176 (90.3%)
 - **Stubs:** 0
-- **Missing:** 24
+- **Missing:** 19
 
 > **Technical Requirement:** Pure CPU/platform logic. Mostly ported or needs standard library wrappers (e.g. tinyxml2, sha256, zlib).
 
@@ -43,11 +43,11 @@ Timers, event handling, network latent transfers, file I/O, XML parsing, JSON se
 | `clearDebugBox` | Missing | `CLuaClientDefs.cpp:25` | `ArgumentParser<ClearDebug>` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
 | `createTrayNotification` | Missing | `CLuaManager.cpp:185` | `CLuaFunctionDefs::CreateTrayNotification` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
 | `debugSleep` | Missing | `CLuaUtilDefs.cpp:70` | `DebugSleep` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `decodeString` | Missing | `CLuaCryptDefs.cpp:33` | `DecodeString` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
+| `decodeString` | **Implemented** | `CLuaCryptDefs.cpp:33` | `DecodeString` | Ported (`CLuaCryptDefs.cpp:838-1264`): same algorithms; zlib detects gzip/zlib/raw. Callback form on a worker thread. Host-tested, arm64 builds, not device-tested. |
 | `deref` | **Implemented** | `CLuaUtilDefs.cpp:44` | `Dereference` | Operational on Android. (l_deref) |
 | `dofile` | **Implemented** | `CLuaMain.cpp:86` | `CLuaUtilDefs::DisabledFunction` | Operational on Android. (l_unsafe) |
 | `downloadFile` | Missing | `CLuaManager.cpp:206` | `CLuaFunctionDefs::DownloadFile` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `encodeString` | Missing | `CLuaCryptDefs.cpp:32` | `EncodeString` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
+| `encodeString` | **Implemented** | `CLuaCryptDefs.cpp:32` | `EncodeString` | Ported (`CLuaCryptDefs.cpp:399-836`, `SharedUtil.Crypto.h`): tea (raw XTEA), aes128 (CTR, returns data and IV), rsa (RSAES-OAEP-SHA, DER key), base64/base32 (URL/HEX variants), zlib (format, compression, strategy). Callback form runs on a worker thread. Crypto++ 8.9.0 vendored as on desktop. Host-tested, arm64 builds, not device-tested. |
 | `executeCommandHandler` | **Implemented** | `CLuaManager.cpp:227` | `CLuaFunctionDefs::ExecuteCommandHandler` | Operational on Android. (l_executeCommandHandler) |
 | `fetchRemote` | **Implemented** | `CLuaNetworkDefs.cpp:26` | `FetchRemote` | Operational on Android. (LuaFetchRemote) |
 | `fileClose` | **Implemented** | `CLuaFileDefs.cpp:47` | `fileClose` | Operational on Android. (l_fileClose) |
@@ -68,7 +68,7 @@ Timers, event handling, network latent transfers, file I/O, XML parsing, JSON se
 | `fileSetPos` | **Implemented** | `CLuaFileDefs.cpp:55` | `fileSetPos` | Operational on Android. (l_fileSetPos) |
 | `fileWrite` | **Implemented** | `CLuaFileDefs.cpp:50` | `fileWrite` | Operational on Android. (l_fileWrite) |
 | `fromJSON` | **Implemented** | `CLuaUtilDefs.cpp:62` | `fromJSON` | Operational on Android. (FromJson) |
-| `generateKeyPair` | Missing | `CLuaCryptDefs.cpp:30` | `ArgumentParser<GenerateKeyPair>` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
+| `generateKeyPair` | **Implemented** | `CLuaCryptDefs.cpp:30` | `ArgumentParser<GenerateKeyPair>` | Ported (`CLuaCryptDefs.cpp:318-397`): RSA private/public DER keys via Crypto++. Bad arguments are Lua errors (ArgumentParser). A missing `size` is an error (desktop reads it uninitialised). Host-tested. |
 | `getAnalogControlState` | Missing | `CLuaManager.cpp:212` | `CLuaFunctionDefs::GetAnalogControlState` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
 | `getBodyPartName` | **Implemented** | `CLuaManager.cpp:189` | `CLuaFunctionDefs::GetBodyPartName` | Operational on Android. (l_getBodyPartName) |
 | `getBoundKeys` | **Implemented** | `CLuaManager.cpp:215` | `CLuaFunctionDefs::GetBoundKeys` | Queries command bindings across resources; no physical GTA-control keyboard mappings on mobile yet. Host-tested; not device-verified. (GetBoundKeys) |
@@ -145,8 +145,8 @@ Timers, event handling, network latent transfers, file I/O, XML parsing, JSON se
 | `outputChatBox` | **Implemented** | `CLuaManager.cpp:178` | `CLuaFunctionDefs::OutputChatBox` | Operational on Android. (OutputChatBox) |
 | `outputConsole` | **Implemented** | `CLuaManager.cpp:177` | `CLuaFunctionDefs::OutputConsole` | Operational on Android. (l_outputConsole) |
 | `outputDebugString` | **Implemented** | `CLuaManager.cpp:179` | `CLuaFunctionDefs::OutputClientDebugString` | Operational on Android. (l_debug) |
-| `passwordHash` | Missing | `CLuaCryptDefs.cpp:29` | `ArgumentParserWarn<false, PasswordHash>` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `passwordVerify` | Missing | `CLuaCryptDefs.cpp:31` | `PasswordVerify` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
+| `passwordHash` | **Implemented** | `CLuaCryptDefs.cpp:29` | `ArgumentParserWarn<false, PasswordHash>` | Ported (`CLuaCryptDefs.cpp:162-234`, `SharedUtil.Hash.hpp:511-541`): bcrypt `$2y$` with crypt_blowfish vendored as on desktop; `cost` and deprecated `salt` options; callback form. Matches the crypt_blowfish reference vector. Host-tested. |
+| `passwordVerify` | **Implemented** | `CLuaCryptDefs.cpp:31` | `PasswordVerify` | Ported (`CLuaCryptDefs.cpp:236-316`): `$2y$`, and `$2a$` only with `insecureBcrypt`; nil for unknown hashes; callback form. Host-tested. |
 | `pathIsDirectory` | **Implemented** | `CLuaPathDefs.cpp:28` | `ArgumentParser<pathIsDirectory>` | Operational on Android. (l_pathIsDirectory) |
 | `pathIsFile` | **Implemented** | `CLuaPathDefs.cpp:27` | `ArgumentParser<pathIsFile>` | Operational on Android. (l_pathIsFile) |
 | `pathListDir` | **Implemented** | `CLuaPathDefs.cpp:26` | `ArgumentParser<pathListDir>` | Operational on Android. (l_pathListDir) |

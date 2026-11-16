@@ -50,6 +50,9 @@ add_subdirectory(lua53)
 add_subdirectory(opus)
 add_subdirectory(speex)
 add_subdirectory(third_party/hlslparser)
+# Crypto++ 8.9.0 and crypt_blowfish, the libraries desktop MTA vendors for CLuaCryptDefs.
+add_subdirectory(third_party/cryptopp)
+add_subdirectory(third_party/bcrypt)
 
 add_library(WorldRPGNeon SHARED ${NATIVE_SOURCES})
 
@@ -72,6 +75,8 @@ target_link_libraries(WorldRPGNeon
     opus
     neon_speex
     neon_hlsl
+    neon_cryptopp
+    neon_bcrypt
 )
 
 # Resolve every native dependency during the Android link
