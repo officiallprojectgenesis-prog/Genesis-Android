@@ -3041,8 +3041,10 @@ void ActiveVmResetSession() {
     const int width = g_dx.screenW, height = g_dx.screenH;
     // The old session's scripts may have hidden HUD components; the new one starts with all shown.
     WorldRPG::Game::ResetHudComponents();
-    g_active->shutdown();
-    g_active->initialize();
+    // shutdown() clears g_active, so keep the VM pointer to initialize it again.
+    LuaVMStub* const vm = g_active;
+    vm->shutdown();
+    vm->initialize();
     g_dx.screenW = width;
     g_dx.screenH = height;
 }
