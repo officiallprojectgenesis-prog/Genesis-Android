@@ -8,6 +8,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added — Vehicle sirens, handling, and model data queries (2026-11-18)
+
+- Siren add, remove, params, and point writes follow `CLuaVehicleDefs.cpp:3310-3462` and `4647-4664`. A siren type outside 1..6 or a count above 8 returns false. Rotor state starts on and can be changed for a plane or helicopter. Handling, audio settings, dummies, exhaust position, entry points, compatible upgrades, and the autopilot diagnostic fail closed because those model tables are not loaded. Wheel size raises `Invalid model ID` for the same reason. A flying component index outside 1..24 raises, and a valid index returns false without a game vehicle. Smoke trails raise `Invalid model ID` except on models 512 and 513. Not yet run on a device.
+
+### Added — Vehicle attachments, upgrades, and component queries (2026-11-18)
+
+- Adjustable property, turret, door ratio, blade collisions, rotors, windows, parking brake, proofs, and the load-collision flag follow the `CClientVehicle` fields. A trailer link is stored for `attachTrailerToVehicle` and cleared by `detachTrailerFromVehicle`. Upgrade slot 10 accepts the radio upgrade 1086 on models that are not trains, boats, bikes, or helicopters. Other upgrades stay incompatible because the model compatibility table is not loaded. Component reads return false while the clump is not loaded. `createVehicle` and the recording calls return false without a resource. Wheel rotation and straight-line distance return false because the game vehicle is not present. Not yet run on a device.
+
+### Added — Vehicle damage, train, and motion state (2026-11-18)
+
+- Door, wheel, light, and panel state follow `CLuaVehicleDefs.cpp:1081-1141` and `2129-2230`, with the initial door states from `CClientVehicle::GetInitialDoorStates`. `fixVehicle` restores that damage. `blowVehicle` marks the vehicle blown. Train queries return false for a non-train, and a derailed train has no position. Gravity starts at `0, 0, -1`. Headlights start white. Nitro queries return false until a nitro upgrade is fitted. Random `setVehicleVariant` fails closed because `GetRandomVariation` is not hooked. The GTA `CVehicle` body is not written. Not yet run on a device.
+
+### Added — Vehicle element state (2026-11-18)
+
+- Lock, door-lock mode, engine, override lights, paintjob, plate, damage proof, fuel tank, frozen, landing gear, sirens, taxi light, burst tyres, and dirt follow the `CClientVehicle` fields in `CClientVehicle.cpp:150-190` and the get/set functions in `CLuaVehicleDefs.cpp`. A new vehicle is unlocked, engine off, paintjob 3, gear down, tank explodable, and tyres able to burst. An empty plate reads as false. Sirens and the getter for landing gear use the stock model lists. The landing-gear setter also accepts the Stuntplane, matching `DoCheckHasLandingGear`. The GTA `CVehicle` body is not written. Not yet run on a device.
+
 ### Added — Model, image, and texture replacement calls (2026-11-18)
 
 - The load, image, replace, clothing, animation, shader, and texture-query functions follow `CLuaEngineDefs.cpp:457-1393`, `1499-1567`, `2073-2126`, `2274-2433`, and `3517-3548`. COL, DFF, TXD, and IFP raw headers use the desktop magic checks. A number passed to a `CScriptArgReader` string is empty because `lua_objlen` is 0. Image and clothing calls require `img`, `txd`, or `dff` userdata. `engineRestoreDFFImage` rejects ids at or above 20000, and `engineRestoreTXDImage` and `engineFreeTXD` reject ids at or above 5000. `engineRequestModel` returns false and does not allocate an id. `engineRequestTXD` returns the number 0 when no slot is free, matching the desktop `uint` result. `engineGetModelTextures` raises `Invalid model ID` when the texture cannot be read. No archive, clothing slot, shader, or RenderWare texture is decoded. `engineParseSAMPMap` follows `CLuaEngineDefs.cpp:2436-2544` and `CSampMapParser.cpp`. It returns the same result table and does not create elements. Not yet run on a device.

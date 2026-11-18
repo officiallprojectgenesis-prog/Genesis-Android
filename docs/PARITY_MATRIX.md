@@ -12,7 +12,7 @@ Percent = implemented / desktop total. Stub and missing columns are defined in t
 
 | Section | Desktop total | Implemented | Stub | Missing | % | Notes |
 |---|---|---|---|---|---|---|
-| A1 Lua functions | 1581 | 945 | 98 | 538 | 59.8% | Port-only bindings not in desktop: 7. Duplicates across groups skipped: 0. |
+| A1 Lua functions | 1581 | 1101 | 79 | 401 | 69.6% | Port-only bindings not in desktop: 7. Duplicates across groups skipped: 0. |
 | A2 Lua OOP classes | 63 | 0 | 0 | 63 | 0.0% | Matched by global name only. Port class-registration calls found: 0. |
 | B Client events | 144 | 17 | 0 | 127 | 11.8% | Port fires 17 literal event names in total (onClientColShapeHit, onClientColShapeLeave, onClientElementColShapeHit, onClientElementColShapeLeave, onClientKey, onClientCharacter, onClientConsole, onClientSoundStopped, onClientResourceStart, onClientChatMessage, onClientCursorMove, onClientClick, onClientPreRender, onClientRender, onClientResourceStop, onClientTransferBoxProgressChange, onClientTransferBoxVisibilityChange). Server-triggered names from packet 81 are dispatched dynamically and are not counted. |
 | C1 Inbound packets (UPE game ids) | 62 | 24 | 0 | 38 | 38.7% | 1 desktop ids reachable only via provisional registerHandler (ids 0-11, not wire ids) counted as missing. Port explicitly dispatches 25 ids. |
@@ -35,11 +35,12 @@ Desktop scope: the load graph from `CLuaManager::LoadCFunctions` (52 loader func
 | False | lua_pushboolean(L, 0) | shared/LuaBrowserApi.cpp:22 |
 | PushFalse | lua_pushboolean(L, 0) | shared/LuaWeaponApi.cpp:518 |
 | GetPlayerUserName | lua_pushboolean(L, 0) | shared/LuaPedApi.cpp:507 |
-| Fail | lua_pushboolean(L, 0) | shared/LuaVehicleApi.cpp:406 |
+| Fail | lua_pushboolean(L, 0) | shared/LuaVehicleApi.cpp:408 |
 | l_nil | lua_pushnil(L) | shared/LuaVMStub.cpp:1141 |
 | l_num0 | lua_pushinteger(L, 0) | shared/LuaVMStub.cpp:1142 |
 | l_false | lua_pushboolean(L, 0) | shared/LuaVMStub.cpp:1297 |
 | l_true | lua_pushboolean(L, 1) | shared/LuaVMStub.cpp:1298 |
+| FailNil | lua_pushnil(L) | shared/LuaVehicleApi.cpp:821 |
 | PushTrue | lua_pushboolean(L, 1) | shared/LuaWeaponApi.cpp:513 |
 | FailFalse | lua_pushboolean(L, 0) | shared/SurfaceInfo.cpp:490 |
 
@@ -79,7 +80,7 @@ Plus the `DefaultValue` dispatcher (`LuaApiExtra.cpp`), which returns the kind i
 | CLuaTeamDefs | 6 | 0 | 0 | 6 | 0.0% |
 | CLuaTimerDefs | 8 | 8 | 0 | 0 | 100.0% |
 | CLuaVectorGraphicDefs | 6 | 6 | 0 | 0 | 100.0% |
-| CLuaVehicleDefs | 165 | 9 | 19 | 137 | 5.5% |
+| CLuaVehicleDefs | 165 | 165 | 0 | 0 | 100.0% |
 | CLuaWaterDefs | 12 | 7 | 1 | 4 | 58.3% |
 | CLuaWeaponDefs | 24 | 24 | 0 | 0 | 100.0% |
 | CLuaWorldDefs | 140 | 104 | 7 | 29 | 74.3% |
@@ -352,33 +353,7 @@ Implemented (6): `svgCreate`, `svgGetDocumentXML`, `svgSetDocumentXML`, `svgGetS
 
 #### CLuaVehicleDefs
 
-Implemented (9): `getVehicleType`, `getVehicleModelFromName`, `getVehicleMaxPassengers`, `getVehicleOccupant`, `getVehicleOccupants`, `getVehicleController`, `getVehicleUpgradeSlotName`, `getVehicleName`, `getVehicleNameFromModel`
-
-Stub (19):
-
-| Lua function | Port binding | Where |
-|---|---|---|
-| isVehicleLocked | DefaultValue(kFalse) | shared/LuaApiExtra.cpp:636 |
-| getVehicleOverrideLights | DefaultValue(kZero) | shared/LuaApiExtra.cpp:635 |
-| isVehicleOnGround | DefaultValue(kFalse) | shared/LuaApiExtra.cpp:636 |
-| getVehicleEngineState | DefaultValue(kFalse) | shared/LuaApiExtra.cpp:635 |
-| isVehicleBlown | DefaultValue(kFalse) | shared/LuaApiExtra.cpp:636 |
-| isVehicleRecordingLoaded | DefaultValue(kFalse) | shared/LuaApiExtra.cpp:637 |
-| isVehiclePlaybackActive | DefaultValue(kFalse) | shared/LuaApiExtra.cpp:637 |
-| getVehicleStraightLineDistance | DefaultValue(kZero) | shared/LuaApiExtra.cpp:635 |
-| createVehicle | FalseResult: lua_pushboolean(L, 0) | shared/LuaApiExtra.cpp:618 |
-| setVehicleColor | DefaultValue(kTrue) | shared/LuaApiExtra.cpp:641 |
-| setVehicleTyresCanBurst | DefaultValue(kTrue) | shared/LuaApiExtra.cpp:640 |
-| setVehicleLoadCollisionFlag | DefaultValue(kTrue) | shared/LuaApiExtra.cpp:639 |
-| setVehicleStraightLineDistance | DefaultValue(kTrue) | shared/LuaApiExtra.cpp:639 |
-| setVehicleOverrideLights | DefaultValue(kTrue) | shared/LuaApiExtra.cpp:640 |
-| setVehicleEngineState | DefaultValue(kTrue) | shared/LuaApiExtra.cpp:640 |
-| requestVehicleRecording | DefaultValue(kFalse) | shared/LuaApiExtra.cpp:637 |
-| startVehiclePlayback | DefaultValue(kFalse) | shared/LuaApiExtra.cpp:638 |
-| stopVehiclePlayback | DefaultValue(kTrue) | shared/LuaApiExtra.cpp:638 |
-| setVehiclePlaybackSpeed | DefaultValue(kTrue) | shared/LuaApiExtra.cpp:638 |
-
-Missing (137): `getVehicleVariant`, `getVehicleColor`, `getVehicleLandingGearDown`, `getVehicleSirensOn`, `getVehicleTurnVelocity`, `getVehicleTurretPosition`, `getVehicleUpgradeOnSlot`, `getVehicleUpgrades`, `getVehicleCompatibleUpgrades`, `getVehicleDoorState`, `getVehicleLightState`, `getVehiclePanelState`, `areVehicleLightsOn`, `getVehicleTowedByVehicle`, `getVehicleTowingVehicle`, `getVehiclePaintjob`, `getVehiclePlateText`, `getVehicleWheelStates`, `isVehicleWheelOnGround`, `isVehicleDamageProof`, `isVehicleFuelTankExplodable`, `isVehicleFrozen`, `isVehicleOnAllWheels`, `getVehicleAdjustableProperty`, `getHelicopterRotorSpeed`, `getVehicleRotorSpeed`, `isTrainDerailed`, `isTrainDerailable`, `getTrainDirection`, `getTrainSpeed`, `getTrainPosition`, `isTrainChainEngine`, `getVehicleGravity`, `isVehicleTaxiLightOn`, `getVehicleHeadLightColor`, `getVehicleCurrentGear`, `getVehicleHandling`, `getOriginalHandling`, `getVehicleDoorOpenRatio`, `getVehicleSirens`, `getVehicleSirenParams`, `isVehicleNitroRecharging`, `isVehicleNitroActivated`, `getVehicleNitroCount`, `getVehicleNitroLevel`, `getHeliBladeCollisionsEnabled`, `isVehicleWindowOpen`, `getVehicleComponentPosition`, `getVehicleComponentRotation`, `getVehicleComponentScale`, `getVehicleComponentVisible`, `getVehicleComponents`, `getVehicleModelExhaustFumesPosition`, `getVehicleModelDummyPosition`, `getVehicleModelDummyDefaultPosition`, `getVehicleDummyPosition`, `getVehicleWheelScale`, `getVehicleModelWheelSize`, `getVehicleWheelFrictionState`, `getVehicleEntryPoints`, `isVehicleSmokeTrailEnabled`, `getVehicleRotorState`, `getVehicleModelAudioSettings`, `getVehicleAudioSettings`, `isVehicleParkingBrakeEnabled`, `getVehicleDoorLockMode`, `getVehicleTyresCanBurst`, `getVehicleNativeAutoPilotDiagnostic`, `fixVehicle`, `blowVehicle`, `setVehicleTurnVelocity`, `setVehicleLandingGearDown`, `setVehicleLocked`, `setVehicleDoorLockMode`, `setVehiclePhysicalProofs`, `setVehicleDoorsUndamageable`, `setVehicleSirensOn`, `addVehicleUpgrade`, `addVehicleSirens`, `removeVehicleUpgrade`, `removeVehicleSirens`, `setVehicleDoorState`, `setVehicleWheelStates`, `setVehicleLightState`, `setVehiclePanelState`, `attachTrailerToVehicle`, `detachTrailerFromVehicle`, `setVehicleDirtLevel`, `setVehicleDamageProof`, `setVehiclePaintjob`, `setVehicleFuelTankExplodable`, `setVehicleFrozen`, `setVehicleAdjustableProperty`, `setHelicopterRotorSpeed`, `setVehicleRotorSpeed`, `setVehicleWheelsRotation`, `setTrainDerailed`, `setTrainDerailable`, `setTrainDirection`, `setTrainSpeed`, `setTrainPosition`, `setVehicleTaxiLightOn`, `setVehicleGravity`, `setVehicleHeadLightColor`, `setVehicleTurretPosition`, `setVehicleDoorOpenRatio`, `setVehicleHandling`, `setVehicleSirens`, `setVehicleComponentPosition`, `setVehicleComponentRotation`, `setVehicleComponentScale`, `resetVehicleComponentPosition`, `resetVehicleComponentRotation`, `resetVehicleComponentScale`, `setVehicleComponentVisible`, `setVehicleNitroActivated`, `setVehicleNitroCount`, `setVehicleNitroLevel`, `setVehiclePlateText`, `setHeliBladeCollisionsEnabled`, `setVehicleWindowOpen`, `setVehicleModelExhaustFumesPosition`, `setVehicleModelDummyPosition`, `resetVehicleDummyPositions`, `setVehicleDummyPosition`, `setVehicleVariant`, `setVehicleWheelScale`, `setVehicleModelWheelSize`, `spawnVehicleFlyingComponent`, `setVehicleSmokeTrailEnabled`, `setVehicleRotorState`, `setVehicleModelAudioSetting`, `resetVehicleModelAudioSettings`, `setVehicleAudioSetting`, `resetVehicleAudioSettings`, `loadVehicleRecording`, `setVehicleParkingBrake`
+Implemented (165): `getVehicleType`, `getVehicleModelFromName`, `getVehicleVariant`, `getVehicleColor`, `getVehicleLandingGearDown`, `getVehicleMaxPassengers`, `getVehicleOccupant`, `getVehicleOccupants`, `getVehicleController`, `getVehicleSirensOn`, `getVehicleTurnVelocity`, `getVehicleTurretPosition`, `isVehicleLocked`, `getVehicleUpgradeOnSlot`, `getVehicleUpgrades`, `getVehicleUpgradeSlotName`, `getVehicleCompatibleUpgrades`, `getVehicleDoorState`, `getVehicleLightState`, `getVehiclePanelState`, `areVehicleLightsOn`, `getVehicleOverrideLights`, `getVehicleTowedByVehicle`, `getVehicleTowingVehicle`, `getVehiclePaintjob`, `getVehiclePlateText`, `getVehicleWheelStates`, `isVehicleWheelOnGround`, `isVehicleDamageProof`, `isVehicleFuelTankExplodable`, `isVehicleFrozen`, `isVehicleOnGround`, `isVehicleOnAllWheels`, `getVehicleName`, `getVehicleNameFromModel`, `getVehicleAdjustableProperty`, `getHelicopterRotorSpeed`, `getVehicleRotorSpeed`, `getVehicleEngineState`, `isTrainDerailed`, `isTrainDerailable`, `getTrainDirection`, `getTrainSpeed`, `getTrainPosition`, `isTrainChainEngine`, `getVehicleGravity`, `isVehicleBlown`, `isVehicleTaxiLightOn`, `getVehicleHeadLightColor`, `getVehicleCurrentGear`, `getVehicleHandling`, `getOriginalHandling`, `getVehicleDoorOpenRatio`, `getVehicleSirens`, `getVehicleSirenParams`, `isVehicleNitroRecharging`, `isVehicleNitroActivated`, `getVehicleNitroCount`, `getVehicleNitroLevel`, `getHeliBladeCollisionsEnabled`, `isVehicleWindowOpen`, `getVehicleComponentPosition`, `getVehicleComponentRotation`, `getVehicleComponentScale`, `getVehicleComponentVisible`, `getVehicleComponents`, `getVehicleModelExhaustFumesPosition`, `getVehicleModelDummyPosition`, `getVehicleModelDummyDefaultPosition`, `getVehicleDummyPosition`, `getVehicleWheelScale`, `getVehicleModelWheelSize`, `getVehicleWheelFrictionState`, `getVehicleEntryPoints`, `isVehicleSmokeTrailEnabled`, `getVehicleRotorState`, `getVehicleModelAudioSettings`, `getVehicleAudioSettings`, `isVehicleRecordingLoaded`, `isVehiclePlaybackActive`, `isVehicleParkingBrakeEnabled`, `getVehicleDoorLockMode`, `getVehicleTyresCanBurst`, `getVehicleStraightLineDistance`, `getVehicleNativeAutoPilotDiagnostic`, `createVehicle`, `fixVehicle`, `blowVehicle`, `setVehicleTurnVelocity`, `setVehicleColor`, `setVehicleLandingGearDown`, `setVehicleLocked`, `setVehicleDoorLockMode`, `setVehicleTyresCanBurst`, `setVehiclePhysicalProofs`, `setVehicleLoadCollisionFlag`, `setVehicleStraightLineDistance`, `setVehicleDoorsUndamageable`, `setVehicleSirensOn`, `addVehicleUpgrade`, `addVehicleSirens`, `removeVehicleUpgrade`, `removeVehicleSirens`, `setVehicleDoorState`, `setVehicleWheelStates`, `setVehicleLightState`, `setVehiclePanelState`, `setVehicleOverrideLights`, `attachTrailerToVehicle`, `detachTrailerFromVehicle`, `setVehicleEngineState`, `setVehicleDirtLevel`, `setVehicleDamageProof`, `setVehiclePaintjob`, `setVehicleFuelTankExplodable`, `setVehicleFrozen`, `setVehicleAdjustableProperty`, `setHelicopterRotorSpeed`, `setVehicleRotorSpeed`, `setVehicleWheelsRotation`, `setTrainDerailed`, `setTrainDerailable`, `setTrainDirection`, `setTrainSpeed`, `setTrainPosition`, `setVehicleTaxiLightOn`, `setVehicleGravity`, `setVehicleHeadLightColor`, `setVehicleTurretPosition`, `setVehicleDoorOpenRatio`, `setVehicleHandling`, `setVehicleSirens`, `setVehicleComponentPosition`, `setVehicleComponentRotation`, `setVehicleComponentScale`, `resetVehicleComponentPosition`, `resetVehicleComponentRotation`, `resetVehicleComponentScale`, `setVehicleComponentVisible`, `setVehicleNitroActivated`, `setVehicleNitroCount`, `setVehicleNitroLevel`, `setVehiclePlateText`, `setHeliBladeCollisionsEnabled`, `setVehicleWindowOpen`, `setVehicleModelExhaustFumesPosition`, `setVehicleModelDummyPosition`, `resetVehicleDummyPositions`, `setVehicleDummyPosition`, `setVehicleVariant`, `setVehicleWheelScale`, `setVehicleModelWheelSize`, `spawnVehicleFlyingComponent`, `setVehicleSmokeTrailEnabled`, `setVehicleRotorState`, `setVehicleModelAudioSetting`, `resetVehicleModelAudioSettings`, `setVehicleAudioSetting`, `resetVehicleAudioSettings`, `requestVehicleRecording`, `loadVehicleRecording`, `startVehiclePlayback`, `stopVehiclePlayback`, `setVehiclePlaybackSpeed`, `setVehicleParkingBrake`
 
 #### CLuaWaterDefs
 

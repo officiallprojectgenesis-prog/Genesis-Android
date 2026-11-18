@@ -115,6 +115,8 @@ void SetSyncTimeContext(uint32_t id, uint8_t context);
 void NoteElementPosition(uint32_t id, float x, float y, float z);
 void NoteElementInterior(uint32_t id, uint8_t interior);
 void NoteElementModel(uint32_t id, int model);
+// A vehicle element for script state. Does not replace a player, ped, or other live kind.
+void NoteVehicle(uint32_t id, int model);
 // CClientEntity::SetDimension and CClientGame::SetAllDimensions. A ped whose dimension is not the local one is streamed
 // out (no body). DimensionOf returns the local dimension for an element this session has no record of.
 void NoteElementDimension(uint32_t id, uint16_t dimension);

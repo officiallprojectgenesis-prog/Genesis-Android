@@ -139,6 +139,49 @@ def format_status(status):
         return "Missing"
 
 def guess_conversion_notes(name, group, status, detail):
+    if status == "implemented" and name in {
+        "isVehicleLocked", "setVehicleLocked", "getVehicleDoorLockMode", "setVehicleDoorLockMode",
+        "getVehicleEngineState", "setVehicleEngineState", "getVehicleOverrideLights", "setVehicleOverrideLights",
+        "getVehiclePaintjob", "setVehiclePaintjob", "getVehiclePlateText", "setVehiclePlateText",
+        "isVehicleDamageProof", "setVehicleDamageProof", "isVehicleFuelTankExplodable", "setVehicleFuelTankExplodable",
+        "isVehicleFrozen", "setVehicleFrozen", "getVehicleLandingGearDown", "setVehicleLandingGearDown",
+        "getVehicleSirensOn", "setVehicleSirensOn", "isVehicleTaxiLightOn", "setVehicleTaxiLightOn",
+        "getVehicleTyresCanBurst", "setVehicleTyresCanBurst", "setVehicleDirtLevel",
+        "getVehicleDoorState", "setVehicleDoorState", "getVehicleLightState", "setVehicleLightState",
+        "getVehiclePanelState", "setVehiclePanelState", "getVehicleWheelStates", "setVehicleWheelStates",
+        "isVehicleWheelOnGround", "getVehicleWheelFrictionState", "isVehicleOnGround", "isVehicleOnAllWheels",
+        "fixVehicle", "isVehicleBlown", "blowVehicle", "areVehicleLightsOn", "getVehicleCurrentGear",
+        "getVehicleTurnVelocity", "setVehicleTurnVelocity", "getVehicleGravity", "setVehicleGravity",
+        "getVehicleHeadLightColor", "setVehicleHeadLightColor", "getHelicopterRotorSpeed",
+        "isTrainDerailed", "setTrainDerailed", "isTrainDerailable", "setTrainDerailable",
+        "getTrainDirection", "setTrainDirection", "isTrainChainEngine", "getTrainSpeed", "setTrainSpeed",
+        "getTrainPosition", "setTrainPosition", "getVehicleColor", "setVehicleColor",
+        "getVehicleVariant", "setVehicleVariant", "getVehicleWheelScale", "setVehicleWheelScale",
+        "isVehicleSmokeTrailEnabled", "setVehicleSmokeTrailEnabled",
+        "isVehicleNitroRecharging", "isVehicleNitroActivated", "getVehicleNitroCount", "getVehicleNitroLevel",
+        "setVehicleNitroActivated", "setVehicleNitroCount", "setVehicleNitroLevel",
+        "getVehicleAdjustableProperty", "setVehicleAdjustableProperty", "getVehicleTurretPosition", "setVehicleTurretPosition",
+        "getVehicleDoorOpenRatio", "setVehicleDoorOpenRatio", "getHeliBladeCollisionsEnabled", "setHeliBladeCollisionsEnabled",
+        "setHelicopterRotorSpeed", "getVehicleRotorSpeed", "setVehicleRotorSpeed", "isVehicleWindowOpen", "setVehicleWindowOpen",
+        "isVehicleParkingBrakeEnabled", "setVehicleParkingBrake", "setVehicleDoorsUndamageable", "setVehicleLoadCollisionFlag",
+        "setVehiclePhysicalProofs", "setVehicleWheelsRotation", "getVehicleStraightLineDistance", "setVehicleStraightLineDistance",
+        "getVehicleTowedByVehicle", "getVehicleTowingVehicle", "attachTrailerToVehicle", "detachTrailerFromVehicle",
+        "getVehicleUpgradeOnSlot", "getVehicleUpgrades", "addVehicleUpgrade", "removeVehicleUpgrade",
+        "getVehicleComponents", "getVehicleComponentPosition", "setVehicleComponentPosition",
+        "getVehicleComponentRotation", "setVehicleComponentRotation", "getVehicleComponentScale", "setVehicleComponentScale",
+        "getVehicleComponentVisible", "setVehicleComponentVisible", "resetVehicleComponentPosition",
+        "resetVehicleComponentRotation", "resetVehicleComponentScale", "createVehicle",
+        "requestVehicleRecording", "loadVehicleRecording", "isVehicleRecordingLoaded", "isVehiclePlaybackActive",
+        "startVehiclePlayback", "stopVehiclePlayback", "setVehiclePlaybackSpeed",
+        "addVehicleSirens", "removeVehicleSirens", "getVehicleSirenParams", "getVehicleSirens", "setVehicleSirens",
+        "getVehicleRotorState", "setVehicleRotorState", "getOriginalHandling", "getVehicleHandling", "setVehicleHandling",
+        "getVehicleModelAudioSettings", "getVehicleAudioSettings", "setVehicleModelAudioSetting", "setVehicleAudioSetting",
+        "resetVehicleAudioSettings", "resetVehicleModelAudioSettings", "getVehicleModelDummyPosition", "setVehicleModelDummyPosition",
+        "getVehicleModelDummyDefaultPosition", "getVehicleDummyPosition", "setVehicleDummyPosition", "resetVehicleDummyPositions",
+        "getVehicleModelExhaustFumesPosition", "setVehicleModelExhaustFumesPosition", "getVehicleModelWheelSize", "setVehicleModelWheelSize",
+        "getVehicleEntryPoints", "getVehicleCompatibleUpgrades", "getVehicleNativeAutoPilotDiagnostic", "spawnVehicleFlyingComponent",
+    }:
+        return "Stored on the client vehicle element with the desktop defaults. Door, train, gear, rotor, and nitro checks follow the desktop model rules. Random variant selection and the GTA CVehicle body are not hooked. Not device-verified."
     if status == "implemented" and name in {"isPedDead", "getPedWeapon", "getPedWeaponSlot", "getPedTotalAmmo", "getPedAmmoInClip"}:
         return "Game-thread GTA ped snapshot plus per-element client cache seeded by ENTITY_ADD/PLAYER_LIST and weapon RPCs. Queries preserve death tasks/network revival, optional weapon slot and uint16 ammo semantics; clip ammo requires a streamed body. Stream-out saves inventory and offscreen RPCs update the cache before body restoration; generation guards reject removed/reused IDs. ARM64 layout is instruction-guarded. Native reload, sync-driven weapons and streaming still need device validation; this is handler coverage, not full gameplay parity."
     if status == "implemented" and name in {"toggleControl", "isControlEnabled"}:

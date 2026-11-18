@@ -81,6 +81,7 @@ foi contabilizada como convertida neste lote.
 | 3 | `acquireElementStreamingLease`, `releaseElementStreamingLease` | Aparecem em 5 recursos WorldRPG cada, com 27 e 21 chamadas. Portar referência/streaming real e liberação no stop; um token local sem impedir stream-out não resolve a dependência. |
 | 4 | `call`, depois `downloadFile` | `call` apareceu em 6 recursos; exige exports e isolamento dos ambientes. Downloads exigem conclusão real, evento e cancelamento por geração do recurso. |
 | 5 | `engineLoadTXD`, `engineImportTXD`, `engineLoadDFF`, `engineReplaceModel` | As 125 funções da categoria já têm handler. A carga e a substituição seguem os argumentos do desktop e falham fechadas: o decodificador RenderWare, os arquivos do recurso e a alocação de `engineRequestModel` ainda não estão ligados. Falta validar no aparelho. |
+| 6 | Corpo nativo de `CVehicle` | As 165 funções Lua de veículo já têm handler. O `CVehicle` do libGTASA ainda não recebe trava, dano, handling, áudio, sirenes nem o spawn de `createVehicle`. |
 
 ## Reproduzir a busca
 

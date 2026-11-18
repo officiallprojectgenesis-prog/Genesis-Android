@@ -8,7 +8,7 @@ Each document lists every single function, its current Android implementation st
 
 | Category | Documentation File | Total | Implemented | Stub | Missing | Parity % |
 |---|---|---|---|---|---|---|
-| **Vehicles (CLuaVehicleDefs)** | [VEHICLES.md](VEHICLES.md) | 165 | 9 | 19 | 137 | 5.5% |
+| **Vehicles (CLuaVehicleDefs)** | [VEHICLES.md](VEHICLES.md) | 165 | 165 | 0 | 0 | 100.0% |
 | **Peds & Players (CLuaPedDefs, CLuaPlayerDefs)** | [PEDS_AND_PLAYERS.md](PEDS_AND_PLAYERS.md) | 206 | 51 | 60 | 95 | 24.8% |
 | **World, Objects & Environment** | [WORLD_AND_OBJECTS.md](WORLD_AND_OBJECTS.md) | 227 | 124 | 11 | 92 | 54.6% |
 | **Element Tree & Data (CLuaElementDefs)** | [ELEMENTS.md](ELEMENTS.md) | 81 | 62 | 5 | 14 | 76.5% |
@@ -20,7 +20,7 @@ Each document lists every single function, its current Android implementation st
 | **Core System, Networking & Utilities** | [CORE_AND_UTILITY.md](CORE_AND_UTILITY.md) | 195 | 171 | 0 | 24 | 87.7% |
 | **Markers, Blips, ColShapes & Spatial** | [MARKERS_AND_SPATIAL.md](MARKERS_AND_SPATIAL.md) | 145 | 2 | 2 | 141 | 1.4% |
 | **Web Browser & Compatibility (CEF / Discord)** | [BROWSER_AND_COMPATIBILITY.md](BROWSER_AND_COMPATIBILITY.md) | 103 | 103 | 0 | 0 | 100.0% |
-| **TOTAL** | **All Categories** | **1581** | **945** | **98** | **538** | **59.8%** |
+| **TOTAL** | **All Categories** | **1581** | **1101** | **79** | **401** | **69.6%** |
 
 ## Implementation Priority Tiers
 

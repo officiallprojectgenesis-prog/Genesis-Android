@@ -753,6 +753,15 @@ void NoteElementModel(uint32_t id, int model) {
     if (found != g_visuals.end() && model >= 0) found->second.model = model;
 }
 
+void NoteVehicle(uint32_t id, int model) {
+    if (id == 0 || id == 0xFFFFFFFFu || model < 0) return;
+    std::lock_guard<std::mutex> lock(g_lock);
+    auto& stored = g_visuals[id];
+    if (stored.kind != 0 && stored.kind != 2) return;
+    stored.kind = 2;
+    stored.model = model;
+}
+
 void NotePlayerSeen(uint32_t id) {
     if (id == 0 || id == 0xFFFFFFFFu || id == g_local) return;
     std::lock_guard<std::mutex> lock(g_lock);
