@@ -83,24 +83,56 @@ class SettingsFragment : Fragment() {
             button.isEnabled = false
             syncingAssets = true
             updateEngineTestButton()
+            binding.assetSyncProgressContainer.visibility = View.VISIBLE
+            binding.progressAssetSync.isIndeterminate = true
+            binding.progressAssetSync.progress = 0
+            binding.tvAssetSyncPercent.text = ""
+            binding.tvAssetSyncFile.text = "Fetching game asset list..."
             viewLifecycleOwner.lifecycleScope.launch {
                 try {
                     nativeAssetBridge.syncAssets().collect { state ->
                         when (state) {
-                            NativeAssetBridge.DownloadState.FetchingManifest ->
-                                button.text = "Fetching game asset manifest..."
-                            is NativeAssetBridge.DownloadState.Verifying ->
+                            NativeAssetBridge.DownloadState.FetchingManifest -> {
+                                button.text = "Fetching game asset list..."
+                                binding.progressAssetSync.isIndeterminate = true
+                                binding.tvAssetSyncFile.text = "Connecting to Hugging Face..."
+                                binding.tvAssetSyncPercent.text = ""
+                            }
+                            is NativeAssetBridge.DownloadState.Verifying -> {
+                                val pct = if (state.total > 0) (state.current * 100 / state.total) else 0
                                 button.text = "Verifying game assets ${state.current}/${state.total}"
-                            is NativeAssetBridge.DownloadState.Downloading ->
-                                button.text = "Downloading ${state.fileName}: ${state.percent}%"
-                            is NativeAssetBridge.DownloadState.Complete ->
+                                binding.progressAssetSync.isIndeterminate = false
+                                binding.progressAssetSync.progress = pct
+                                binding.tvAssetSyncFile.text = "Verifying file ${state.current} of ${state.total}"
+                                binding.tvAssetSyncPercent.text = "$pct%"
+                            }
+                            is NativeAssetBridge.DownloadState.Downloading -> {
+                                val countSuffix = if (state.totalFiles > 0) {
+                                    " (${state.currentFile}/${state.totalFiles})"
+                                } else ""
+                                button.text = "Downloading ${state.fileName}$countSuffix: ${state.percent}%"
+                                binding.progressAssetSync.isIndeterminate = false
+                                binding.progressAssetSync.progress = state.percent
+                                binding.tvAssetSyncFile.text = "${state.fileName}$countSuffix"
+                                binding.tvAssetSyncPercent.text = "${state.percent}%"
+                            }
+                            is NativeAssetBridge.DownloadState.Complete -> {
+                                binding.progressAssetSync.isIndeterminate = false
+                                binding.progressAssetSync.progress = 100
+                                binding.tvAssetSyncFile.text = "${state.fileCount} files verified and ready"
+                                binding.tvAssetSyncPercent.text = "100%"
                                 Toast.makeText(
                                     context,
                                     "${state.fileCount} game files verified and ready",
                                     Toast.LENGTH_LONG
                                 ).show()
-                            is NativeAssetBridge.DownloadState.Error ->
+                            }
+                            is NativeAssetBridge.DownloadState.Error -> {
+                                binding.progressAssetSync.isIndeterminate = false
+                                binding.tvAssetSyncFile.text = state.message
+                                binding.tvAssetSyncPercent.text = "Error"
                                 Toast.makeText(context, state.message, Toast.LENGTH_LONG).show()
+                            }
                         }
                     }
                 } finally {
