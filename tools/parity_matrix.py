@@ -343,6 +343,16 @@ FOLLOW_INSTALLS = {
     "BindPedLua",
     "InstallVehicleLua",
     "BindVehicleLua",
+    "InstallEngineLua",
+    "BindObjectGroupLua",
+    "BindSurfaceLua",
+    "BindStreamingLua",
+    "BindEngineWorldLua",
+    "BindEngineRendererLua",
+    "BindCullZoneLua",
+    "BindVehicleAudioLua",
+    "BindBreakEffectLua",
+    "BindEngineAssetLua",
     "Register",
 }
 
@@ -952,7 +962,7 @@ def main():
     out.append("## Method and blind spots\n")
     out.append("""- **Implemented** means the Lua name is bound to a C function whose body is not a constant return. It does not mean the behaviour matches desktop. Argument handling and return values are not compared.
 - **Stub** means the binding is a constant helper (table in A1, detected from the C body), or a `defaults[]` entry in `LuaApiExtra.cpp`. A `defaults[]` entry only applies when no core binding already defines the name, which the script follows.
-- **Port binding order** follows `installDxBindings`: its `binds[]`, then `InstallExtraBindings` (JSON, `SetGlobal`, GUI, then `defaults[]` for names still missing), then `installWardrobeBindings`, then `InstallCategoryLua` (element, ped, vehicle, GUI). A later step replaces the same name. `Bind(L, name, fn)` and qualified `SetGlobal` targets count. If that call order changes, update `port_lua_bindings`.
+- **Port binding order** follows `installDxBindings`: its `binds[]`, then `InstallExtraBindings` (JSON, `SetGlobal`, GUI, then `defaults[]` for names still missing), then `installWardrobeBindings`, then `InstallCategoryLua` (element, ped, vehicle, GUI, engine model names). A later step replaces the same name. `Bind(L, name, fn)` and qualified `SetGlobal` targets count. If that call order changes, update `port_lua_bindings`.
 - **Lua name overlap** in other ports (Lua resource code that defines a function with the same name) is not counted. Only C-side bindings are.
 - **Desktop luadefs** are read from `LoadFunctions` tables (entries of the form `{"name", Handler}`) and `lua_register` calls. Functions registered through other mechanisms are missed. Duplicates across groups are counted once.
 - **Client events** are literal names only. `AddEvent` calls that pass a variable name are not counted.

@@ -1289,12 +1289,6 @@ static int l_getPedMoveState(lua_State* L) {
     return 1;
 }
 
-// Desktop MTA engineStreamingGetModelLoadState(): "loaded" means the model is resident. Assume loaded.
-static int l_engineStreamingGetModelLoadState(lua_State* L) {
-    lua_pushstring(L, "loaded");
-    return 1;
-}
-
 // Desktop MTA getPlayerName(): local nick from the launcher settings. Fixed text for now.
 static int l_getPlayerName(lua_State* L) {
     lua_pushstring(L, "Player");
@@ -2141,7 +2135,6 @@ static void installDxBindings(lua_State* L) {
         {"getDistanceBetweenPoints3D", l_getDistanceBetweenPoints3D},
         {"getDistanceBetweenPoints2D", l_getDistanceBetweenPoints2D},
         {"getPedMoveState", l_getPedMoveState},
-        {"engineStreamingGetModelLoadState", l_engineStreamingGetModelLoadState},
         // Ped and element natives the ped-traffic client calls. Defaults until the engine exposes them.
         {"getPedRotation", l_getPedRotation},
         // CLuaCompatibilityDefs.cpp:17. Same function as getPedRotation.

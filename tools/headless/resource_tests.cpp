@@ -16,6 +16,14 @@
 #include "LuaGuiApi.h"
 #include "LuaMtaWindowApi.h"
 #include "LuaVMStub.h"
+#include "ModelNames.h"
+#include "ModelInfoRead.h"
+#include "ObjectGroups.h"
+#include "SurfaceInfo.h"
+#include "Streaming.h"
+#include "EngineWorld.h"
+#include "EngineRenderer.h"
+#include "CullZones.h"
 #include "LuaWeaponApi.h"
 #include "LuaCryptApi.h"
 #include "ClientWeapon.h"
@@ -2905,6 +2913,572 @@ void CheckPlayerListCapture() {
     std::printf("player list capture: id=%u model=%d\n", id, WorldRPG::ServerWorld::ModelOf(id));
 }
 
+// CLuaEngineDefs.cpp:2192-2270 and CModelNames::InitializeMaps (CModelNames.cpp:29362-29382).
+void CheckEngineModelNames(WorldRPG::Script::LuaVMStub& vm) {
+    CHECK(WorldRPG::Models::ModelNameFromId(400) == std::string("Landstalker"));
+    CHECK(WorldRPG::Models::ModelIdFromName("landstal") == WorldRPG::Models::kInvalidModelId);
+    CHECK(WorldRPG::Models::ModelIdFromName("Landstalker") == 400u);
+    CHECK(std::string(WorldRPG::Models::ModelNameFromId(334)) == "Night_Stick");
+    CHECK(WorldRPG::Models::ModelIdFromName("Night_Strick") == 334u);
+    CHECK(WorldRPG::Models::ModelNameFromId(611)[0] == '\0');
+    CHECK(WorldRPG::Models::ModelIdFromName("Street Clean Trailer") == WorldRPG::Models::kInvalidModelId);
+    CHECK(WorldRPG::Models::ModelIdFromName("Monster") == WorldRPG::Models::kInvalidModelId);
+    CHECK(WorldRPG::Models::ModelIdFromName("Monster 1") == 444u);
+
+    // ARM64 CBaseModelInfo fixture: LOD at +0x38, flags at +0x2c, TXD at +0x24,
+    // AsDamageAtomicModelInfoPtr at vptr+0x18. Flags 0x0902 are draw-last, road, and TREE.
+    alignas(8) unsigned char model[0x40] = {};
+    const float lod = 123.5f;
+    const std::uint16_t flags = 0x0902;
+    const std::uint16_t txd = 42;
+    std::memcpy(model + 0x38, &lod, sizeof lod);
+    std::memcpy(model + 0x2c, &flags, sizeof flags);
+    std::memcpy(model + 0x24, &txd, sizeof txd);
+    using DamageFn = void* (*)(void*);
+    DamageFn slots[4] = {};
+    slots[3] = [](void* self) -> void* { return self; };
+    const void* vptr = slots;
+    std::memcpy(model, &vptr, sizeof vptr);
+    WorldRPG::Models::StockModelView view;
+    CHECK(WorldRPG::Models::ReadStockModelView(model, view));
+    CHECK(view.lod == 123.5f);
+    CHECK(view.txd == 42);
+    CHECK(view.damageAtomic);
+    CHECK(WorldRPG::Models::ReadIdeFlag(view, WorldRPG::Models::IdeFlag::DrawLast));
+    CHECK(WorldRPG::Models::ReadIdeFlag(view, WorldRPG::Models::IdeFlag::IsRoad));
+    CHECK(WorldRPG::Models::ReadIdeFlag(view, WorldRPG::Models::IdeFlag::IsTree));
+    CHECK(WorldRPG::Models::ReadIdeFlag(view, WorldRPG::Models::IdeFlag::IgnoreLighting) == false);
+    CHECK(WorldRPG::Models::ReadIdeFlag(view, WorldRPG::Models::IdeFlag::DisableBackfaceCulling));
+    slots[3] = [](void*) -> void* { return nullptr; };
+    CHECK(WorldRPG::Models::ReadStockModelView(model, view));
+    CHECK(view.damageAtomic == false);
+    WorldRPG::Models::IdeFlag parsed = WorldRPG::Models::IdeFlag::IsRoad;
+    CHECK(WorldRPG::Models::IdeFlagFromName("IS_ROAD", parsed));
+    CHECK(parsed == WorldRPG::Models::IdeFlag::IsRoad);
+    CHECK(WorldRPG::Models::IdeFlagFromName("not-a-flag", parsed) == false);
+    CHECK(WorldRPG::Models::ReadLiveStockModel(411, view) == WorldRPG::Models::LiveModelStatus::Unavailable);
+    float lodDistance = 200.f;
+    WorldRPG::Models::LodOverride lodSaved;
+    CHECK(WorldRPG::Models::ApplyLodDistance(lodDistance, lodSaved, 100.f, false));
+    CHECK(lodDistance == 100.f && lodSaved.original == 200.f);
+    CHECK(WorldRPG::Models::ApplyLodDistance(lodDistance, lodSaved, 1000.f, false));
+    CHECK(lodDistance == 325.f && lodSaved.original == 200.f);
+    CHECK(WorldRPG::Models::ApplyLodDistance(lodDistance, lodSaved, 1000.f, true));
+    CHECK(lodDistance == 1000.f && lodSaved.original == 200.f);
+    CHECK(WorldRPG::Models::ApplyLodDistance(lodDistance, lodSaved, 0.f, true) == false);
+    CHECK(lodDistance == 1000.f);
+    CHECK(WorldRPG::Models::RestoreLodDistance(lodDistance, lodSaved));
+    CHECK(lodDistance == 200.f && lodSaved.saved == false);
+    CHECK(WorldRPG::Models::RestoreLodDistance(lodDistance, lodSaved) == false);
+    WorldRPG::Models::FlagRecord flagRecord;
+    flagRecord.flags = 0xC0;
+    WorldRPG::Models::SetRawFlags(flagRecord, 0x00FF);
+    CHECK(flagRecord.haveOriginal && flagRecord.original == 0xC0);
+    CHECK((flagRecord.flags & 0x80) != 0 && (flagRecord.flags & 0x7F) == 0x7F);
+    WorldRPG::Models::SetIdeWord(flagRecord, 1u << 2, 1);
+    CHECK((flagRecord.flags & 0x02) != 0 && (flagRecord.flags & 0x04) == 0 && (flagRecord.flags & 0x80) != 0);
+    WorldRPG::Models::FlagRecord singleFlag;
+    singleFlag.flags = 0xC0;
+    WorldRPG::Models::SetOneIdeFlag(singleFlag, WorldRPG::Models::IdeFlag::IsRoad, true);
+    CHECK(singleFlag.haveOriginal == false);
+    CHECK(WorldRPG::Models::ResetRecordedFlags(singleFlag) == false);
+    CHECK(WorldRPG::Models::ResetRecordedFlags(flagRecord));
+    CHECK(flagRecord.flags == static_cast<std::uint16_t>((0xC0 & 0xFF7F) | (flagRecord.flags & 0x80)));
+    WorldRPG::Models::TxdRecord txdRecord;
+    txdRecord.id = 5;
+    txdRecord.refs = 2;
+    txdRecord.rwObject = true;
+    const WorldRPG::Models::TxdTransfer moved = WorldRPG::Models::SetTxdId(txdRecord, 9);
+    CHECK(moved.from == 5 && moved.to == 9 && moved.refs == 3 && txdRecord.original == 5 && txdRecord.id == 9);
+    WorldRPG::Models::TxdTransfer back;
+    CHECK(WorldRPG::Models::ResetTxdId(txdRecord, back));
+    CHECK(back.to == 5 && txdRecord.id == 5 && txdRecord.haveDefault == false);
+    CHECK(WorldRPG::Models::ResetTxdId(txdRecord, back) == false);
+    WorldRPG::Models::VisibleTime visible;
+    visible.on = 20;
+    visible.off = 6;
+    CHECK(WorldRPG::Models::HoursInRange(25, 1) == false);
+    CHECK(WorldRPG::Models::ApplyVisibleTime(visible, 25, 1) == false);
+    CHECK(visible.on == 20 && visible.saved == false);
+    CHECK(WorldRPG::Models::ApplyVisibleTime(visible, 8, 18));
+    CHECK(visible.on == 8 && visible.off == 18 && visible.originalOn == 20 && visible.originalOff == 6);
+    CHECK(WorldRPG::Models::ApplyVisibleTime(visible, 1, 2));
+    CHECK(visible.originalOn == 20 && visible.on == 1);
+    unsigned char groupBytes[WorldRPG::Models::kObjectGroupBytes] = {};
+    WorldRPG::Models::ObjectGroup written;
+    written.mass = 12.5f;
+    written.turnMass = 3.f;
+    written.colDamageEffect = 20;
+    WorldRPG::Models::WriteObjectGroup(written, groupBytes);
+    WorldRPG::Models::ObjectGroup readBack;
+    WorldRPG::Models::ReadObjectGroup(groupBytes, readBack);
+    CHECK(readBack.mass == 12.5f && readBack.turnMass == 3.f && readBack.colDamageEffect == 20);
+    written.smashMultiplier = 5.f;
+    written.breakVelocity[0] = 1.f;
+    written.breakVelocity[1] = 2.f;
+    written.breakVelocity[2] = 3.f;
+    written.breakVelocityRand = 4.f;
+    written.breakMode = 2;
+    written.sparksOnImpact = 7;
+    WorldRPG::Models::WriteObjectGroup(written, groupBytes);
+    float smash = 0.f;
+    float breakX = 0.f;
+    float breakRand = 0.f;
+    std::uint32_t breakMode = 0;
+    std::uint32_t sparks = 0;
+    std::memcpy(&smash, groupBytes + WorldRPG::Models::kGroupSmash, sizeof smash);
+    std::memcpy(&breakX, groupBytes + WorldRPG::Models::kGroupBreakVelocity, sizeof breakX);
+    std::memcpy(&breakRand, groupBytes + WorldRPG::Models::kGroupBreakVelocityRand, sizeof breakRand);
+    std::memcpy(&breakMode, groupBytes + WorldRPG::Models::kGroupBreakMode, sizeof breakMode);
+    std::memcpy(&sparks, groupBytes + WorldRPG::Models::kGroupSparks, sizeof sparks);
+    CHECK(smash == 5.f && breakX == 1.f && breakRand == 4.f && breakMode == 2 && sparks == 7);
+    WorldRPG::Models::GroupOriginal groupSaved;
+    WorldRPG::Models::AssignGroupFloat(groupBytes, groupSaved, WorldRPG::Models::kGroupMass, 12.5f);
+    CHECK(groupSaved.saved == false);
+    WorldRPG::Models::AssignGroupFloat(groupBytes, groupSaved, WorldRPG::Models::kGroupMass, 9.f);
+    CHECK(groupSaved.saved);
+    WorldRPG::Models::AssignGroupBoolWord(groupBytes, groupSaved, WorldRPG::Models::kGroupSparks, false);
+    std::memcpy(&sparks, groupBytes + WorldRPG::Models::kGroupSparks, sizeof sparks);
+    CHECK(sparks == 0);
+    std::memcpy(groupBytes, groupSaved.bytes, WorldRPG::Models::kObjectGroupBytes);
+    WorldRPG::Models::ReadObjectGroup(groupBytes, readBack);
+    CHECK(readBack.mass == 12.5f && readBack.sparksOnImpact == 7);
+    unsigned char surface[WorldRPG::Models::kSurfaceStride] = {};
+    WorldRPG::Models::CopyOriginalSurface(0, surface);
+    WorldRPG::Models::SurfaceRead surfaceRead;
+    CHECK(WorldRPG::Models::ReadSurfaceRecord(surface, WorldRPG::Models::SurfaceProperty::Tyre, surfaceRead));
+    CHECK(surfaceRead.number == surface[0]);
+    CHECK(WorldRPG::Models::ReadSurfaceRecord(surface, WorldRPG::Models::SurfaceProperty::Bullet, surfaceRead));
+    CHECK(std::string(surfaceRead.text) == "metal");
+    CHECK(WorldRPG::Models::ReadSurfaceRecord(surface, WorldRPG::Models::SurfaceProperty::Adhesion, surfaceRead));
+    CHECK(std::string(surfaceRead.text) == "road");
+    CHECK(WorldRPG::Models::ReadSurfaceRecord(surface, WorldRPG::Models::SurfaceProperty::StepDust, surfaceRead) == false);
+    CHECK(WorldRPG::Models::WriteSurfaceAudio(surface, "METAL"));
+    CHECK(WorldRPG::Models::ReadSurfaceRecord(surface, WorldRPG::Models::SurfaceProperty::Audio, surfaceRead));
+    CHECK(std::string(surfaceRead.text) == "metal");
+    CHECK(WorldRPG::Models::WriteSurfaceWheel(surface, "disabled"));
+    CHECK(WorldRPG::Models::ReadSurfaceRecord(surface, WorldRPG::Models::SurfaceProperty::Wheel, surfaceRead));
+    CHECK(std::string(surfaceRead.text) == "disabled");
+    CHECK(WorldRPG::Models::WriteSurfaceBool(surface, WorldRPG::Models::SurfaceProperty::See, true));
+    CHECK(WorldRPG::Models::ReadSurfaceRecord(surface, WorldRPG::Models::SurfaceProperty::See, surfaceRead) && surfaceRead.flag);
+    const unsigned char tyre = surface[0];
+    surface[0] = 1;
+    WorldRPG::Models::CopyOriginalSurface(0, surface);
+    CHECK(surface[0] == tyre);
+    WorldRPG::Models::SetStreamingMemory(2048);
+    CHECK(WorldRPG::Models::StreamingMemory() == 2048);
+    WorldRPG::Models::RestoreStreamingMemory();
+    CHECK(WorldRPG::Models::StreamingMemory() == WorldRPG::Models::kDefaultStreamingMemory);
+    WorldRPG::Models::SetCacheLimits(4, std::nullopt);
+    WorldRPG::Models::CacheLimits cache = WorldRPG::Models::GetCacheLimits();
+    CHECK(cache.vehiclesSet && cache.vehicles == 4 && cache.pedsSet == false);
+    WorldRPG::Models::SetCacheLimits(std::nullopt, 2);
+    cache = WorldRPG::Models::GetCacheLimits();
+    CHECK(cache.vehiclesSet == false && cache.pedsSet && cache.peds == 2);
+    CHECK(WorldRPG::Models::PoolDefaultCapacity(0) == 32000);
+    CHECK(WorldRPG::Models::PoolDefaultCapacity(2) == 1200);
+    CHECK(WorldRPG::Models::PoolDefaultCapacity(18) == 4000);
+    CHECK(WorldRPG::Models::DecidePoolCapacity(0, 100, 0) == WorldRPG::Models::PoolSetDecision::BelowDefault);
+    CHECK(WorldRPG::Models::DecidePoolCapacity(1, 200, 0) == WorldRPG::Models::PoolSetDecision::NotChangeable);
+    CHECK(WorldRPG::Models::DecidePoolCapacity(0, 32000, 40000) == WorldRPG::Models::PoolSetDecision::BelowUsed);
+    CHECK(WorldRPG::Models::DecidePoolCapacity(16, 90000, 0) == WorldRPG::Models::PoolSetDecision::Resize);
+    WorldRPG::Models::SetAsyncLoading(true, true);
+    CHECK(WorldRPG::Models::AsyncLoadingEnabled() && WorldRPG::Models::AsyncLoadingForced());
+    CHECK(WorldRPG::Models::PostFXValue(WorldRPG::Models::PostFX::Gamma) == 0.95f);
+    CHECK(WorldRPG::Models::PostFXValue(WorldRPG::Models::PostFX::Brightness) == 1.03f);
+    WorldRPG::Models::SetPostFXEnabled(WorldRPG::Models::PostFX::Brightness, true);
+    WorldRPG::Models::SetPostFXEnabled(WorldRPG::Models::PostFX::Contrast, false);
+    CHECK(WorldRPG::Models::PostFXEnabled(WorldRPG::Models::PostFX::Contrast));
+    CHECK(WorldRPG::Models::PostFXEnabled(WorldRPG::Models::PostFX::Brightness));
+    CHECK(WorldRPG::Models::PostFXEnabled(WorldRPG::Models::PostFX::Gamma) == false);
+    WorldRPG::Models::SetPostFXMode(true, true);
+    CHECK(WorldRPG::Models::PostFXMode() == 1);
+    WorldRPG::Models::SetPostFXMode(false, true);
+    CHECK(WorldRPG::Models::PostFXMode() == 2);
+    CHECK(WorldRPG::Models::SetObjectStreamingLimits(1001, 0) == false);
+    CHECK(WorldRPG::Models::SetObjectStreamingLimits(400, 400));
+    CHECK(WorldRPG::Models::MaxStreamedObjects() == 400 && WorldRPG::Models::MaxLowLodObjects() == 400);
+    CHECK(WorldRPG::Models::SetDistantLightDistance(100.f) == false);
+    CHECK(WorldRPG::Models::SetDistantLightDistance(300.f));
+    CHECK(WorldRPG::Models::GetDistantLights().distance == 300.f && WorldRPG::Models::GetDistantLights().automatic == false);
+    CHECK(WorldRPG::Models::SetDistantLightDistance(5000.f));
+    CHECK(WorldRPG::Models::SetDistantLightDistance(5000.1f) == false);
+    int cullOwner = 1;
+    WorldRPG::Models::CullZone cull;
+    cull.width = cull.depth = cull.height = 10.f;
+    const std::uint32_t cullId = WorldRPG::Models::CreateCullZone(cull, &cullOwner);
+    CHECK(cullId == 1);
+    const std::vector<WorldRPG::Models::CullZone> listed = WorldRPG::Models::ListCullZones(false, WorldRPG::Models::CullZoneType::Attribute);
+    CHECK(listed.size() == 1 && listed[0].id == 1 && listed[0].width == 10.f && listed[0].centerX == 0.f && listed[0].original == false);
+    CHECK(WorldRPG::Models::CreateCullZone(cull, nullptr) == 0);
+    cull.width = 0.f;
+    CHECK(WorldRPG::Models::CreateCullZone(cull, &cullOwner) == 0);
+    cull.width = 10.f;
+    cull.type = WorldRPG::Models::CullZoneType::Mirror;
+    cull.mirrorNormalZ = 2.f;
+    CHECK(WorldRPG::Models::CreateCullZone(cull, &cullOwner) == 0);
+    CHECK(WorldRPG::Models::SetCullZoneEnabled(cullId, false, &cullOwner));
+    CHECK(WorldRPG::Models::RemoveCullZone(cullId, &cullOwner));
+    CHECK(WorldRPG::Models::ListCullZones(false, WorldRPG::Models::CullZoneType::Attribute).empty());
+    WorldRPG::Models::ModelGroupRecord modelGroup;
+    modelGroup.current = WorldRPG::Models::GroupIndexFromHalf(0xFFFF);
+    CHECK(modelGroup.current == -1);
+    CHECK(WorldRPG::Models::SetModelGroup(modelGroup, 10));
+    CHECK(modelGroup.original == -1 && modelGroup.current == 10);
+    CHECK(WorldRPG::Models::HalfFromGroupIndex(-1) == 0xFFFF);
+    CHECK(WorldRPG::Models::SetModelGroup(modelGroup, -1));
+    CHECK(WorldRPG::Models::RestoreModelGroup(modelGroup));
+    CHECK(modelGroup.current == -1 && modelGroup.saved == false);
+
+    RunLua(vm, "engine-model-names", R"LUA(
+        assert(engineGetModelNameFromID(400) == "Landstalker")
+        assert(engineGetModelNameFromID(400.9) == "Landstalker")
+        assert(engineGetModelNameFromID("411") == "Infernus")
+        assert(engineGetModelNameFromID(411, "ignored") == "Infernus")
+        assert(engineGetModelIDFromName("infernus") == 411)
+        assert(engineGetModelIDFromName("LANDSTALKER") == 400)
+        assert(engineGetModelNameFromID(334) == "Night_Stick")
+        assert(engineGetModelIDFromName("Night_Strick") == 334)
+        assert(engineGetModelIDFromName("night_stick") == 334)
+        assert(engineGetModelNameFromID(9557) == "lake_sfw")
+        assert(engineGetModelIDFromName("lake_SFW") == 9557)
+        assert(engineGetModelNameFromID(610) == "Farm Trailer")
+        assert(engineGetModelIDFromName("Farm Trailer") == 610)
+        assert(engineGetModelNameFromID(321) == "Regular_Dildo")
+        assert(engineGetModelNameFromID(1337) == "Recycle1")
+        assert(engineGetModelNameFromID(18630) == "cs_landbit_20_A")
+        assert(engineGetModelIDFromName("Monster 1") == 444)
+        assert(engineGetModelIDFromName("Monster") == false)
+        assert(engineGetModelNameFromID(611) == false)
+        assert(engineGetModelIDFromName("Street Clean Trailer") == false)
+        assert(engineGetModelIDFromName("411") == false)
+        assert(engineGetModelIDFromName(411) == false)
+        assert(engineGetModelIDFromName("") == false)
+        assert(engineGetModelNameFromID() == false)
+        assert(engineGetModelNameFromID(nil) == false)
+        assert(engineGetModelNameFromID(true) == false)
+        assert(engineGetModelNameFromID("nope") == false)
+        assert(engineGetModelNameFromID(-1) == false)
+        assert(engineGetModelNameFromID(65535) == false)
+        assert(engineGetModelNameFromID(65534.1) == false)
+        assert(engineGetModelNameFromID(0/0) == false)
+        assert(engineGetModelIDFromName() == false)
+        assert(engineGetModelIDFromName(nil) == false)
+        assert(engineGetModelIDFromName("not-a-real-model") == false)
+        assert(engineGetModelLODDistance("Infernus") == false)
+        assert(engineGetModelLODDistance("411") == false)
+        assert(engineGetModelLODDistance(411) == false)
+        assert(engineGetModelLODDistance("txd1") == false)
+        assert(engineGetModelLODDistance("nope") == false)
+        assert(engineGetModelLODDistance() == false)
+        local ok, err = pcall(engineGetModelFlags, 411)
+        assert(ok == false and err:find("0-19999", 1, true))
+        ok, err = pcall(engineGetModelFlags, 70000)
+        assert(ok == false and err:find("Expected a valid model ID at argument 1", 1, true) and not err:find("0-19999", 1, true))
+        ok, err = pcall(engineGetModelFlags, "Infernus")
+        assert(ok == false and err:find("Expected number", 1, true))
+        ok, err = pcall(engineGetModelFlags, "411")
+        assert(ok == false and err:find("0-19999", 1, true))
+        ok, err = pcall(engineGetModelFlag, "nope", "nope")
+        assert(ok == false and err:find("Expected number", 1, true))
+        ok, err = pcall(engineGetModelFlag, 411, "nope")
+        assert(ok == false and err:find("model-ide-flag", 1, true))
+        ok, err = pcall(engineGetModelFlag, 411)
+        assert(ok == false and err:find("Expected enum", 1, true))
+        ok, err = pcall(engineGetModelFlag, 411, "IS_ROAD")
+        assert(ok == false and err:find("0-19999", 1, true))
+        ok, err = pcall(engineGetModelTXDID, 1337)
+        assert(ok == false and err:find("0-19999", 1, true))
+        ok, err = pcall(engineGetModelTXDID, -1)
+        assert(ok == false and err:find("out-of-range", 1, true))
+        assert(engineSetModelLODDistance("Infernus", 100) == false)
+        assert(engineSetModelLODDistance("411", 100) == false)
+        assert(engineSetModelLODDistance(411, 100) == false)
+        assert(engineSetModelLODDistance("nope", 100) == false)
+        assert(engineSetModelLODDistance("Infernus", 0) == false)
+        assert(engineSetModelLODDistance("Infernus", -1) == false)
+        assert(engineSetModelLODDistance("Infernus") == false)
+        assert(engineSetModelLODDistance("Infernus", 100, "yes") == false)
+        assert(engineResetModelLODDistance("Infernus") == false)
+        assert(engineResetModelLODDistance("nope") == false)
+        assert(engineResetModelLODDistance(411) == false)
+        ok, err = pcall(engineResetModelLODDistance)
+        assert(ok == false and err:find("Expected string", 1, true))
+        ok, err = pcall(engineSetModelFlags, 411, 1)
+        assert(ok == false and err:find("0-19999", 1, true))
+        ok, err = pcall(engineSetModelFlags, 411, 1, "yes")
+        assert(ok == false and err:find("Expected boolean", 1, true))
+        ok, err = pcall(engineSetModelFlag, 411, "is_road", true)
+        assert(ok == false and err:find("0-19999", 1, true))
+        ok, err = pcall(engineResetModelFlags, 411)
+        assert(ok == false and err:find("0-19999", 1, true))
+        ok, err = pcall(engineGetTXDIDFromName, "")
+        assert(ok == false and err:find("1 and 24", 1, true))
+        ok, err = pcall(engineGetTXDIDFromName, string.rep("a", 25))
+        assert(ok == false and err:find("1 and 24", 1, true))
+        assert(engineGetTXDIDFromName("grass") == false)
+        ok, err = pcall(engineSetModelTXDID, 411, 5000)
+        assert(ok == false and err:find("valid model ID", 1, true))
+        ok, err = pcall(engineSetModelTXDID, 411, 1)
+        assert(ok == false and err:find("valid model ID", 1, true))
+        ok, err = pcall(engineResetModelTXDID, 411)
+        assert(ok == false and err:find("valid model ID", 1, true))
+        assert(engineGetModelRuntimeID(411) == false)
+        assert(engineGetModelServerID(411) == false)
+        assert(engineGetModelParent(411) == false)
+        assert(engineGetModelType(411) == false)
+        assert(engineGetModelRuntimeID(-1) == false)
+        assert(engineGetModelType() == false)
+        assert(engineGetModelVisibleTime("nope") == false)
+        assert(engineGetModelVisibleTime("Infernus") == false)
+        assert(engineSetModelVisibleTime("nope", 8, 18) == false)
+        assert(engineSetModelVisibleTime("Infernus", 25, 1) == false)
+        assert(engineSetModelVisibleTime("Infernus", 8, 18) == false)
+        local timeOk, timeErr = pcall(engineGetModelVisibleTime)
+        assert(timeOk == false and timeErr:find("Expected string", 1, true))
+        timeOk, timeErr = pcall(engineSetModelVisibleTime, "Infernus", 200, 1)
+        assert(timeOk == false and timeErr:find("out-of-range", 1, true))
+        local groupOk, groupErr = pcall(engineGetObjectGroupPhysicalProperty, 200, "mass")
+        assert(groupOk == false and groupErr:find("0-159", 1, true))
+        groupOk, groupErr = pcall(engineGetObjectGroupPhysicalProperty, 0, "nope")
+        assert(groupOk == false and groupErr:find("objectgroup-modifiable", 1, true))
+        groupOk, groupErr = pcall(engineGetObjectGroupPhysicalProperty, 0, "mass")
+        assert(groupOk == false and groupErr:find("valid group", 1, true))
+        groupOk, groupErr = pcall(engineGetObjectGroupPhysicalProperty, 0, "fx_system")
+        assert(groupOk == false and groupErr:find("isn't possible", 1, true))
+        groupOk, groupErr = pcall(engineGetModelPhysicalPropertiesGroup, 411)
+        assert(groupOk == false and groupErr:find("valid model", 1, true))
+        groupOk, groupErr = pcall(engineSetModelPhysicalPropertiesGroup, 411, 200)
+        assert(groupOk == false and groupErr:find("0-159", 1, true))
+        groupOk, groupErr = pcall(engineRestoreObjectGroupPhysicalProperties, -1)
+        assert(groupOk == false and groupErr:find("0-159", 1, true))
+        groupOk, groupErr = pcall(engineSetObjectGroupPhysicalProperty, 200, "mass", 1)
+        assert(groupOk == false and groupErr:find("0-159", 1, true))
+        groupOk, groupErr = pcall(engineSetObjectGroupPhysicalProperty, 0, "nope", 1)
+        assert(groupOk == false and groupErr:find("objectgroup-modifiable", 1, true))
+        groupOk, groupErr = pcall(engineSetObjectGroupPhysicalProperty, 0, "mass", 1)
+        assert(groupOk == false and groupErr:find("valid group", 1, true))
+        groupOk, groupErr = pcall(engineGetModelPhysicalPropertiesGroup, 50000)
+        assert(groupOk == false and groupErr:find("Expected a valid model ID at argument 1", 1, true) and not groupErr:find("0-19999", 1, true))
+        groupOk, groupErr = pcall(engineGetModelPhysicalPropertiesGroup, 70000)
+        assert(groupOk == false and groupErr:find("supported range", 1, true))
+        assert(engineGetSurfaceProperties(200, "audio") == nil)
+        assert(engineGetSurfaceProperties(0, "nope") == nil)
+        assert(engineGetSurfaceProperties(0, "audio") == false)
+        assert(engineGetSurfaceProperties(0, "stepdust") == false)
+        assert(engineSetSurfaceProperties(0, "audio", "nope") == nil)
+        assert(engineSetSurfaceProperties(0, "tyregrip", -1) == nil)
+        assert(engineSetSurfaceProperties(0, "audio", "grass") == false)
+        assert(engineResetSurfaceProperties(200) == nil)
+        assert(engineResetSurfaceProperties() == false)
+        assert(engineResetSurfaceProperties("all") == false)
+        local streamOk, streamErr = pcall(engineStreamingSetMemorySize, 0)
+        assert(streamOk == false and streamErr:find("must be > 0", 1, true))
+        streamOk, streamErr = pcall(engineStreamingSetMemorySize)
+        assert(streamOk == false and streamErr:find("Expected number", 1, true))
+        streamOk, streamErr = pcall(engineStreamingSetMemorySize, -1)
+        assert(streamOk == false and streamErr:find("out-of-range", 1, true))
+        assert(engineStreamingSetMemorySize(2048) == nil)
+        assert(engineStreamingGetMemorySize() == 2048)
+        assert(engineStreamingRestoreMemorySize() == nil)
+        assert(engineStreamingGetMemorySize() == 50 * 1024 * 1024)
+        assert(engineStreamingFreeUpMemory(100) == nil)
+        assert(engineStreamingGetUsedMemory() == false)
+        assert(engineStreamingSetBufferSize(100) == false)
+        assert(engineStreamingSetBufferSize(2521 * 2048) == false)
+        assert(engineStreamingGetBufferSize() == false)
+        assert(engineStreamingRestoreBufferSize() == nil)
+        assert(engineStreamingSetModelCacheLimits() == nil)
+        assert(engineStreamingSetModelCacheLimits(nil, 3) == nil)
+        streamOk, streamErr = pcall(engineStreamingSetModelCacheLimits, true)
+        assert(streamOk == false and streamErr:find("Expected number", 1, true))
+        streamOk, streamErr = pcall(engineStreamingGetModelLoadState)
+        assert(streamOk == false and streamErr:find("Expected number", 1, true))
+        streamOk, streamErr = pcall(engineStreamingGetModelLoadState, 70000)
+        assert(streamOk == false and streamErr:find("valid model ID", 1, true))
+        streamOk, streamErr = pcall(engineStreamingGetModelLoadState, 30000)
+        assert(streamOk == false and streamErr:find("valid model ID", 1, true))
+        assert(engineStreamingGetModelLoadState(411) == false)
+        streamOk, streamErr = pcall(engineStreamingRequestModel, 411)
+        assert(streamOk == false and streamErr:find("valid model ID", 1, true))
+        streamOk, streamErr = pcall(engineStreamingRequestModel, 411, "yes")
+        assert(streamOk == false and streamErr:find("boolean", 1, true))
+        streamOk, streamErr = pcall(engineStreamingReleaseModel, 30000)
+        assert(streamOk == false and streamErr:find("valid model ID", 1, true))
+        assert(engineGetPoolDefaultCapacity("building") == 32000)
+        assert(engineGetPoolDefaultCapacity("object") == 1200)
+        assert(engineGetPoolDefaultCapacity("env-map-atomic") == 4000)
+        assert(engineGetPoolCapacity("building") == false)
+        assert(engineGetPoolUsedCapacity("ped") == false)
+        assert(engineSetPoolCapacity("building", 100) == false)
+        assert(engineSetPoolCapacity("ped", 200) == false)
+        assert(engineSetAsynchronousLoading(true) == true)
+        assert(engineSetAsynchronousLoading(true, nil) == true)
+        assert(engineSetAsynchronousLoading() == false)
+        assert(engineSetAsynchronousLoading("yes") == false)
+        assert(enginePreloadWorldArea(0, 0, 0) == nil)
+        assert(enginePreloadWorldArea(0, 0, 0, "models") == nil)
+        assert(enginePreloadWorldAreaInDirection(0, 0, 0, 90) == false)
+        assert(engineRestream() == nil)
+        assert(engineRestream("vehicles") == nil)
+        assert(engineRestreamModel(411) == false)
+        assert(engineRestreamWorld() == false)
+        streamOk, streamErr = pcall(engineGetPoolDefaultCapacity, "nope")
+        assert(streamOk == false and streamErr:find("ePools", 1, true))
+        streamOk, streamErr = pcall(engineSetPoolCapacity, "building", -1)
+        assert(streamOk == false and streamErr:find("out-of-range", 1, true))
+        streamOk, streamErr = pcall(enginePreloadWorldArea)
+        assert(streamOk == false and streamErr:find("vector3", 1, true))
+        streamOk, streamErr = pcall(enginePreloadWorldArea, 0, 0)
+        assert(streamOk == false and streamErr:find("Expected number", 1, true))
+        streamOk, streamErr = pcall(enginePreloadWorldArea, 0, 0, 0, "nope")
+        assert(streamOk == false and streamErr:find("preload-area-option", 1, true))
+        streamOk, streamErr = pcall(engineRestream, "nope")
+        assert(streamOk == false and streamErr:find("restream-option", 1, true))
+        streamOk, streamErr = pcall(engineRestreamModel, 70000)
+        assert(streamOk == false and streamErr:find("valid model ID", 1, true))
+        assert(math.abs(getPostFXValue("gamma") - 0.95) < 0.0001)
+        assert(math.abs(getPostFXValue("brightness") - 1.03) < 0.0001)
+        assert(getPostFXValue("contrast") == 1)
+        assert(isPostFXEnabled("gamma") == false)
+        assert(isPostFXEnabled("contrast") == true)
+        streamOk, streamErr = pcall(getPostFXValue, "nope")
+        assert(streamOk == false and streamErr:find("postfx-type", 1, true))
+        local objects, lowLod, total = engineGetObjectStreamingLimits()
+        assert(objects == 400 and lowLod == 400 and total == 1000)
+        assert(engineSetObjectStreamingLimits(300, 300) == true)
+        objects, lowLod, total = engineGetObjectStreamingLimits()
+        assert(objects == 300 and lowLod == 300 and total == 1000)
+        streamOk, streamErr = pcall(engineSetObjectStreamingLimits, 1000, 1)
+        assert(streamOk == false and streamErr:find("between 0 and 1000", 1, true))
+        local lights = engineGetDistantLightStats()
+        assert(lights.enabled == false and lights.coronaCapacity == 25000 and lights.drawDistance == 5000 and lights.automaticDrawDistance == false)
+        assert(engineSetDistantLightsDrawDistance(299) == false)
+        assert(engineSetDistantLightsEnabled(true) == true)
+        assert(engineSetDistantLightsAutomaticDrawDistance(true) == true)
+        assert(engineRebuildDistantLights() == true)
+        lights = engineGetDistantLightStats()
+        assert(lights.enabled == true and lights.automaticDrawDistance == true and lights.drawDistance == 5000)
+        local renderer = engineGetRendererStats()
+        assert(renderer.visibleEntityCapacity == 8192 and renderer.visibleLodCapacity == 8192 and renderer.streamingRwObjectCapacity == 30000)
+        assert(renderer.visibleEntities == 0)
+        assert(engineResetRendererStats() == true)
+        assert(engineGetRadarMapStats().hooksInstalled == false)
+        assert(engineResetRadarMapTile(40, 0) == false)
+        assert(engineResetRadarMapTile(0, 0) == false)
+        streamOk, streamErr = pcall(engineSetDistantLightsEnabled)
+        assert(streamOk == false and streamErr:find("bool", 1, true))
+        streamOk, streamErr = pcall(engineSetRadarMapTile, 0, 0)
+        assert(streamOk == false and streamErr:find("txd", 1, true))
+        streamOk, streamErr = pcall(engineResetRadarMapTile)
+        assert(streamOk == false and streamErr:find("Expected number", 1, true))
+        assert(type(engineGetCullZones()) == "table")
+        assert(engineCreateCullZone("attribute", 0, 0, 0, 0, 10, 10, 1) == false)
+        assert(engineSetCullZone(1, "attribute", 0, 0, 0, 10, 10, 10, 1) == false)
+        assert(engineRemoveCullZone(1) == false)
+        assert(engineRestoreCullZone(1) == false)
+        streamOk, streamErr = pcall(engineCreateCullZone, "nope")
+        assert(streamOk == false and streamErr:find("Expected number", 1, true))
+        streamOk, streamErr = pcall(engineCreateCullZone, "nope", 0, 0, 0, 10, 10, 10, 1)
+        assert(streamOk == false and streamErr:find("0..65535", 1, true))
+        streamOk, streamErr = pcall(engineCreateCullZone, "attribute", 0, 0, 0, 10, 10, 10, 70000)
+        assert(streamOk == false and streamErr:find("0..65535", 1, true))
+        streamOk, streamErr = pcall(engineGetCullZones, "nope")
+        assert(streamOk == false and streamErr:find("attribute", 1, true))
+        local loaded, detail = engineLoadVehicleAudioConfig("")
+        assert(loaded == false and detail:find("non-empty", 1, true))
+        loaded, detail = engineLoadVehicleAudioConfig(1)
+        assert(loaded == false and detail:find("non-empty", 1, true))
+        loaded, detail = engineLoadVehicleAudioConfig("vehicles.dat")
+        assert(loaded == false and detail:find("Unable to load", 1, true) and detail:find("vehicles.dat", 1, true))
+        loaded, detail = engineLoadVehicleAudioConfig()
+        assert(loaded == false and detail:find("string", 1, true))
+        assert(engineReloadVehicleAudioConfig() == false)
+        assert(engineUnloadVehicleAudioConfig() == false)
+        assert(enginePlayVehicleAudioBackfire() == false)
+        assert(getBreakEffectCacheSize() == 0)
+        assert(clearBreakEffectCache() == true)
+        assert(getBreakEffectFragmentCount() == false)
+        assert(getBreakEffectSourceTriangleCount() == false)
+        assert(getBreakEffectSleepingFragmentCount() == false)
+        assert(getBreakEffectCacheHit() == false)
+        assert(isBreakEffectPaused() == false)
+        assert(setBreakEffectPaused(nil, true) == false)
+        assert(createObjectBreakEffect() == false)
+        assert(setObjectBreakProfile() == false)
+        assert(getObjectBreakProfile() == false)
+        assert(getObjectBreakHealth() == false)
+        assert(setObjectBreakHealth() == false)
+        assert(resetObjectBreakHealth() == false)
+        assert(clearObjectBreakProfile() == false)
+        assert(engineLoadCOL("missing.col") == false)
+        assert(engineLoadCOL(1) == false)
+        assert(engineLoadDFF() == false)
+        assert(engineLoadTXD("missing.txd", true) == false)
+        assert(engineLoadIFP("missing.ifp") == false)
+        assert(engineLoadIFP("missing.ifp", "block") == false)
+        assert(engineLoadIMG("missing.img") == nil)
+        assert(engineRestoreCOL("Infernus") == false)
+        assert(engineRestoreCOL(411) == false)
+        assert(engineRestoreModel("Infernus") == false)
+        assert(engineRestoreModel(30000) == false)
+        assert(engineRequestModel("object") == false)
+        assert(engineRequestModel("nope") == false)
+        assert(engineFreeModel(411) == false)
+        assert(engineFreeModel(19999) == false)
+        assert(engineRestoreDFFImage(411) == false)
+        assert(engineRestoreTXDImage(0) == false)
+        assert(engineRequestTXD("city") == 0)
+        assert(engineFreeTXD(1) == false)
+        assert(engineReplaceEncryptedModel("car.neonasset", "Infernus") == false)
+        assert(engineGetModelTextureNames("Infernus") == false)
+        assert(engineGetModelTextureNames() == false)
+        assert(type(engineGetVisibleTextureNames()) == "table")
+        assert(engineGetVisibleTextureNames("*", "nope") == false)
+        local assetOk, assetErr = pcall(engineLoadIMG)
+        assert(assetOk == false and assetErr:find("string", 1, true))
+        assetOk, assetErr = pcall(engineAddImage)
+        assert(assetOk == false and assetErr:find("img", 1, true))
+        assetOk, assetErr = pcall(engineImageLinkDFF, nil, "car.dff", 411)
+        assert(assetOk == false and assetErr:find("img", 1, true))
+        assetOk, assetErr = pcall(engineRestoreDFFImage, 20000)
+        assert(assetOk == false and assetErr:find("0-19999", 1, true))
+        assetOk, assetErr = pcall(engineRestoreDFFImage, "Infernus")
+        assert(assetOk == false and assetErr:find("number", 1, true))
+        assetOk, assetErr = pcall(engineRestoreTXDImage, 5000)
+        assert(assetOk == false and assetErr:find("0-4999", 1, true))
+        assetOk, assetErr = pcall(engineFreeTXD, -1)
+        assert(assetOk == false and assetErr:find("destination type range", 1, true))
+        assetOk, assetErr = pcall(engineRequestTXD, "abcdefghijklmnopqrstuvwxyz")
+        assert(assetOk == false and assetErr:find("24 characters", 1, true))
+        assetOk, assetErr = pcall(engineAddClothingTXD)
+        assert(assetOk == false and assetErr:find("txd", 1, true))
+        assetOk, assetErr = pcall(engineAddClothingModel)
+        assert(assetOk == false and assetErr:find("dff", 1, true))
+        assetOk, assetErr = pcall(engineGetModelTextures)
+        assert(assetOk == false and assetErr:find("string", 1, true))
+        assetOk, assetErr = pcall(engineGetModelTextures, "Infernus")
+        assert(assetOk == false and assetErr:find("Invalid model ID", 1, true))
+        assert(engineFreeModel(20000) == false)
+        assert(engineReplaceModel() == false)
+        assert(engineReplaceCOL() == false)
+        assert(engineImportTXD() == false)
+        assert(engineReplaceAnimation() == false)
+        assert(engineRestoreAnimation() == false)
+        assert(engineApplyShaderToWorldTexture() == false)
+        assert(engineRemoveShaderFromWorldTexture() == false)
+        local map = engineParseSAMPMap("CreateObject(1337, 1, 2, 3, 0, 0, 90)")
+        assert(map.success == true and map.objectCount == 1 and map.errorCount == 0)
+        assert(map.objects[1].creationType == "object" and map.objects[1].model == 1337)
+        assert(map.objects[1].x == 1 and map.objects[1].y == 2 and map.objects[1].z == 3 and map.objects[1].rz == 90)
+        assert(map.removedBuildingCount == 0)
+        local broken = engineParseSAMPMap("CreateObject(1)")
+        assert(broken.success == false and broken.errorCount >= 1 and broken.diagnostics[1].severity == "error")
+        assetOk, assetErr = pcall(engineParseSAMPMap)
+        assert(assetOk == false and assetErr:find("string", 1, true))
+    )LUA");
+}
+
 int main(int argc, char** argv) {
     CheckPacketLayouts();
     CheckPedEntityBody();
@@ -2933,6 +3507,7 @@ int main(int argc, char** argv) {
     WorldRPG::ServerWorld::SetLocalPlayer(777);
     WorldRPG::ServerWorld::NotePlayerNick(777, "Sam");
     CheckCompatibilityAliases(vm);
+    CheckEngineModelNames(vm);
 
     CheckUiViewport(vm);
     CheckJson(vm, argc > 1 ? argv[1] : nullptr);

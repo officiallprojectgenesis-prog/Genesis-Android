@@ -189,6 +189,48 @@ def guess_conversion_notes(name, group, status, detail):
         return "Desktop station-name lookup (IDs 0..12); does not tune the GTA radio. Host-tested."
     if status == "implemented" and name in {"setSoundPan", "getSoundPan"}:
         return "2D sound pan is applied to MediaPlayer left/right gains. Player voice overload is not ported. Android compiles; not device-verified."
+    if status == "implemented" and ("BreakEffect" in name or name.endswith("BreakProfile") or name.endswith("BreakHealth")):
+        return "The break-effect cache starts empty. Calls that need an object or break-effect element return false, matching a missing element. Fracturing a streamed mesh is not implemented. Not device-verified."
+    if status == "implemented" and name in {"engineLoadVehicleAudioConfig", "engineReloadVehicleAudioConfig", "engineUnloadVehicleAudioConfig", "enginePlayVehicleAudioBackfire"}:
+        return "An empty vehicle-audio path returns false. A non-empty path fails closed because CVehicleSoundManager is not hooked. A successful load would also return ready. Backfire needs a vehicle element. Not device-verified."
+    if status == "implemented" and name in {"engineGetCullZones", "engineCreateCullZone", "engineSetCullZone", "engineSetCullZoneEnabled", "engineRemoveCullZone", "engineRestoreCullZone"}:
+        return "Script cull zones follow CCullZonesSA. A missing resource returns false. Non-positive size and mirror normals outside -1..1 are rejected. The GTA CULL IPL catalog is not loaded. Not device-verified."
+    if status == "implemented" and name in {"engineGetRendererStats", "engineResetRendererStats", "engineSetDistantLightsEnabled", "engineSetDistantLightsDrawDistance", "engineSetDistantLightsAutomaticDrawDistance", "engineRebuildDistantLights", "engineGetDistantLightStats", "engineSetRadarMapTile", "engineResetRadarMapTile", "engineGetRadarMapStats"}:
+        return "Distant-light distance is kept from 300 through 5000 and starts at 2000. Renderer capacities are 8192, 8192, and 30000. Radar tiles outside 0..39 return false, and the tile registry is absent. Not device-verified."
+    if status == "implemented" and name in {"getPostFXValue", "getPostFXMode", "isPostFXEnabled", "engineGetObjectStreamingLimits", "engineSetObjectStreamingLimits"}:
+        return "Postfx reads the borderless cvar defaults. Contrast enabled follows the desktop read of the brightness flag. Object streaming starts at 500 and 500 with a combined cap of 1000. Not device-verified."
+    if status == "implemented" and name in {"engineGetPoolCapacity", "engineGetPoolDefaultCapacity", "engineGetPoolUsedCapacity", "engineSetPoolCapacity", "engineSetAsynchronousLoading", "enginePreloadWorldArea", "enginePreloadWorldAreaInDirection", "engineRestream", "engineRestreamModel", "engineRestreamWorld"}:
+        return "Default pool sizes are the modded CPoolsSA table, including 32000 buildings and 1200 objects. A size below that default returns false. Live pool counts, scene preload, and entity restream fail closed. Asynchronous loading stores the enabled and forced flags. Not device-verified."
+    if status == "implemented" and name.startswith("engineStreaming"):
+        return "Memory size follows CCore: zero is rejected and the unset size is 50 MB. Cache limits clear on nil. Load state is the byte at ms_aInfoForModel+id*20+0x10, for ids below 26316. Buffer resize and the resource model streamer fail closed on the host. Not device-verified."
+    if status == "implemented" and name in {"engineGetSurfaceProperties", "engineSetSurfaceProperties", "engineResetSurfaceProperties"}:
+        return "Surface records are 12 bytes at g_surfaceInfos+0x90. GetBulletFx reads the flag word at record+2. Bad arguments return nil. stepdust has no case and returns false. Surface 179 is outside the 179-record table and returns false. The host has no surface table. Not device-verified."
+    if status == "implemented" and name in {"engineGetObjectGroupPhysicalProperty", "engineSetObjectGroupPhysicalProperty", "engineRestoreObjectGroupPhysicalProperties", "engineGetModelPhysicalPropertiesGroup", "engineSetModelPhysicalPropertiesGroup", "engineRestoreModelPhysicalPropertiesGroup"}:
+        return "Object groups are 0..159 records of 88 bytes. ObjectDamage reads smash at +0x38 and break velocity at +0x3c; Explode reads the fx blueprint at +0x30. The model group is the signed halfword at CBaseModelInfo+0x2a; 0xFFFF is -1. fx_system cannot be read, and a blueprint name fails closed. The host has no object table, so a valid id fails closed. Not device-verified."
+    if status == "implemented" and name in {"engineGetModelVisibleTime", "engineSetModelVisibleTime"}:
+        return "Hours are a signed byte and must be 0..24. A non-time model reports 0, 24 and rejects set. Bytes come from the GetTimeInfo virtual (vptr+0x30): time models at +0x48, lod-time models at +0x4c. The first set keeps the previous hours. The host has no model table. Not device-verified."
+    if status == "implemented" and name in {"engineSetModelFlags", "engineSetModelFlag", "engineResetModelFlags", "engineSetModelTXDID", "engineResetModelTXDID", "engineGetTXDIDFromName", "engineGetModelRuntimeID", "engineGetModelServerID", "engineGetModelParent", "engineGetModelType"}:
+        return "Flag and TXD writes follow CModelInfoSA on the verified arm64 field layout. Raw flags keep the collision-loaded bit. A single IDE flag does not record an original. TXD changes transfer CTxdStore refs, plus one when a RenderWare object exists. TXD names must be 1..24 characters. Runtime, server, parent, and type ids return false until a server model is registered. The host has no model table. Not device-verified."
+    if status == "implemented" and name in {"engineSetModelLODDistance", "engineResetModelLODDistance"}:
+        return "Writes the verified +0x38 LOD float. Distances of 0 or below fail. Without extendedLod, values above 325 are stored as 325 and the first previous distance is kept for reset. The set error uses range [0-19999]; reset raises on a bad argument and returns false when that model was not changed. No Project2DFX lease or extended-LOD preference is active. The host has no model table. Not device-verified."
+    if status == "implemented" and name in {"engineGetModelLODDistance", "engineGetModelFlags", "engineGetModelFlag", "engineGetModelTXDID"}:
+        return "Stock model lookup, then libGTASA 2.10 arm64 CBaseModelInfo fields verified from Init and SetTexDictionary (+0x38 LOD, +0x2c flags, +0x24 TXD). is_damagable calls vptr+0x18 with the model. A number passed to engineGetModelLODDistance is an empty string. Flags and the TXD id raise ArgumentParser errors. The host has no model table, so a resolved stock id fails closed. Not device-verified."
+    if status == "implemented" and name in {
+        "engineLoadCOL", "engineLoadDFF", "engineLoadTXD", "engineLoadIFP", "engineLoadIMG",
+        "engineAddImage", "engineRemoveImage", "engineImageGetFile", "engineImageGetFiles", "engineImageGetFilesCount",
+        "engineImageLinkDFF", "engineImageLinkTXD", "engineRestoreDFFImage", "engineRestoreTXDImage",
+        "engineReplaceCOL", "engineRestoreCOL", "engineImportTXD", "engineReplaceModel", "engineRestoreModel",
+        "engineRequestModel", "engineFreeModel", "engineRequestTXD", "engineFreeTXD",
+        "engineAddClothingModel", "engineAddClothingTXD", "engineReplaceEncryptedModel",
+        "engineReplaceAnimation", "engineRestoreAnimation",
+        "engineApplyShaderToWorldTexture", "engineRemoveShaderFromWorldTexture",
+        "engineGetModelTextureNames", "engineGetVisibleTextureNames", "engineGetModelTextures",
+    }:
+        return "Load and replace follow the desktop argument checks. Raw COL, DFF, TXD, and IFP headers are recognized. No resource file, archive, clothing slot, shader, or texture is decoded, so a parsed call fails closed. Image and clothing calls require img, txd, or dff userdata. engineRequestModel does not allocate an id. Not device-verified."
+    if status == "implemented" and name == "engineParseSAMPMap":
+        return "Parses the literal Texture Studio map text from CSampMapParser.cpp and returns the desktop result table. It does not create elements or remap models. A non-string argument raises. Not device-verified."
+    if status == "implemented" and name in {"engineGetModelNameFromID", "engineGetModelIDFromName"}:
+        return "Stock IDE names, then vehicle display names for models 400..610 (CModelNames::InitializeMaps). Model 611 keeps no vehicle name. Lookup is case-insensitive. Server-model definitions are checked first and stay empty until engineRequestModel allocates them. A number passed to engineGetModelIDFromName is an empty string, matching lua_objlen. Host-tested; not device-verified."
     if status == "implemented" and name == "getValidPedModels":
         return "Stock models only (0..312 excluding 74, 149, 208); custom allocation is not ported. Host-tested; not device-verified. (GetValidPedModels)"
     if status == "implemented" and name == "getBoundKeys":

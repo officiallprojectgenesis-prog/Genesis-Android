@@ -80,7 +80,7 @@ foi contabilizada como convertida neste lote.
 | 2 | `getElementsWithinRange`, `createColSphere`, `createColCuboid`, `isElementWithinColShape`, `getElementsWithinColShape` | Preservar geometria de colshape hoje descartada em ENTITY_ADD; manter colisores com posição atual, interior/dimensão, remoção e eventos hit/leave. No inventário atual só `getElementsWithinRange` (2 recursos) e `createColSphere` (1) tiveram chamadas globais detectadas. |
 | 3 | `acquireElementStreamingLease`, `releaseElementStreamingLease` | Aparecem em 5 recursos WorldRPG cada, com 27 e 21 chamadas. Portar referência/streaming real e liberação no stop; um token local sem impedir stream-out não resolve a dependência. |
 | 4 | `call`, depois `downloadFile` | `call` apareceu em 6 recursos; exige exports e isolamento dos ambientes. Downloads exigem conclusão real, evento e cancelamento por geração do recurso. |
-| 5 | `engineLoadTXD`, `engineImportTXD`, `engineLoadDFF`, `engineReplaceModel` | Alto impacto para mapas e skins; precisam de streaming, restauração e validação no aparelho. Não tiveram chamadas globais ausentes detectadas neste inventário; aliases/OOP podem ocultar uso. |
+| 5 | `engineLoadTXD`, `engineImportTXD`, `engineLoadDFF`, `engineReplaceModel` | As 125 funções da categoria já têm handler. A carga e a substituição seguem os argumentos do desktop e falham fechadas: o decodificador RenderWare, os arquivos do recurso e a alocação de `engineRequestModel` ainda não estão ligados. Falta validar no aparelho. |
 
 ## Reproduzir a busca
 
