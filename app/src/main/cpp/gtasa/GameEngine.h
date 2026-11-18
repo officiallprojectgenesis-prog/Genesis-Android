@@ -172,6 +172,8 @@ bool ReleaseScriptPed(uint32_t id);
 bool ScriptPedAlive(uint32_t id);
 // addPedClothes / removePedClothes. type is the clothing slot. remove clears it.
 void NoteScriptClothes(uint32_t id, const char* texture, const char* model, int type, bool remove);
+// The texture and model NoteScriptClothes stored for this slot. False when the slot is empty.
+bool CopyScriptClothes(uint32_t id, int type, char* texture, int textureBytes, char* model, int modelBytes);
 // setElementRotation for a script ped: Z degrees, default order.
 void NoteScriptRotation(uint32_t id, float rotationDegrees);
 void NoteScriptFrozen(uint32_t id, bool frozen);

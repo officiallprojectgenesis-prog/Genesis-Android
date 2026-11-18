@@ -3828,6 +3828,20 @@ void NoteScriptClothes(uint32_t id, const char* texture, const char* model, int 
     }
 }
 
+bool CopyScriptClothes(uint32_t id, int type, char* texture, int textureBytes, char* model, int modelBytes) {
+    if (!texture || !model || textureBytes <= 0 || modelBytes <= 0 || type < 0 || type >= kClothesSlots) return false;
+    texture[0] = 0;
+    model[0] = 0;
+    std::lock_guard<std::mutex> lock(g_scriptMu);
+    for (const auto& slot : g_scriptPeds) {
+        if (!slot.used || slot.drop || slot.id != id || !slot.slotOn[type]) continue;
+        std::snprintf(texture, static_cast<size_t>(textureBytes), "%s", slot.texture[type]);
+        std::snprintf(model, static_cast<size_t>(modelBytes), "%s", slot.cloth[type]);
+        return texture[0] != 0 && model[0] != 0;
+    }
+    return false;
+}
+
 void NoteScriptRotation(uint32_t id, float rotationDegrees) {
     float rad = rotationDegrees * 0.01745329251f;
     constexpr float kPi = 3.14159265f;

@@ -287,6 +287,64 @@ def guess_conversion_notes(name, group, status, detail):
         "releaseObjectGangTag",
     }:
         return "Follows CLuaObjectDefs.cpp and the object writes in CStaticFunctionDefinitions.cpp. createObject needs a resource and a stock object model; peds, vehicles, clothes, and the cutscene range are rejected. The element stores scale, mass, properties, frozen, respawn, movement, and materials. CObject is not created, so breakObject and setObjectGangTagAlpha return false and a texture replace cannot resolve. The host has no model table. Not device-verified."
+    if status == "implemented" and name in {
+        "isPedHeadless", "setPedHeadless", "isPedFrozen", "setPedFrozen",
+        "isPedFootBloodEnabled", "setPedFootBloodEnabled", "isPedBleeding", "setPedBleeding",
+        "getPedOxygenLevel", "setPedOxygenLevel", "getPedArmor", "getPlayerArmor", "setPedArmor",
+        "getPedFightingStyle", "setPedFightingStyle", "getPedWalkingStyle", "setPedWalkingStyle",
+        "isPedUsingNativeWalkingStyle", "setPedUseNativeWalkingStyle", "isPedWearingJetpack",
+        "getPedClothes", "isPedDoingGangDriveby", "setPedDoingGangDriveby",
+        "getPedCameraRotation", "setPedCameraRotation", "isPedMissionActor", "setPedMissionActor",
+        "isPedStoryProtected", "setPedStoryProtected", "getPedSuffersCriticalHits", "setPedSuffersCriticalHits",
+        "canPedBeDraggedOut", "setPedCanBeDraggedOut", "isPedOnlyDamagedByPlayer", "setPedOnlyDamagedByPlayer",
+        "getPedStayInSamePlace", "setPedStayInSamePlace", "isPedNeverTargeted", "setPedNeverTargeted",
+        "getPedPhysicalProofs", "setPedPhysicalProofs", "getPedWeaponAccuracy", "setPedWeaponAccuracy",
+        "getPedWeaponShootingRate", "setPedWeaponShootingRate",
+    }:
+        return "Follows CLuaPedDefs.cpp and the CClientPed fields those calls store. Headless, frozen, bleeding, armor, fighting style, walking style, gang driveby, camera rotation, mission policy and physical proofs are kept on the client element. ENTITY_ADD headless, frozen, armor and walking style are the unset values. Fighting style starts at 15 and only a client-created ped accepts styles 4..16. Script clothes are read back for slots 0-3. Oxygen and foot blood return the unstreamed result. Weapon accuracy and shooting rate return -1 until the ped is streamed, then the stored byte. CPed body bits are not written. Host-tested. Not device-verified."
+    if status == "implemented" and name in {
+        "setPedAnimation", "getPedAnimation", "getPedAnimationProgress", "getPedAnimationSpeed", "getPedAnimationLength",
+        "setPedAnimationProgress", "setPedAnimationSpeed", "isPedReloadingWeapon",
+        "forcePlayerMap", "isPlayerMapForced", "isPlayerMapVisible", "getPlayerMapBoundingBox", "getPlayerMapOpacity",
+        "getPlayerScriptDebugLevel", "isPlayerCrosshairVisible", "getPlayerUserName",
+    }:
+        return "setPedAnimation follows CLuaPedDefs.cpp 2602-2664. An empty block or name clears the animation. A named block returns false because the animation block is not loaded. Progress, speed and length return -1 because task 401 is not running. isPedReloadingWeapon is false because the weapon state is not read. forcePlayerMap stores the flag. The map image is absent, so the map stays hidden and the bounding box is false. Opacity is the desktop default 155. Script debug level starts at 0. The crosshair is false because the camera mode and weapon are not read. getPlayerUserName returns false, as the desktop function does. Host-tested. Not device-verified."
+    if status == "implemented" and name in {"getPlayerHudComponentProperty", "setPlayerHudComponentProperty", "resetPlayerHudComponentProperty"}:
+        return "Follows CLuaPlayerDefs.cpp 857-1272. Component and property names, bar and text limits, and the read-only text size match the desktop. A set value is returned by the getter. Unset placement is 0,0 because CHud is not read. Radar layout returns false. Host-tested. Not device-verified."
+    if status == "implemented" and name in {
+        "acquireMissionText", "showMissionText", "showMissionHelp", "showMissionBigText",
+        "clearMissionTexts", "clearMissionHelp", "releaseMissionText",
+        "getElementBonePosition", "getElementBoneRotation", "getElementBoneQuaternion", "getElementBoneMatrix",
+        "setElementBonePosition", "setElementBoneRotation", "setElementBoneQuaternion", "setElementBoneMatrix",
+        "updateElementRpHAnim", "getPedBonePosition", "setPedStat", "killPed", "setPedAimTarget",
+        "detonateSatchels", "removePedFromVehicle",
+    }:
+        return "Mission text follows CLuaPlayerDefs.cpp 159-258. A GXT name is 1 to 7 letters, digits, or underscores. The block is not loaded, so a new lease fails. Bone calls follow CLuaPedDefs.cpp 1349-1520 and return false without a streamed CEntity. killPed marks a client-created ped dead. setPedStat stores ids 0..342 and rejects fat and muscle unless the model is CJ. detonateSatchels is false because no satchels are counted. removePedFromVehicle is false when the ped is not in a vehicle. Host-tested. Not device-verified."
+    if status == "implemented" and name in {
+        "getPedVoice", "setPedVoice", "resetPedVoice", "playPedVoiceLine",
+        "getPedAnalogControlState", "setPedAnalogControlState", "givePedWeapon", "warpPedIntoVehicle",
+        "setPedLookAt", "killPedTask", "getPedCarriedObject", "setPedCarryObject", "pickUpPedObject",
+        "putDownPedObject", "cancelPedCarryObject", "getPedNoiseLevel", "setPedDriveTo", "setPedDriveMission",
+        "setPedDriveBy", "setPedTaskSequence", "acquirePedNativeEventProfile", "releasePedNativeEventProfile",
+        "isPedNativeEventProfileActive", "acquirePedNativeGroup", "releasePedNativeGroup", "isPedNativeGroupActive",
+        "getPedNativeGroupDiagnostic", "validatePedNativeCouple", "acquirePedNativeCouple", "releasePedNativeCouple",
+        "isPedNativeCoupleActive", "getPedNativeCoupleDiagnostic", "acquirePedNativeCouplePresentation",
+        "updatePedNativeCouplePresentation", "releasePedNativeCouplePresentation", "isPedNativeCouplePresentationActive",
+        "acquirePedNativePointArm", "updatePedNativePointArm", "releasePedNativePointArm", "isPedNativePointArmActive",
+        "addPedNativeGunAimedAtEvent", "addPedNativeDamageResponseEvent", "getPedNativeVehicleResponse",
+        "restorePedNativeVehicleResponse", "addPedNativeDamageEvent", "addPedNativeBikeJackTask",
+    }:
+        return "Voice, analog, weapons, warp, look-at, task kill, carry, noise, drive, sequence, and native leases follow CLuaPedDefs.cpp 601-682, 1582-1766, 2022-2054, 2319-2353, 3286-3676, 3743-4510, and 4586-4712. A player analog read is 0 because the controller is not sampled. A script ped stores the 14 analog controls and clears the opposite axis. givePedWeapon updates the client weapon cache and does not call CPed::GiveWeapon. warp stays false because WarpIntoVehicle is not called. setPedLookAt returns true and does not call LookAt. killPedTask rejects the default slot and otherwise returns false. Carry state is released. Drive and sequence calls return false because the ped is not driving and CTask is not created. Native profile, group, couple, point-arm, and event calls return false because no resource lease is stored. Host-tested. Not device-verified."
+    if status == "implemented" and name in {
+        "isPedNativeTaskReady", "setPedGoTo", "setPedNavigateTo", "setPedChatWith", "setPedStandStill", "setPedHandsUp",
+        "setPedTurnToFace", "setPedGoToOffset", "setPedKillOnFoot", "setPedAchieveHeading", "setPedAimAt", "setPedShootAt",
+        "setPedJump", "setPedScriptedSpeechMuted", "setPedFacialTalk", "stopPedFacialTalk",
+        "isPedNativeAmbientCopWanderTask", "getPedTaskSequenceProgress", "setPedDriveWander", "setPedEnterVehicle",
+        "setPedExitVehicle",
+    }:
+        return "Follows CLuaPedDefs.cpp 2997-3283 and 4624-4641. An unstreamed, dead, or unowned ped returns false before a task is built. A call that would create a task returns false because CTask is not created. Enter and exit return false because EnterVehicle and ExitVehicle are not called. Sequence progress is -1. Host-tested. Not device-verified."
+    if status == "implemented" and name in {"getPlayerMoney", "setPlayerMoney", "givePlayerMoney", "takePlayerMoney", "getPlayerWantedLevel"}:
+        return "Money follows CLuaPlayerDefs.cpp 501-511 and 582-648. set, give and take keep the balance getPlayerMoney returns. The HUD is not updated. getPlayerWantedLevel returns 0 because CWanted::GetWantedLevel is not read. Host-tested. Not device-verified."
     if status == "implemented":
         return f"Operational on Android. ({detail})"
     if status == "stub":

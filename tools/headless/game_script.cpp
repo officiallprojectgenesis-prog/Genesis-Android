@@ -18,6 +18,8 @@
 #include "game_script.h"
 
 #include "gtasa/GameEngine.h"
+#include "gtasa/PlayerClothesTable.h"
+#include "shared/PedQueries.h"
 #include "shared/ServerWorld.h"
 #include "stubs/test_ped_queries.h"
 
@@ -28,6 +30,7 @@
 #include <cmath>
 #include <cstdio>
 #include <cstring>
+#include <strings.h>
 #include <deque>
 #include <map>
 #include <memory>
@@ -275,6 +278,19 @@ void BodyPose(float& x, float& y, float& z, float& heading, float& vx, float& vy
     heading = g_foot.heading;
 }
 
+// createPed bookkeeping for the host. The phone creates the body in GameEngine.cpp.
+// Four slots and ids from 0x300001 match that file. No GTA ped is constructed here.
+struct HostScriptPed {
+    uint32_t id = 0;
+    int model = 0;
+    bool used = false;
+    char texture[4][40]{};
+    char cloth[4][40]{};
+    bool on[4]{};
+};
+HostScriptPed g_hostPeds[4];
+uint32_t g_hostNextPed = 0x300001u;
+
 } // namespace
 
 // ---------------------------------------------------------------------------
@@ -376,11 +392,68 @@ void CopyBody(float& x, float& y, float& z, float& heading,
 float CopyLocalArmor() { return 0.f; }
 // No libGTASA in this build, so getGroundPosition cannot query the world.
 bool FindGroundZFor3DPosition(float, float, float, float&) { return false; }
-uint32_t NoteScriptPed(int, float, float, float, float) { return 0; }
+uint32_t NoteScriptPed(int model, float x, float y, float z, float) {
+    if (model < 0 || model > 312 || !std::isfinite(x) || !std::isfinite(y) || !std::isfinite(z)) return 0;
+    for (auto& slot : g_hostPeds) {
+        if (slot.used) continue;
+        slot = {};
+        slot.used = true;
+        slot.model = model;
+        slot.id = g_hostNextPed++;
+        if (g_hostNextPed < 0x300001u) g_hostNextPed = 0x300001u;
+        PedQueries::Create(slot.id, false);
+        return slot.id;
+    }
+    return 0;
+}
 bool NoteScriptPedModel(uint32_t, int) { return false; }
-bool ReleaseScriptPed(uint32_t) { return false; }
-bool ScriptPedAlive(uint32_t) { return false; }
-void NoteScriptClothes(uint32_t, const char*, const char*, int, bool) {}
+bool ReleaseScriptPed(uint32_t id) {
+    for (auto& slot : g_hostPeds) {
+        if (!slot.used || slot.id != id) continue;
+        slot.used = false;
+        PedQueries::Forget(id);
+        return true;
+    }
+    return false;
+}
+bool ScriptPedAlive(uint32_t id) {
+    for (const auto& slot : g_hostPeds)
+        if (slot.used && slot.id == id) return true;
+    return false;
+}
+void NoteScriptClothes(uint32_t id, const char* texture, const char* model, int type, bool remove) {
+    if (type < 0 || type >= 4) return;
+    if (!remove) {
+        if (type >= PlayerClothesTable::kSlots) return;
+        const auto& choices = PlayerClothesTable::kTable[type];
+        bool listed = false;
+        for (int i = 0; texture && model && i < choices.count; ++i)
+            if (strcasecmp(texture, choices.items[i].texture) == 0 && strcasecmp(model, choices.items[i].model) == 0)
+                listed = true;
+        if (!listed) return;
+    }
+    for (auto& slot : g_hostPeds) {
+        if (!slot.used || slot.id != id) continue;
+        slot.on[type] = !remove && texture && model && texture[0] && model[0];
+        if (slot.on[type]) {
+            std::snprintf(slot.texture[type], sizeof slot.texture[type], "%s", texture);
+            std::snprintf(slot.cloth[type], sizeof slot.cloth[type], "%s", model);
+        }
+        return;
+    }
+}
+bool CopyScriptClothes(uint32_t id, int type, char* texture, int textureBytes, char* model, int modelBytes) {
+    if (!texture || !model || textureBytes <= 0 || modelBytes <= 0 || type < 0 || type >= 4) return false;
+    texture[0] = 0;
+    model[0] = 0;
+    for (const auto& slot : g_hostPeds) {
+        if (!slot.used || slot.id != id || !slot.on[type]) continue;
+        std::snprintf(texture, static_cast<size_t>(textureBytes), "%s", slot.texture[type]);
+        std::snprintf(model, static_cast<size_t>(modelBytes), "%s", slot.cloth[type]);
+        return texture[0] != 0 && model[0] != 0;
+    }
+    return false;
+}
 void NoteScriptRotation(uint32_t, float) {}
 void NoteScriptFrozen(uint32_t, bool) {}
 void NoteScriptCamera(float, float, float, float, float, float) {}
@@ -388,7 +461,14 @@ void ClearScriptCamera() {}
 bool NoteScriptTime(int, int) { return false; }
 bool NoteScriptWeather(int) { return false; }
 bool CopyScriptWeather(int&) { return false; }
-bool CopyScriptPedFacts(uint32_t, int&, float&, bool&) { return false; }
+bool CopyScriptPedFacts(uint32_t id, int& model, float&, bool&) {
+    for (const auto& slot : g_hostPeds) {
+        if (!slot.used || slot.id != id) continue;
+        model = slot.model;
+        return true;
+    }
+    return false;
+}
 void NoteLocalHealth(float) {}
 
 void NoteDamage(uint32_t, float, uint8_t) {}

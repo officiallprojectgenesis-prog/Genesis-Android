@@ -31,6 +31,9 @@
 #include "MtaOfflineCodec.h"
 #include "MtaReliabilityCodec.h"
 #include "RemoteVehicle.h"
+#include "PedQueries.h"
+#include "gtasa/GameEngine.h"
+#include "test_ped_queries.h"
 #include "ResourceFiles.h"
 #include "ResourceLoader.h"
 #include "ResourcePackets.h"
@@ -1036,6 +1039,240 @@ void CheckCompatibilityAliases(WorldRPG::Script::LuaVMStub& vm) {
         assert(isPedDoingTask(me, 'TASK_SIMPLE_PLAYER_ON_FOOT') == false and getPedTarget(me) == false, 'no task or target')
         assert(setPedRotation(me, 90) == false, 'local rotation is not hooked')
         assert(attachElements(me, me) == false and detachElements(me) == false, 'no physical attach')
+    )LUA");
+}
+
+// CLuaPedDefs body flags, walking style, clothes, mission policy and weapon accuracy.
+void CheckPedBodyState(WorldRPG::Script::LuaVMStub& vm) {
+    RunLua(vm, "ped-body-state", R"LUA(
+        local me = {id = 777, element = true}
+        assert(isPedHeadless(me) == false and setPedHeadless(me, true) == true and isPedHeadless(me) == true, 'headless stored')
+        assert(setPedHeadless(me, 1) == false and isPedHeadless(me) == true, 'headless wants a bool')
+        assert(isPedFrozen(me) == false and setPedFrozen(me, true) == true and isPedFrozen(me) == true, 'frozen stored')
+        assert(setPedFrozen(me, false) == true and isPedFrozen(me) == false, 'frozen clears')
+        assert(setPedFootBloodEnabled(me, true) == true and isPedFootBloodEnabled(me) == false, 'foot blood is not stored without a body')
+        assert(setPedOxygenLevel(me, 50) == true and getPedOxygenLevel(me) == false, 'oxygen is not stored without a body')
+        assert(setPedOxygenLevel(me, -1) == true and setPedOxygenLevel(me, 0/0) == false and setPedOxygenLevel(me) == false, 'oxygen accepts any finite number')
+        assert(isPedBleeding(me) == false and setPedBleeding(me, true) == true and isPedBleeding(me) == true, 'bleeding stored')
+        local ok, err = pcall(setPedBleeding, me, 1)
+        assert(not ok and err:find('boolean'), 'bleeding type: ' .. tostring(err))
+        assert(setPedArmor(me, 40) == true and getPedArmor(me) == 40 and getPlayerArmor(me) == 40, 'armor stored')
+        ok, err = pcall(setPedArmor, me, -1)
+        assert(not ok and err:find('greater than or equal to 0'), 'armor floor: ' .. tostring(err))
+        ok, err = pcall(setPedArmor, me, 101)
+        assert(not ok and err:find('less than or equal to 100'), 'armor ceiling: ' .. tostring(err))
+        assert(getPedArmor(me) == 40, 'rejected armor is unchanged')
+        assert(getPedFightingStyle(me) == 15, 'default grab kick')
+        assert(setPedFightingStyle(me, 4) == false and getPedFightingStyle(me) == 15, 'player is not a local ped')
+        assert(getPedWalkingStyle(me) == 0, 'default walk')
+        assert(setPedWalkingStyle(me, 118) == true and getPedWalkingStyle(me) == 118, 'man walk')
+        assert(setPedWalkingStyle(me, 1) == false and getPedWalkingStyle(me) == 118, 'invalid walk')
+        assert(isPedUsingNativeWalkingStyle(me) == false, 'not native')
+        assert(setPedUseNativeWalkingStyle(me, true) == true and isPedUsingNativeWalkingStyle(me) == true and getPedWalkingStyle(me) == 0, 'native resets style')
+        assert(setPedWalkingStyle(me, 121) == true and isPedUsingNativeWalkingStyle(me) == false and getPedWalkingStyle(me) == 121, 'explicit style clears native')
+        assert(isPedDoingGangDriveby(me) == false and setPedDoingGangDriveby(me, true) == true and isPedDoingGangDriveby(me) == true, 'gang flag')
+        assert(getPedCameraRotation(me) == 0, 'camera starts at 0')
+        assert(setPedCameraRotation(me, 90) == true and math.abs(getPedCameraRotation(me) - 90) < 0.02, 'camera degrees')
+        assert(isPedWearingJetpack(me) == doesPedHaveJetPack(me), 'jetpack alias')
+        assert(setPedMissionActor(me, true) == false and isPedMissionActor(me) == false, 'player is not a script ped')
+        assert(getPedSuffersCriticalHits(me) == false and canPedBeDraggedOut(me) == false, 'player policy getters')
+        assert(setPedStayInSamePlace(me, true) == false and getPedStayInSamePlace(me) == false, 'player stay')
+        assert(setPedPhysicalProofs(me, true, true, true, true, true) == false, 'player proofs')
+        local b, f, e, c, m = getPedPhysicalProofs(me)
+        assert(b == false and f == false and e == false and c == false and m == false, 'empty proofs')
+        assert(getPedWeaponAccuracy(me) == -1 and setPedWeaponAccuracy(me, 10) == false, 'unstreamed accuracy')
+        assert(getPedWeaponShootingRate(me) == -1 and setPedWeaponShootingRate(me, 10) == false, 'unstreamed rate')
+        local ped = createPed(7, 0, 0, 3)
+        assert(type(ped) == 'table', 'script ped')
+        _G.bodyPed = ped
+        assert(setPedFightingStyle(ped, 4) == true and getPedFightingStyle(ped) == 4, 'style stored')
+        assert(setPedFightingStyle(ped, 4) == false, 'same style is false')
+        ok, err = pcall(setPedFightingStyle, ped, 3)
+        assert(not ok and err:find('between 4 and 16'), 'style range: ' .. tostring(err))
+        assert(setPedMissionActor(ped, true) == true and isPedMissionActor(ped) == true, 'mission actor')
+        assert(setPedStoryProtected(ped, true) == true and isPedStoryProtected(ped) == true, 'story')
+        assert(getPedSuffersCriticalHits(ped) == true and setPedSuffersCriticalHits(ped, false) == true and getPedSuffersCriticalHits(ped) == false, 'critical hits')
+        assert(canPedBeDraggedOut(ped) == true and setPedCanBeDraggedOut(ped, false) == true and canPedBeDraggedOut(ped) == false, 'drag')
+        assert(isPedOnlyDamagedByPlayer(ped) == false and setPedOnlyDamagedByPlayer(ped, true) == true and isPedOnlyDamagedByPlayer(ped) == true, 'only player')
+        assert(getPedStayInSamePlace(ped) == false and setPedStayInSamePlace(ped, true) == true and getPedStayInSamePlace(ped) == true, 'stay')
+        assert(isPedNeverTargeted(ped) == false and setPedNeverTargeted(ped, true) == true and isPedNeverTargeted(ped) == true, 'never targeted')
+        assert(setPedPhysicalProofs(ped, true, false, true, false, true) == true, 'proofs set')
+        b, f, e, c, m = getPedPhysicalProofs(ped)
+        assert(b == true and f == false and e == true and c == false and m == true, 'proofs stored')
+        assert(getPedClothes(ped, 0) == false, 'no clothes yet')
+        assert(addPedClothes(ped, 'player_torso', 'torso', 0) == true, 'clothes accepted')
+        local texture, model = getPedClothes(ped, 0)
+        assert(texture == 'player_torso' and model == 'torso', 'clothes read back')
+        assert(removePedClothes(ped, 0) == true and getPedClothes(ped, 0) == false, 'clothes cleared')
+        assert(getPedClothes(ped, 17) == false, 'slot 17 is not stored on a script ped')
+        assert(destroyElement(ped) == true, 'script ped removed')
+        _G.bodyPed = nil
+        assert(setPedArmor(me, 0) == true and setPedWalkingStyle(me, 0) == true and setPedHeadless(me, false) == true, 'player restored')
+        assert(setPedBleeding(me, false) == true and setPedDoingGangDriveby(me, false) == true and setPedCameraRotation(me, 0) == true, 'player flags restored')
+    )LUA");
+    lua_State* L = WorldRPG::Script::ActiveVmState();
+    lua_getglobal(L, "bodyPed");
+    if (lua_istable(L, -1)) {
+        lua_getfield(L, -1, "id");
+        if (lua_isinteger(L, -1)) WorldRPG::Game::ReleaseScriptPed(static_cast<uint32_t>(lua_tointeger(L, -1)));
+        lua_pop(L, 1);
+    }
+    lua_pop(L, 1);
+
+    WorldRPG::PedQueries::Snapshot native;
+    native.generation = WorldRPG::PedQueries::Generation(777);
+    native.taskType = -1;
+    native.health = 100.f;
+    WorldRPG::Headless::SetPedQueryNative(777, native);
+    RunLua(vm, "ped-weapon-bytes", R"LUA(
+        local me = {id = 777, element = true}
+        assert(setPedWeaponAccuracy(me, 40) == true and getPedWeaponAccuracy(me) == 40, 'accuracy stored while streamed')
+        assert(setPedWeaponAccuracy(me, 256) == false and setPedWeaponAccuracy(me, -1) == false and getPedWeaponAccuracy(me) == 40, 'accuracy range')
+        assert(setPedWeaponShootingRate(me, 12) == true and getPedWeaponShootingRate(me) == 12, 'rate stored')
+        assert(setPedWeaponShootingRate(me, 256) == false and getPedWeaponShootingRate(me) == 12, 'rate range')
+        assert(setPedTaskSequence(me, {}) == false, 'empty sequence')
+        assert(setPedTaskSequence(me, {{task = 'die'}}) == false, 'sequence factory')
+        assert(setPedTaskSequence(me, {{task = 'go_to', x = 1, y = 2, z = 3}}) == false, 'go to factory')
+        assert(setPedTaskSequence(me, {{task = 'drive_to', x = 1, y = 2, z = 3}}) == false, 'drive to needs the driver')
+        assert(killPedTask(me, 'primary', 0) == false, 'primary task is not removed')
+    )LUA");
+    native.taskType = 218;
+    native.health = 0.f;
+    WorldRPG::Headless::SetPedQueryNative(777, native);
+    RunLua(vm, "ped-weapon-bytes-dead", R"LUA(
+        local me = {id = 777, element = true}
+        assert(setPedWeaponAccuracy(me, 7) == false and setPedWeaponShootingRate(me, 7) == false, 'dead ped rejects the byte')
+    )LUA");
+    WorldRPG::Headless::ClearPedQueryNative();
+    RunLua(vm, "ped-weapon-bytes-away", R"LUA(
+        local me = {id = 777, element = true}
+        assert(getPedWeaponAccuracy(me) == -1 and getPedWeaponShootingRate(me) == -1, 'unstreamed hides the byte')
+        assert(getPlayerMoney() == 0 and getPlayerWantedLevel() == 0, 'money and wanted start at 0')
+        assert(setPlayerMoney(40) == true and getPlayerMoney() == 40, 'money set')
+        assert(setPlayerMoney(12, true) == true and getPlayerMoney() == 12, 'instant money')
+        assert(givePlayerMoney(5) == true and takePlayerMoney(2) == true and getPlayerMoney() == 15, 'give and take')
+        assert(setPlayerMoney(-4) == true and getPlayerMoney() == -4, 'negative money')
+        assert(setPlayerMoney() == false and givePlayerMoney(0/0) == false and setPlayerMoney(12, 1) == false, 'bad money')
+        assert(getPlayerMoney() == -4, 'bad money does not change the balance')
+        assert(isPlayerMapForced() == false and forcePlayerMap(true) == true and isPlayerMapForced() == true, 'map forced')
+        assert(forcePlayerMap(false) == true and isPlayerMapVisible() == false and getPlayerMapBoundingBox() == false, 'map stays hidden')
+        assert(getPlayerMapOpacity() == 155, 'default map alpha')
+        assert(forcePlayerMap(1) == false, 'map force wants a bool')
+        assert(getPlayerScriptDebugLevel() == 0 and isPlayerCrosshairVisible() == false, 'debug level and crosshair')
+        assert(getPlayerUserName() == false, 'no community username')
+        local ped = createPed(7, 1, 2, 3)
+        assert(setPedAnimation(ped) == true and setPedAnimation(ped, false) == true, 'empty animation kills')
+        assert(setPedAnimation(ped, 'ped', 'idle') == false and getPedAnimation(ped) == false, 'named block is not loaded')
+        assert(getPedAnimationProgress(ped) == -1 and getPedAnimationSpeed(ped) == -1 and getPedAnimationLength(ped) == -1, 'no anim task')
+        assert(setPedAnimationProgress(ped) == true and setPedAnimationProgress(ped, 'idle', 0.5) == false, 'progress needs the association')
+        assert(setPedAnimationSpeed(ped, 'idle', 1) == false and setPedAnimationSpeed(ped, 'idle', 11) == false and setPedAnimationSpeed(ped) == false, 'speed rejected')
+        assert(isPedReloadingWeapon(ped) == false and isPedReloadingWeapon(me) == false, 'not reloading')
+        assert(destroyElement(ped) == true, 'anim ped removed')
+        local x, y = getPlayerHudComponentProperty('health', 'position')
+        assert(x == 0 and y == 0, 'unset hud position')
+        assert(setPlayerHudComponentProperty('health', 'position', 12, 34) == true, 'hud position')
+        x, y = getPlayerHudComponentProperty('health', 'position')
+        assert(x == 12 and y == 34, 'hud position stored')
+        assert(setPlayerHudComponentProperty('radar', 'position', 1, 2) == false, 'radar position is rejected')
+        assert(getPlayerHudComponentProperty('radar', 'position') == false, 'radar layout is not read')
+        assert(setPlayerHudComponentProperty('health', 'fillColor', 16711680) == true, 'health color')
+        local r, g, b, a = getPlayerHudComponentProperty('health', 'fillColor')
+        assert(r == 255 and g == 0 and b == 0 and a == 0, 'color bytes')
+        assert(setPlayerHudComponentProperty('health', 'drawPercentage', true) == true and getPlayerHudComponentProperty('health', 'drawPercentage') == true, 'percentage')
+        assert(setPlayerHudComponentProperty('money', 'fontStyle', 'pricedown') == true and getPlayerHudComponentProperty('money', 'fontStyle') == 'pricedown', 'font')
+        assert(setPlayerHudComponentProperty('money', 'fontStyle', 'nope') == false, 'unknown font')
+        assert(getPlayerHudComponentProperty('health', 'fontStyle') == false, 'health is not text')
+        assert(resetPlayerHudComponentProperty('health', 'position') == true, 'reset position')
+        x, y = getPlayerHudComponentProperty('health', 'position')
+        assert(x == 0 and y == 0, 'position cleared')
+        assert(resetPlayerHudComponentProperty('crosshair', 'position') == false, 'crosshair cannot reset')
+        assert(setPlayerHudComponentProperty('money', 'textSize', 1, 2) == false and resetPlayerHudComponentProperty('money', 'textSize') == false, 'text size is read only')
+        local ped = createPed(7, 4, 5, 6)
+        assert(setPedGoTo(ped, 1, 2, 3) == false and setPedNavigateTo(ped, 1, 2, 3) == false, 'unstreamed task')
+        assert(setPedStandStill(ped) == false and setPedHandsUp(ped, 1000) == false and setPedJump(ped) == false, 'unstreamed simple tasks')
+        assert(setPedTurnToFace(ped, me) == false and setPedKillOnFoot(ped, me) == false, 'unstreamed target tasks')
+        assert(setPedAimAt(ped, 0, 0, 1) == false and setPedShootAt(ped, 0, 1, 1) == false, 'zero aim is rejected when it runs')
+        assert(setPedFacialTalk(ped, -1) == false and stopPedFacialTalk(ped) == false, 'no facial task')
+        assert(setPedEnterVehicle(ped) == false and setPedExitVehicle(ped) == false, 'no enter task')
+        assert(getPedTaskSequenceProgress(ped) == -1 and isPedNativeTaskReady(ped) == false, 'no sequence')
+        assert(isPedNativeAmbientCopWanderTask(ped) == false, 'no cop wander')
+        local ok, err = pcall(setPedGoTo, ped, 'nope')
+        assert(not ok and err:find('vector3', 1, true), 'goto vector: ' .. tostring(err))
+        ok, err = pcall(setPedHandsUp, ped)
+        assert(not ok, 'hands up needs a duration')
+        assert(destroyElement(ped) == true, 'task ped removed')
+        assert(acquireMissionText('') == false and acquireMissionText('BAD NAME') == false and acquireMissionText('TOOLONG1') == false, 'gxt names')
+        assert(acquireMissionText('INTRO') == false and showMissionText('INTRO', 1000) == false, 'no mission text block')
+        assert(clearMissionTexts() == false and clearMissionHelp() == false and releaseMissionText() == false, 'no mission lease')
+        assert(killPed(me) == false, 'player is not a client ped')
+        local cj = createPed(0, 0, 0, 3)
+        assert(setPedStat(cj, 24, 50) == true and getPedStat(cj, 24) == 50, 'stat stored')
+        assert(setPedStat(cj, 21, 10) == true and setPedStat(cj, 400, 1) == false and setPedStat(cj, 24, 1001) == false, 'stat range and cj muscle')
+        assert(killPed(cj) == true and isPedDead(cj) == true and killPed(cj) == false, 'client ped dies once')
+        assert(setPedAimTarget(cj, 1, 2, 3) == true, 'aim target accepted')
+        assert(getElementBonePosition(cj, 8) == false and getElementBonePosition(cj, 400) == false, 'no bone entity')
+        assert(getPedBonePosition(cj, 8) == false and getPedBonePosition(cj, 200) == false, 'ped bone')
+        assert(updateElementRpHAnim(cj) == false and detonateSatchels() == false, 'no anim hierarchy or satchels')
+        assert(removePedFromVehicle(cj) == false and removePedFromVehicle(me) == false, 'not in a vehicle')
+        assert(destroyElement(cj) == true, 'cj removed')
+        local other = createPed(7, 0, 0, 3)
+        assert(setPedStat(other, 21, 10) == false and getPedStat(other, 21) == 0, 'fat stat needs cj')
+        assert(destroyElement(other) == true, 'other ped removed')
+        local cj = createPed(0, 0, 0, 3)
+        local mate = createPed(7, 1, 0, 3)
+        assert(getPedVoice(cj) == false and setPedVoice(cj, 'PED_TYPE_DISABLED') == true, 'disable speech')
+        assert(getPedVoice(cj) == 'PED_TYPE_DISABLED' and resetPedVoice(cj) == false, 'voice shorts stay')
+        assert(getPedVoice(cj) == 'PED_TYPE_DISABLED', 'speech stays disabled')
+        assert(setPedVoice(cj, 'PED_TYPE_GEN', 'VOICE_GEN_BB') == true and getPedVoice(cj) == false, 'voice names are not read')
+        local ok, err = pcall(playPedVoiceLine, cj, 400)
+        assert(not ok and err:find('0-359', 1, true), 'speech range: ' .. tostring(err))
+        assert(pcall(playPedVoiceLine, cj, 1), 'say returns no values')
+        assert(getPedAnalogControlState(me, 'forwards') == 0 and getPedAnalogControlState(me, 'not_a_control') == 0, 'player analog is the controller')
+        assert(setPedAnalogControlState(me, 'forwards', 1) == true and getPedAnalogControlState(me, 'forwards') == 0, 'player get ignores the pad')
+        assert(getPedAnalogControlState(cj, 'forwards') == 0 and getPedAnalogControlState(cj, 'fire') == 0, 'script pad starts at 0')
+        assert(getPedAnalogControlState(cj, 'not_a_control') == false, 'unknown script control')
+        assert(setPedAnalogControlState(cj, 'forwards', 2) == true and getPedAnalogControlState(cj, 'forwards') == 1, 'analog clamps')
+        assert(setPedAnalogControlState(cj, 'backwards', 0.25) == true, 'opposite analog')
+        assert(getPedAnalogControlState(cj, 'forwards') == 0 and getPedAnalogControlState(cj, 'backwards') == 0.25, 'opposite cleared')
+        assert(setPedAnalogControlState(cj, 'fire', 1) == false, 'fire is not analog')
+        assert(givePedWeapon(me, 22) == false and givePedWeapon(cj, 'nope') == false and givePedWeapon(cj, 19) == false, 'weapon rejected')
+        assert(givePedWeapon(cj, 'pistol', 5, true) == true and getPedWeapon(cj) == 22 and getPedTotalAmmo(cj) == 5, 'pistol alias')
+        assert(givePedWeapon(cj, 22, 30, true) == true and getPedWeapon(cj) == 22 and getPedTotalAmmo(cj) == 35, 'script weapon cache')
+        assert(setPedLookAt(cj, 1, 2, 3) == true and setPedLookAt(cj, 1, 2, 3, 3000, 500) == true, 'look at')
+        assert(setPedLookAt(cj, 'nope') == false and setPedLookAt(cj, 1, 2, 3, cj) == false, 'look at arguments')
+        ok, err = pcall(killPedTask, cj, 'primary', 4)
+        assert(not ok and err:find('TASK_PRIORITY_DEFAULT', 1, true), 'default task: ' .. tostring(err))
+        ok, err = pcall(killPedTask, cj, 'primary', 5)
+        assert(not ok and err:find('Invalid task slot', 1, true), 'primary slot: ' .. tostring(err))
+        ok, err = pcall(killPedTask, cj, 'nope', 0)
+        assert(not ok and err:find('enum', 1, true), 'task type: ' .. tostring(err))
+        assert(killPedTask(cj, 'secondary', 1) == false, 'secondary task is not removed')
+        local carried, carryState = getPedCarriedObject(cj)
+        assert(carried == false and carryState == 'released', 'not carrying')
+        assert(setPedCarryObject(cj, cj) == false and pickUpPedObject(cj, cj) == false, 'carry rejected')
+        assert(putDownPedObject(cj) == false and cancelPedCarryObject(cj) == false and getPedNoiseLevel(cj) == false, 'no cargo or noise')
+        assert(warpPedIntoVehicle(cj) == false, 'warp needs a vehicle')
+        ok, err = pcall(setPedDriveTo, cj)
+        assert(not ok, 'drive to needs a vehicle')
+        ok, err = pcall(setPedDriveBy, cj)
+        assert(not ok, 'drive by needs a target')
+        assert(setPedTaskSequence(cj, {{task = 'die'}}) == false, 'unstreamed sequence')
+        assert(acquirePedNativeEventProfile(me, 'mission') == false and acquirePedNativeEventProfile(cj, 'nope') == false, 'event profile rejected')
+        assert(acquirePedNativeEventProfile(cj, 'mission') == false, 'no event lease')
+        assert(acquirePedNativeGroup({cj}, 'ambient-random') == false and acquirePedNativeGroup({cj, me}, 'ambient-random') == false, 'group rejected')
+        assert(acquirePedNativeGroup({cj, mate}, 'nope') == false and acquirePedNativeGroup({cj, mate}, 'ambient-random') == false, 'no group lease')
+        assert(releasePedNativeGroup(1) == false and isPedNativeGroupActive(1) == false and getPedNativeGroupDiagnostic(1) == false, 'group query')
+        assert(validatePedNativeCouple(cj, mate) == false and acquirePedNativeCouple(cj, mate, 3) == false, 'couple rejected')
+        assert(acquirePedNativeCouple(cj, mate, 1) == false and releasePedNativeCouple(1) == false, 'no couple lease')
+        assert(getPedNativeVehicleResponse(cj, 1) == false and getPedNativeVehicleResponse(me, 1) == false, 'no vehicle response')
+        assert(addPedNativeDamageResponseEvent(cj, mate, 99, 3, 1) == false and addPedNativeDamageResponseEvent(cj, mate, 22, 3, 1) == false, 'damage response')
+        assert(addPedNativeGunAimedAtEvent(cj, mate, 1) == false and addPedNativeDamageEvent(cj, mate, 22, 3, 10, 1, 1) == false, 'native events')
+        assert(restorePedNativeVehicleResponse(cj, {{type = 1, values = {}}}, 1) == false, 'restore response')
+        assert(acquirePedNativePointArm(cj) == false and isPedNativePointArmActive(1) == false, 'point arm')
+        assert(addPedNativeBikeJackTask(me, cj, me, 10, 0, true, 1) == false, 'bike jack needs a vehicle')
+        assert(destroyElement(cj) == true and destroyElement(mate) == true, 'voice peds removed')
+        local ok, err = pcall(setPlayerHudComponentProperty, 'nope', 'position', 0, 0)
+        assert(not ok and err:find('hud-component', 1, true), 'bad component: ' .. tostring(err))
     )LUA");
 }
 
@@ -4071,6 +4308,7 @@ int main(int argc, char** argv) {
     CheckDxImage(vm);
     CheckGuiFonts(vm);
     CheckNetworkCalls(vm);
+    CheckPedBodyState(vm);
 
     if (argc > 1) {
         RunLua(vm, "catalog-count", "assert(_G.catalogModels == 1435, 'catalog holds 1435 models')");
