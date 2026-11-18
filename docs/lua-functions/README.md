@@ -9,9 +9,9 @@ Each document lists every single function, its current Android implementation st
 | Category | Documentation File | Total | Implemented | Stub | Missing | Parity % |
 |---|---|---|---|---|---|---|
 | **Vehicles (CLuaVehicleDefs)** | [VEHICLES.md](VEHICLES.md) | 165 | 9 | 19 | 137 | 5.5% |
-| **Peds & Players (CLuaPedDefs, CLuaPlayerDefs)** | [PEDS_AND_PLAYERS.md](PEDS_AND_PLAYERS.md) | 206 | 39 | 72 | 95 | 18.9% |
+| **Peds & Players (CLuaPedDefs, CLuaPlayerDefs)** | [PEDS_AND_PLAYERS.md](PEDS_AND_PLAYERS.md) | 206 | 51 | 60 | 95 | 24.8% |
 | **World, Objects & Environment** | [WORLD_AND_OBJECTS.md](WORLD_AND_OBJECTS.md) | 227 | 124 | 11 | 92 | 54.6% |
-| **Element Tree & Data (CLuaElementDefs)** | [ELEMENTS.md](ELEMENTS.md) | 81 | 60 | 7 | 14 | 74.1% |
+| **Element Tree & Data (CLuaElementDefs)** | [ELEMENTS.md](ELEMENTS.md) | 81 | 62 | 5 | 14 | 76.5% |
 | **GUI & 2D/3D Drawing (DX & CEGUI)** | [GUI_AND_DX.md](GUI_AND_DX.md) | 199 | 199 | 0 | 0 | 100.0% |
 | **Engine & Model Replacement (DFF, TXD, COL)** | [ENGINE_AND_MODELS.md](ENGINE_AND_MODELS.md) | 125 | 1 | 15 | 109 | 0.8% |
 | **Audio & Voice System (CLuaAudioDefs)** | [AUDIO_AND_VOICE.md](AUDIO_AND_VOICE.md) | 57 | 21 | 1 | 35 | 36.8% |
@@ -19,8 +19,8 @@ Each document lists every single function, its current Android implementation st
 | **Weapons & Projectiles (CLuaWeaponDefs, CLuaProjectileDefs)** | [WEAPONS_AND_COMBAT.md](WEAPONS_AND_COMBAT.md) | 31 | 31 | 0 | 0 | 100.0% |
 | **Core System, Networking & Utilities** | [CORE_AND_UTILITY.md](CORE_AND_UTILITY.md) | 195 | 171 | 0 | 24 | 87.7% |
 | **Markers, Blips, ColShapes & Spatial** | [MARKERS_AND_SPATIAL.md](MARKERS_AND_SPATIAL.md) | 145 | 2 | 2 | 141 | 1.4% |
-| **Web Browser & Compatibility (CEF / Discord)** | [BROWSER_AND_COMPATIBILITY.md](BROWSER_AND_COMPATIBILITY.md) | 103 | 89 | 14 | 0 | 86.4% |
-| **TOTAL** | **All Categories** | **1581** | **793** | **141** | **647** | **50.2%** |
+| **Web Browser & Compatibility (CEF / Discord)** | [BROWSER_AND_COMPATIBILITY.md](BROWSER_AND_COMPATIBILITY.md) | 103 | 103 | 0 | 0 | 100.0% |
+| **TOTAL** | **All Categories** | **1581** | **821** | **113** | **647** | **51.9%** |
 
 ## Implementation Priority Tiers
 

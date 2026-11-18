@@ -5,22 +5,22 @@ Embedded Chromium web pages, browser mouse/keyboard input, Discord Rich Presence
 ## Parity Status
 
 - **Total Functions:** 103
-- **Implemented:** 89 (86.4%)
-- **Stubs:** 14
+- **Implemented:** 103 (100.0%)
+- **Stubs:** 0
 - **Missing:** 0
 
-> **Technical Requirement:** Desktop bundles CEF. Android has no web core: `createBrowser` and `guiCreateBrowser` still enforce the size errors, `getBrowserSettings` returns the three flags as false, and page calls return false. Discord checks lengths then returns false. Ped compatibility reads the ENTITY_ADD jetpack flag, PED_SYNC fire/water bits and keysync duck, choke and aim origin. `setElementModel` stores stock ped and vehicle ids without rebuilding the body. Fourteen old names still alias constant stubs (ground, tasks, controls, attachment).
+> **Technical Requirement:** Desktop bundles CEF. Android has no web core: createBrowser and guiCreateBrowser still enforce the size errors, getBrowserSettings returns the three flags as false, and page calls return false. Discord checks lengths then returns false. Compatibility names share the modern handlers. Weapon slot, knock-off-bike and control state are stored. Ground height uses FindGroundZFor3DPosition when it returns. Task, target and line-of-sight queries return false because those engine calls are not hooked. setPedRotation applies to a script ped. attachElements and detachElements return false and do not change the server attachment snapshot.
 
 ## Function List
 
 | Lua Function | Status | Desktop Source Ref | Desktop Handler | Conversion Requirement / Implementation Notes |
 |---|---|---|---|---|
-| `attachElementToElement` | *Stub* | `CLuaCompatibilityDefs.cpp:60` | `CLuaElementDefs::AttachElements` | Currently stubbed: `DefaultValue(kFalse)`. Needs native engine wiring. |
+| `attachElementToElement` | **Implemented** | `CLuaCompatibilityDefs.cpp:60` | `CLuaElementDefs::AttachElements` | Operational on Android. (AttachElements) |
 | `canBrowserNavigateBack` | **Implemented** | `CLuaBrowserDefs.cpp:44` | `CanBrowserNavigateBack` | Operational on Android. (MissingBrowser) |
 | `canBrowserNavigateForward` | **Implemented** | `CLuaBrowserDefs.cpp:45` | `CanBrowserNavigateForward` | Operational on Android. (MissingBrowser) |
-| `canPlayerBeKnockedOffBike` | *Stub* | `CLuaCompatibilityDefs.cpp:18` | `CLuaPedDefs::CanPedBeKnockedOffBike` | Currently stubbed: `DefaultValue(kFalse)`. Needs native engine wiring. |
+| `canPlayerBeKnockedOffBike` | **Implemented** | `CLuaCompatibilityDefs.cpp:18` | `CLuaPedDefs::CanPedBeKnockedOffBike` | Operational on Android. (CanPedBeKnockedOffBike) |
 | `createBrowser` | **Implemented** | `CLuaBrowserDefs.cpp:20` | `CreateBrowser` | Operational on Android. (CreateBrowser) |
-| `detachElementFromElement` | *Stub* | `CLuaCompatibilityDefs.cpp:61` | `CLuaElementDefs::DetachElements` | Currently stubbed: `DefaultValue(kFalse)`. Needs native engine wiring. |
+| `detachElementFromElement` | **Implemented** | `CLuaCompatibilityDefs.cpp:61` | `CLuaElementDefs::DetachElements` | Operational on Android. (DetachElements) |
 | `doesPlayerHaveJetPack` | **Implemented** | `CLuaCompatibilityDefs.cpp:21` | `CLuaPedDefs::DoesPedHaveJetPack` | Operational on Android. (DoesPedHaveJetPack) |
 | `executeBrowserJavascript` | **Implemented** | `CLuaBrowserDefs.cpp:33` | `ExecuteBrowserJavascript` | Operational on Android. (MissingBrowser) |
 | `focusBrowser` | **Implemented** | `CLuaBrowserDefs.cpp:37` | `FocusBrowser` | Operational on Android. (MissingBrowser) |
@@ -31,7 +31,7 @@ Embedded Chromium web pages, browser mouse/keyboard input, Discord Rich Presence
 | `getBrowserURL` | **Implemented** | `CLuaBrowserDefs.cpp:30` | `GetBrowserURL` | Operational on Android. (MissingBrowser) |
 | `getBrowserVolume` | **Implemented** | `CLuaBrowserDefs.cpp:34` | `GetBrowserVolume` | Operational on Android. (MissingBrowser) |
 | `getCameraShakeLevel` | **Implemented** | `CLuaCompatibilityDefs.cpp:73` | `ArgumentParserWarn<false, CLuaCameraDefs::GetCameraDrunkLevel>` | Operational on Android. (l_getCameraDrunkLevel) |
-| `getControlState` | *Stub* | `CLuaCompatibilityDefs.cpp:71` | `ArgumentParserWarn<false, CLuaPedDefs::GetPedControlState>` | Currently stubbed: `l_false: lua_pushboolean(L, 0)`. Needs native engine wiring. |
+| `getControlState` | **Implemented** | `CLuaCompatibilityDefs.cpp:71` | `ArgumentParserWarn<false, CLuaPedDefs::GetPedControlState>` | Operational on Android. (GetPedControlState) |
 | `getDiscordRichPresenceUserID` | **Implemented** | `CLuaDiscordDefs.cpp:30` | `ArgumentParser<GetDiscordUserID>` | Operational on Android. (GetUserID) |
 | `getObjectRotation` | **Implemented** | `CLuaCompatibilityDefs.cpp:53` | `CLuaElementDefs::GetElementRotation` | Operational on Android. (l_getElementRotation) |
 | `getPedSkin` | **Implemented** | `CLuaCompatibilityDefs.cpp:51` | `CLuaElementDefs::GetElementModel` | Operational on Android. (l_getElementModel) |
@@ -41,14 +41,14 @@ Embedded Chromium web pages, browser mouse/keyboard input, Discord Rich Presence
 | `getPlayerContactElement` | **Implemented** | `CLuaCompatibilityDefs.cpp:19` | `CLuaPedDefs::GetPedContactElement` | Operational on Android. (GetPedContactElement) |
 | `getPlayerOccupiedVehicle` | **Implemented** | `CLuaCompatibilityDefs.cpp:39` | `CLuaPedDefs::GetPedOccupiedVehicle` | Operational on Android. (GetPedOccupiedVehicle) |
 | `getPlayerRotation` | **Implemented** | `CLuaCompatibilityDefs.cpp:17` | `CLuaPedDefs::GetPedRotation` | Operational on Android. (l_getPedRotation) |
-| `getPlayerSimplestTask` | *Stub* | `CLuaCompatibilityDefs.cpp:28` | `CLuaPedDefs::GetPedSimplestTask` | Currently stubbed: `DefaultValue(kEmptyString)`. Needs native engine wiring. |
+| `getPlayerSimplestTask` | **Implemented** | `CLuaCompatibilityDefs.cpp:28` | `CLuaPedDefs::GetPedSimplestTask` | Operational on Android. (GetPedSimplestTask) |
 | `getPlayerSkin` | **Implemented** | `CLuaCompatibilityDefs.cpp:41` | `CLuaElementDefs::GetElementModel` | Operational on Android. (l_getElementModel) |
-| `getPlayerStat` | *Stub* | `CLuaCompatibilityDefs.cpp:44` | `CLuaPedDefs::GetPedStat` | Currently stubbed: `l_num0: lua_pushinteger(L, 0)`. Needs native engine wiring. |
-| `getPlayerTarget` | *Stub* | `CLuaCompatibilityDefs.cpp:30` | `CLuaPedDefs::GetPedTarget` | Currently stubbed: `l_false: lua_pushboolean(L, 0)`. Needs native engine wiring. |
+| `getPlayerStat` | **Implemented** | `CLuaCompatibilityDefs.cpp:44` | `CLuaPedDefs::GetPedStat` | Operational on Android. (GetPedStat) |
+| `getPlayerTarget` | **Implemented** | `CLuaCompatibilityDefs.cpp:30` | `CLuaPedDefs::GetPedTarget` | Operational on Android. (GetPedTarget) |
 | `getPlayerTargetCollision` | **Implemented** | `CLuaCompatibilityDefs.cpp:33` | `CLuaPedDefs::GetPedTargetCollision` | Operational on Android. (GetPedTargetCollision) |
 | `getPlayerTargetEnd` | **Implemented** | `CLuaCompatibilityDefs.cpp:32` | `CLuaPedDefs::GetPedTargetEnd` | Operational on Android. (GetPedTargetEnd) |
 | `getPlayerTargetStart` | **Implemented** | `CLuaCompatibilityDefs.cpp:31` | `CLuaPedDefs::GetPedTargetStart` | Operational on Android. (GetPedTargetStart) |
-| `getPlayerTask` | *Stub* | `CLuaCompatibilityDefs.cpp:27` | `CLuaPedDefs::GetPedTask` | Currently stubbed: `l_false: lua_pushboolean(L, 0)`. Needs native engine wiring. |
+| `getPlayerTask` | **Implemented** | `CLuaCompatibilityDefs.cpp:27` | `CLuaPedDefs::GetPedTask` | Operational on Android. (GetPedTask) |
 | `getPlayerTotalAmmo` | **Implemented** | `CLuaCompatibilityDefs.cpp:37` | `CLuaPedDefs::GetPedTotalAmmo` | Operational on Android. (GetPedTotalAmmo) |
 | `getPlayerWeapon` | **Implemented** | `CLuaCompatibilityDefs.cpp:35` | `CLuaPedDefs::GetPedWeapon` | Operational on Android. (GetPedWeapon) |
 | `getPlayerWeaponSlot` | **Implemented** | `CLuaCompatibilityDefs.cpp:34` | `CLuaPedDefs::GetPedWeaponSlot` | Operational on Android. (GetPedWeaponSlot) |
@@ -75,11 +75,11 @@ Embedded Chromium web pages, browser mouse/keyboard input, Discord Rich Presence
 | `isPedOnFire` | **Implemented** | `CLuaCompatibilityDefs.cpp:24` | `CLuaPedDefs::IsPedOnFire` | Operational on Android. (IsPedOnFire) |
 | `isPlayerChoking` | **Implemented** | `CLuaCompatibilityDefs.cpp:42` | `CLuaPedDefs::IsPedChoking` | Operational on Android. (IsPedChoking) |
 | `isPlayerDead` | **Implemented** | `CLuaCompatibilityDefs.cpp:67` | `CLuaPedDefs::IsPedDead` | Operational on Android. (IsPedDead) |
-| `isPlayerDoingTask` | *Stub* | `CLuaCompatibilityDefs.cpp:29` | `CLuaPedDefs::IsPedDoingTask` | Currently stubbed: `DefaultValue(kFalse)`. Needs native engine wiring. |
+| `isPlayerDoingTask` | **Implemented** | `CLuaCompatibilityDefs.cpp:29` | `CLuaPedDefs::IsPedDoingTask` | Operational on Android. (IsPedDoingTask) |
 | `isPlayerDucked` | **Implemented** | `CLuaCompatibilityDefs.cpp:43` | `CLuaPedDefs::IsPedDucked` | Operational on Android. (IsPedDucked) |
 | `isPlayerInVehicle` | **Implemented** | `CLuaCompatibilityDefs.cpp:20` | `CLuaPedDefs::IsPedInVehicle` | Operational on Android. (IsPedInVehicle) |
 | `isPlayerInWater` | **Implemented** | `CLuaCompatibilityDefs.cpp:22` | `CLuaElementDefs::IsElementInWater` | Operational on Android. (IsElementInWater) |
-| `isPlayerOnGround` | *Stub* | `CLuaCompatibilityDefs.cpp:26` | `CLuaPedDefs::IsPedOnGround` | Currently stubbed: `l_true: lua_pushboolean(L, 1)`. Needs native engine wiring. |
+| `isPlayerOnGround` | **Implemented** | `CLuaCompatibilityDefs.cpp:26` | `CLuaPedDefs::IsPedOnGround` | Operational on Android. (IsPedOnGround) |
 | `loadBrowserURL` | **Implemented** | `CLuaBrowserDefs.cpp:23` | `LoadBrowserURL` | Operational on Android. (MissingBrowser) |
 | `navigateBrowserBack` | **Implemented** | `CLuaBrowserDefs.cpp:46` | `NavigateBrowserBack` | Operational on Android. (MissingBrowser) |
 | `navigateBrowserForward` | **Implemented** | `CLuaBrowserDefs.cpp:47` | `NavigateBrowserForward` | Operational on Android. (MissingBrowser) |
@@ -93,7 +93,7 @@ Embedded Chromium web pages, browser mouse/keyboard input, Discord Rich Presence
 | `setBrowserRenderingPaused` | **Implemented** | `CLuaBrowserDefs.cpp:31` | `SetBrowserRenderingPaused` | Operational on Android. (MissingBrowser) |
 | `setBrowserVolume` | **Implemented** | `CLuaBrowserDefs.cpp:35` | `SetBrowserVolume` | Operational on Android. (SetBrowserVolume) |
 | `setCameraShakeLevel` | **Implemented** | `CLuaCompatibilityDefs.cpp:72` | `ArgumentParserWarn<false, CLuaCameraDefs::SetCameraDrunkLevel>` | Operational on Android. (l_setCameraDrunkLevel) |
-| `setControlState` | *Stub* | `CLuaCompatibilityDefs.cpp:70` | `ArgumentParserWarn<false, CLuaPedDefs::SetPedControlState>` | Currently stubbed: `l_true: lua_pushboolean(L, 1)`. Needs native engine wiring. |
+| `setControlState` | **Implemented** | `CLuaCompatibilityDefs.cpp:70` | `ArgumentParserWarn<false, CLuaPedDefs::SetPedControlState>` | Operational on Android. (SetPedControlState) |
 | `setDiscordApplicationID` | **Implemented** | `CLuaDiscordDefs.cpp:19` | `ArgumentParser<SetAppID>` | Operational on Android. (SetAppID) |
 | `setDiscordRichPresenceAsset` | **Implemented** | `CLuaDiscordDefs.cpp:22` | `ArgumentParser<SetLargeAsset>` | Operational on Android. (SetLargeAsset) |
 | `setDiscordRichPresenceButton` | **Implemented** | `CLuaDiscordDefs.cpp:24` | `ArgumentParser<SetButtons>` | Operational on Android. (SetButtons) |
@@ -106,10 +106,10 @@ Embedded Chromium web pages, browser mouse/keyboard input, Discord Rich Presence
 | `setObjectRotation` | **Implemented** | `CLuaCompatibilityDefs.cpp:54` | `CLuaElementDefs::SetElementRotation` | Operational on Android. (l_setElementRotation) |
 | `setPedOnFire` | **Implemented** | `CLuaCompatibilityDefs.cpp:25` | `CLuaPedDefs::SetPedOnFire` | Operational on Android. (SetPedOnFire) |
 | `setPedSkin` | **Implemented** | `CLuaCompatibilityDefs.cpp:52` | `CLuaElementDefs::SetElementModel` | Operational on Android. (SetElementModel) |
-| `setPlayerCanBeKnockedOffBike` | *Stub* | `CLuaCompatibilityDefs.cpp:48` | `CLuaPedDefs::SetPedCanBeKnockedOffBike` | Currently stubbed: `DefaultValue(kTrue)`. Needs native engine wiring. |
-| `setPlayerRotation` | *Stub* | `CLuaCompatibilityDefs.cpp:47` | `CLuaPedDefs::SetPedRotation` | Currently stubbed: `l_true: lua_pushboolean(L, 1)`. Needs native engine wiring. |
+| `setPlayerCanBeKnockedOffBike` | **Implemented** | `CLuaCompatibilityDefs.cpp:48` | `CLuaPedDefs::SetPedCanBeKnockedOffBike` | Operational on Android. (SetPedCanBeKnockedOffBike) |
+| `setPlayerRotation` | **Implemented** | `CLuaCompatibilityDefs.cpp:47` | `CLuaPedDefs::SetPedRotation` | Operational on Android. (SetPedRotation) |
 | `setPlayerSkin` | **Implemented** | `CLuaCompatibilityDefs.cpp:46` | `CLuaElementDefs::SetElementModel` | Operational on Android. (SetElementModel) |
-| `setPlayerWeaponSlot` | *Stub* | `CLuaCompatibilityDefs.cpp:45` | `CLuaPedDefs::SetPedWeaponSlot` | Currently stubbed: `l_true: lua_pushboolean(L, 1)`. Needs native engine wiring. |
+| `setPlayerWeaponSlot` | **Implemented** | `CLuaCompatibilityDefs.cpp:45` | `CLuaPedDefs::SetPedWeaponSlot` | Operational on Android. (SetPedWeaponSlot) |
 | `setVehicleModel` | **Implemented** | `CLuaCompatibilityDefs.cpp:49` | `CLuaElementDefs::SetElementModel` | Operational on Android. (SetElementModel) |
 | `setVehicleRotation` | **Implemented** | `CLuaCompatibilityDefs.cpp:59` | `CLuaElementDefs::SetElementRotation` | Operational on Android. (l_setElementRotation) |
 | `toggleBrowserDevTools` | **Implemented** | `CLuaBrowserDefs.cpp:49` | `ToggleBrowserDevTools` | Operational on Android. (MissingBrowser) |

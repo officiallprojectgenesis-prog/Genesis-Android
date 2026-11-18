@@ -5,8 +5,8 @@ Core element hierarchy (parent/child), element data (synced/local), collisions, 
 ## Parity Status
 
 - **Total Functions:** 81
-- **Implemented:** 60 (74.1%)
-- **Stubs:** 7
+- **Implemented:** 62 (76.5%)
+- **Stubs:** 5
 - **Missing:** 14
 
 > **Technical Requirement:** Implemented via `LuaElementApi.cpp` and `ServerWorld.cpp`. Attachment queries read ENTITY_ADD metadata, resolve references after the batch and clear references on removal. Physical attachment, attachment RPCs, spatial octree lookup and complete element matrix math remain pending.
@@ -16,10 +16,10 @@ Core element hierarchy (parent/child), element data (synced/local), collisions, 
 | Lua Function | Status | Desktop Source Ref | Desktop Handler | Conversion Requirement / Implementation Notes |
 |---|---|---|---|---|
 | `acquireElementStreamingLease` | Missing | `CLuaElementDefs.cpp:96` | `AcquireElementStreamingLease` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `attachElements` | *Stub* | `CLuaElementDefs.cpp:89` | `AttachElements` | Returns false until native physical attachment and its lifecycle/events are ported. Server attachment queries are metadata-only; these calls do not mutate that snapshot. |
+| `attachElements` | **Implemented** | `CLuaElementDefs.cpp:89` | `AttachElements` | Operational on Android. (AttachElements) |
 | `createElement` | **Implemented** | `CLuaElementDefs.cpp:76` | `CreateElement` | Operational on Android. (CreateElement) |
 | `destroyElement` | **Implemented** | `CLuaElementDefs.cpp:77` | `DestroyElement` | Operational on Android. (DestroyElementDispatch) |
-| `detachElements` | *Stub* | `CLuaElementDefs.cpp:90` | `DetachElements` | Returns false until native physical attachment and its lifecycle/events are ported. Server attachment queries are metadata-only; these calls do not mutate that snapshot. |
+| `detachElements` | **Implemented** | `CLuaElementDefs.cpp:90` | `DetachElements` | Operational on Android. (DetachElements) |
 | `getAllElementData` | **Implemented** | `CLuaElementDefs.cpp:27` | `ArgumentParserWarn<false, GetAllElementData>` | Operational on Android. (GetAllElementData) |
 | `getAttachedElements` | **Implemented** | `CLuaElementDefs.cpp:50` | `GetAttachedElements` | Reads server ENTITY_ADD attachment metadata, including forward references in the batch and offsets in degrees. Removal clears references before ID reuse. Physical attachment, local attach/detach and later attachment RPCs remain pending. Host-tested; not device-verified. |
 | `getElementAlpha` | **Implemented** | `CLuaElementDefs.cpp:55` | `GetElementAlpha` | Operational on Android. (l_getElementAlpha) |

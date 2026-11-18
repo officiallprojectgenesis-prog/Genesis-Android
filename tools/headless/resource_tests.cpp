@@ -1017,6 +1017,17 @@ void CheckCompatibilityAliases(WorldRPG::Script::LuaVMStub& vm) {
         ok, err = pcall(setDiscordRichPresencePartySize, 3, 1)
         assert(not ok and err:find('Party size'), 'party size: ' .. tostring(err))
         assert(setDiscordRichPresenceButton(3, 'Go', 'https://example.com') == false, 'button index')
+        assert(setPedWeaponSlot(me, 3) == true and getPedWeaponSlot(me) == 3, 'slot stored')
+        assert(setPedWeaponSlot(me, -1) == false and setPedWeaponSlot(me, 13) == false, 'slot range')
+        assert(setPedCanBeKnockedOffBike(me, true) == true and canPedBeKnockedOffBike(me) == true, 'knock flag true')
+        assert(setPedCanBeKnockedOffBike(me, false) == true and canPlayerBeKnockedOffBike(me) == false, 'knock flag stored')
+        assert(setControlState(me, 'jump', true) == true and getControlState(me, 'jump') == true, 'control stored')
+        assert(setControlState(me, 'not_a_control', true) == false, 'unknown control')
+        assert(getPedStat(me, 24) == 0 and getPedStat(me, 400) == false, 'stat id range')
+        assert(getPedTask(me, 'primary', 0) == false and getPedSimplestTask(me) == false, 'no task manager')
+        assert(isPedDoingTask(me, 'TASK_SIMPLE_PLAYER_ON_FOOT') == false and getPedTarget(me) == false, 'no task or target')
+        assert(setPedRotation(me, 90) == false, 'local rotation is not hooked')
+        assert(attachElements(me, me) == false and detachElements(me) == false, 'no physical attach')
     )LUA");
 }
 

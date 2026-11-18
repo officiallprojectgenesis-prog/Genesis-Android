@@ -1118,6 +1118,73 @@ int SetElementModel(lua_State* L) {
     return 1;
 }
 
+bool ReadOffset(lua_State* L, int index, float& x, float& y, float& z) {
+    if (lua_isnoneornil(L, index)) {
+        x = y = z = 0.f;
+        return true;
+    }
+    if (!lua_isnumber(L, index) || !lua_isnumber(L, index + 1) || !lua_isnumber(L, index + 2)) return false;
+    x = static_cast<float>(lua_tonumber(L, index));
+    y = static_cast<float>(lua_tonumber(L, index + 1));
+    z = static_cast<float>(lua_tonumber(L, index + 2));
+    return std::isfinite(x) && std::isfinite(y) && std::isfinite(z);
+}
+
+// CLuaElementDefs.cpp:2184-2211. Physical attachment is not hooked, so a well-formed
+// call returns false and does not change the server attachment snapshot.
+int AttachElements(lua_State* L) {
+    uint32_t id = 0, parent = 0;
+    if (!ReadElement(L, 1, id) || !ReadElement(L, 2, parent)) {
+        LUA_LOGE("attachElements: expected two elements");
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+    float x = 0, y = 0, z = 0, rx = 0, ry = 0, rz = 0;
+    if (!ReadOffset(L, 3, x, y, z) || !ReadOffset(L, 6, rx, ry, rz)) {
+        LUA_LOGE("attachElements: expected offset numbers");
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+    (void)x;
+    (void)y;
+    (void)z;
+    (void)rx;
+    (void)ry;
+    (void)rz;
+    static bool once = false;
+    if (!once) {
+        once = true;
+        LUA_LOGI("DIAG attachElements: physical attachment and onClientElementAttach are not run");
+    }
+    lua_pushboolean(L, 0);
+    return 1;
+}
+
+// CLuaElementDefs.cpp:2214-2227. Same rule: do not clear a server attachment.
+int DetachElements(lua_State* L) {
+    uint32_t id = 0;
+    if (!ReadElement(L, 1, id)) {
+        LUA_LOGE("detachElements: expected an element");
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+    if (!lua_isnoneornil(L, 2)) {
+        uint32_t parent = 0;
+        if (!ReadElement(L, 2, parent)) {
+            LUA_LOGE("detachElements: expected an element");
+            lua_pushboolean(L, 0);
+            return 1;
+        }
+    }
+    static bool once = false;
+    if (!once) {
+        once = true;
+        LUA_LOGI("DIAG detachElements: physical detach is not run");
+    }
+    lua_pushboolean(L, 0);
+    return 1;
+}
+
 void InstallElementBindings(lua_State* L) {
     ResetCatalog();
     EnsureRoot();
@@ -1159,6 +1226,12 @@ void InstallElementBindings(lua_State* L) {
     Bind(L, "setPlayerSkin", SetElementModel);
     Bind(L, "setVehicleModel", SetElementModel);
     Bind(L, "setPedSkin", SetElementModel);
+    Bind(L, "attachElements", AttachElements);
+    // CLuaCompatibilityDefs.cpp:60. Same function as attachElements.
+    Bind(L, "attachElementToElement", AttachElements);
+    Bind(L, "detachElements", DetachElements);
+    // CLuaCompatibilityDefs.cpp:61.
+    Bind(L, "detachElementFromElement", DetachElements);
 }
 
 }  // namespace WorldRPG::Script

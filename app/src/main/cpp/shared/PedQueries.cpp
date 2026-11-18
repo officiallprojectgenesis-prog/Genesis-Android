@@ -222,4 +222,12 @@ bool Ammo(const Snapshot& s, unsigned slot, bool clip, uint16_t& out) {
     out = hasAmmo ? static_cast<uint16_t>(s.streamed ? s.weapons[slot].total : s.cachedAmmo[slot]) : 1;
     return true;
 }
+bool SetCurrentSlot(uint32_t id, unsigned slot, bool player) {
+    if (!Valid(id) || slot >= Slots) return false;
+    std::lock_guard lock(mutex);
+    auto it = entries.find(id);
+    if (it == entries.end()) it = entries.emplace(id, New(player, nullptr)).first;
+    it->second.state.currentSlot = slot;
+    return true;
+}
 }

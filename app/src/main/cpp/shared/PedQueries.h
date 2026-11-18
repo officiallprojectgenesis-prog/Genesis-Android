@@ -51,4 +51,6 @@ void StreamOut(uint32_t id, const Snapshot& native);
 int WeaponSlot(unsigned type);
 bool IsDead(const Snapshot& state);
 bool Ammo(const Snapshot& state, unsigned slot, bool clip, uint16_t& out);
+// Updates the client weapon slot when the ped already has a snapshot, or creates one for this call.
+bool SetCurrentSlot(uint32_t id, unsigned slot, bool player);
 }

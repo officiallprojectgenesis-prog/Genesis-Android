@@ -17,6 +17,7 @@ extern "C" {
 #include <cfloat>
 #include <cstdint>
 #include <cstring>
+#include <mutex>
 #include <string>
 #include <unordered_map>
 
@@ -638,6 +639,326 @@ int IsPedInVehicle(lua_State* L) {
     return 1;
 }
 
+bool SameControl(const char* a, const char* b) {
+    if (!a || !b) return false;
+    while (*a && *b) {
+        const char ca = (*a >= 'A' && *a <= 'Z') ? static_cast<char>(*a - 'A' + 'a') : *a;
+        const char cb = (*b >= 'A' && *b <= 'Z') ? static_cast<char>(*b - 'A' + 'a') : *b;
+        if (ca != cb) return false;
+        ++a;
+        ++b;
+    }
+    return *a == *b;
+}
+
+const char* kControls[] = {
+    "fire", "next_weapon", "previous_weapon", "forwards", "backwards", "left", "right", "zoom_in", "zoom_out",
+    "enter_exit", "change_camera", "jump", "sprint", "look_behind", "crouch", "action", "walk", "vehicle_fire",
+    "vehicle_secondary_fire", "vehicle_left", "vehicle_right", "steer_forward", "steer_back", "accelerate",
+    "brake_reverse", "radio_next", "radio_previous", "radio_user_track_skip", "horn", "sub_mission", "handbrake",
+    "vehicle_look_left", "vehicle_look_right", "vehicle_look_behind", "vehicle_mouse_look", "special_control_left",
+    "special_control_right", "special_control_down", "special_control_up", "aim_weapon", "conversation_yes",
+    "conversation_no", "group_control_forwards", "group_control_back",
+};
+
+bool KnownControl(const char* name) {
+    for (const char* control : kControls)
+        if (SameControl(control, name)) return true;
+    return false;
+}
+
+std::mutex g_controlMu;
+std::unordered_map<uint32_t, std::unordered_map<std::string, bool>> g_controls;
+std::unordered_map<uint32_t, bool> g_knockable;
+
+bool SampledControl(const char* name, bool& state) {
+    Game::OnFootKeys keys;
+    Game::CopyOnFoot(0.f, 0.f, 0.f, keys);
+    if (SameControl(name, "fire")) state = keys.fire;
+    else if (SameControl(name, "jump")) state = keys.jump;
+    else if (SameControl(name, "sprint")) state = keys.sprint;
+    else if (SameControl(name, "crouch")) state = keys.duck;
+    else if (SameControl(name, "forwards")) state = keys.stickY == -128;
+    else if (SameControl(name, "backwards")) state = keys.stickY == 128;
+    else if (SameControl(name, "left")) state = keys.stickX == -128;
+    else if (SameControl(name, "right")) state = keys.stickX == 128;
+    else return false;
+    return true;
+}
+
+// CLuaPedDefs.cpp:1641-1669. A control name alone means the local player.
+bool ReadControlQuery(lua_State* L, uint32_t& id, std::string& control) {
+    if (lua_type(L, 1) == LUA_TSTRING) {
+        control = lua_tostring(L, 1);
+        id = ServerWorld::LocalPlayer();
+        return true;
+    }
+    if (!IsPed(L, 1, id) || lua_type(L, 2) != LUA_TSTRING) return false;
+    control = lua_tostring(L, 2);
+    return true;
+}
+
+int GetPedControlState(lua_State* L) {
+    uint32_t id = 0;
+    std::string control;
+    if (!ReadControlQuery(L, id, control) || !KnownControl(control.c_str())) {
+        LUA_LOGE("getPedControlState: expected a ped and a control name");
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+    {
+        std::lock_guard lock(g_controlMu);
+        auto ped = g_controls.find(id);
+        if (ped != g_controls.end()) {
+            auto found = ped->second.find(control);
+            if (found != ped->second.end()) {
+                lua_pushboolean(L, found->second ? 1 : 0);
+                return 1;
+            }
+        }
+    }
+    bool state = false;
+    if (id == ServerWorld::LocalPlayer() && SampledControl(control.c_str(), state)) {
+        lua_pushboolean(L, state ? 1 : 0);
+        return 1;
+    }
+    lua_pushboolean(L, 0);
+    return 1;
+}
+
+// CLuaPedDefs.cpp:2251-2283. The GTA pad is not written; the value is what getPedControlState reads back.
+int SetPedControlState(lua_State* L) {
+    uint32_t id = 0;
+    std::string control;
+    int stateIndex = 3;
+    if (lua_type(L, 1) == LUA_TSTRING) {
+        control = lua_tostring(L, 1);
+        id = ServerWorld::LocalPlayer();
+        stateIndex = 2;
+    } else if (!IsPed(L, 1, id) || lua_type(L, 2) != LUA_TSTRING) {
+        LUA_LOGE("setPedControlState: expected a ped and a control name");
+        lua_pushboolean(L, 0);
+        return 1;
+    } else {
+        control = lua_tostring(L, 2);
+    }
+    if (!KnownControl(control.c_str()) || lua_type(L, stateIndex) != LUA_TBOOLEAN) {
+        LUA_LOGE("setPedControlState: expected a known control and a boolean");
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+    {
+        std::lock_guard lock(g_controlMu);
+        g_controls[id][control] = lua_toboolean(L, stateIndex) != 0;
+    }
+    static bool once = false;
+    DiagOnce(once, "DIAG setPedControlState: CPad is not written; the control is stored for getPedControlState");
+    lua_pushboolean(L, 1);
+    return 1;
+}
+
+// CLuaPedDefs.cpp:1262-1283 and CClientPed.cpp:7912-7925.
+int IsPedOnGround(lua_State* L) {
+    uint32_t id = 0;
+    if (!IsPed(L, 1, id)) {
+        LUA_LOGE("isPedOnGround: expected a ped");
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+    if (!lua_isnoneornil(L, 2) && lua_type(L, 2) != LUA_TBOOLEAN) {
+        LUA_LOGE("isPedOnGround: expected a boolean");
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+    const bool checkVehicles = lua_toboolean(L, 2) != 0;
+    float x = 0, y = 0, z = 0, heading = 0;
+    const bool posed = id == ServerWorld::LocalPlayer() ? (Game::CopyPose(x, y, z, heading), true)
+                                                         : ServerWorld::ElementPose(id, x, y, z);
+    float ground = 0;
+    if (!posed || !Game::FindGroundZFor3DPosition(x, y, z, ground)) {
+        static bool once = false;
+        DiagOnce(once, "DIAG isPedOnGround: CWorld::FindGroundZFor3DPosition did not return a ground height");
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+    if (z < ground - 1e-4f) {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+    const float gap = z - ground;
+    const bool onGround = gap < 1.f || std::fabs(gap - 1.f) < 1e-4f;
+    if (!onGround && checkVehicles) {
+        static bool once = false;
+        DiagOnce(once, "DIAG isPedOnGround: CPed::IsStandingOnEntity is not hooked");
+    }
+    lua_pushboolean(L, onGround ? 1 : 0);
+    return 1;
+}
+
+// CLuaPedDefs.cpp:1144-1167. Stats are not read from the ped. An id outside 0..342 is false.
+int GetPedStat(lua_State* L) {
+    uint32_t id = 0;
+    if (!IsPed(L, 1, id) || !lua_isnumber(L, 2)) {
+        LUA_LOGE("getPedStat: expected a ped and a stat id");
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+    const double stat = lua_tonumber(L, 2);
+    if (!std::isfinite(stat) || stat < 0 || stat >= 343) {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+    static bool once = false;
+    DiagOnce(once, "DIAG getPedStat: CPed::GetStat is not read; valid stat ids return 0");
+    lua_pushnumber(L, 0);
+    return 1;
+}
+
+// CLuaPedDefs.cpp:882-918. No CTaskManager, so a well-formed query returns false.
+int GetPedTask(lua_State* L) {
+    uint32_t id = 0;
+    if (!IsPed(L, 1, id) || lua_type(L, 2) != LUA_TSTRING || !lua_isnumber(L, 3)) {
+        LUA_LOGE("getPedTask: expected a ped, a priority and a task index");
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+    const char* priority = lua_tostring(L, 2);
+    if (!SameControl(priority, "primary") && !SameControl(priority, "secondary")) {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+    static bool once = false;
+    DiagOnce(once, "DIAG getPedTask: CTaskManager is not hooked");
+    lua_pushboolean(L, 0);
+    return 1;
+}
+
+int GetPedSimplestTask(lua_State* L) {
+    uint32_t id = 0;
+    if (!IsPed(L, 1, id)) {
+        LUA_LOGE("getPedSimplestTask: expected a ped");
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+    static bool once = false;
+    DiagOnce(once, "DIAG getPedSimplestTask: CTaskManager is not hooked");
+    lua_pushboolean(L, 0);
+    return 1;
+}
+
+int IsPedDoingTask(lua_State* L) {
+    uint32_t id = 0;
+    if (!IsPed(L, 1, id) || lua_type(L, 2) != LUA_TSTRING) {
+        LUA_LOGE("isPedDoingTask: expected a ped and a task name");
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+    static bool once = false;
+    DiagOnce(once, "DIAG isPedDoingTask: CTaskManager is not hooked");
+    lua_pushboolean(L, 0);
+    return 1;
+}
+
+// CLuaPedDefs.cpp:973-995. ProcessLineOfSight is not hooked, so there is no target element.
+int GetPedTarget(lua_State* L) {
+    uint32_t id = 0;
+    if (!IsPed(L, 1, id)) {
+        LUA_LOGE("getPedTarget: expected a ped");
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+    static bool once = false;
+    DiagOnce(once, "DIAG getPedTarget: CWorld::ProcessLineOfSight is not hooked");
+    lua_pushboolean(L, 0);
+    return 1;
+}
+
+// CLuaPedDefs.cpp:1552-1579. Slot 0..12 is stored. CPed::SetCurrentWeapon is not called.
+int SetPedWeaponSlot(lua_State* L) {
+    uint32_t id = 0;
+    if (!IsPed(L, 1, id) || !lua_isnumber(L, 2)) {
+        LUA_LOGE("setPedWeaponSlot: expected a ped and a slot");
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+    const double slot = lua_tonumber(L, 2);
+    if (!std::isfinite(slot) || slot < 0 || slot >= PedQueries::Slots) {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+    const char* kind = ServerWorld::ElementKindName(id);
+    const bool player = kind && std::strcmp(kind, "player") == 0;
+    if (!PedQueries::SetCurrentSlot(id, static_cast<unsigned>(slot), player)) {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+    static bool once = false;
+    DiagOnce(once, "DIAG setPedWeaponSlot: CPed::SetCurrentWeapon is not called; the client slot is stored");
+    lua_pushboolean(L, 1);
+    return 1;
+}
+
+// CLuaPedDefs.cpp:2548-2573. Script peds store the heading. Other peds have no rotation hook.
+int SetPedRotation(lua_State* L) {
+    uint32_t id = 0;
+    if (!IsPed(L, 1, id) || !lua_isnumber(L, 2)) {
+        LUA_LOGE("setPedRotation: expected a ped and a rotation");
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+    if (!lua_isnoneornil(L, 3) && lua_type(L, 3) != LUA_TBOOLEAN) {
+        LUA_LOGE("setPedRotation: expected a boolean");
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+    if (!Game::ScriptPedAlive(id)) {
+        static bool once = false;
+        DiagOnce(once, "DIAG setPedRotation: CClientPed::SetCurrentRotation is not hooked");
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+    Game::NoteScriptRotation(id, static_cast<float>(lua_tonumber(L, 2)));
+    lua_pushboolean(L, 1);
+    return 1;
+}
+
+// CLuaPedDefs.cpp:1329-1346. Unset means the ped can be knocked off, which is the GTA default.
+int CanPedBeKnockedOffBike(lua_State* L) {
+    uint32_t id = 0;
+    if (!IsPed(L, 1, id)) {
+        LUA_LOGE("canPedBeKnockedOffBike: expected a ped");
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+    std::lock_guard lock(g_controlMu);
+    auto found = g_knockable.find(id);
+    lua_pushboolean(L, (found == g_knockable.end() || found->second) ? 1 : 0);
+    return 1;
+}
+
+// CLuaPedDefs.cpp:2576-2588. Remote players are rejected. The bike flag is stored, not applied to CPed.
+int SetPedCanBeKnockedOffBike(lua_State* L) {
+    uint32_t id = 0;
+    if (!IsPed(L, 1, id) || lua_type(L, 2) != LUA_TBOOLEAN) {
+        LUA_LOGE("setPedCanBeKnockedOffBike: expected a ped and a boolean");
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+    const char* kind = ServerWorld::ElementKindName(id);
+    if (kind && std::strcmp(kind, "player") == 0 && id != ServerWorld::LocalPlayer()) {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+    {
+        std::lock_guard lock(g_controlMu);
+        g_knockable[id] = lua_toboolean(L, 2) != 0;
+    }
+    static bool once = false;
+    DiagOnce(once, "DIAG setPedCanBeKnockedOffBike: CPed::SetCanBeKnockedOffBike is not hooked");
+    lua_pushboolean(L, 1);
+    return 1;
+}
+
 }  // namespace
 
 void BindPedLua(lua_State* L) {
@@ -693,6 +1014,42 @@ void BindPedLua(lua_State* L) {
         {"getPedTargetCollision", GetPedTargetCollision},
         // CLuaCompatibilityDefs.cpp:33.
         {"getPlayerTargetCollision", GetPedTargetCollision},
+        {"isPedOnGround", IsPedOnGround},
+        // CLuaCompatibilityDefs.cpp:26.
+        {"isPlayerOnGround", IsPedOnGround},
+        {"getPedStat", GetPedStat},
+        // CLuaCompatibilityDefs.cpp:44.
+        {"getPlayerStat", GetPedStat},
+        {"getPedTask", GetPedTask},
+        // CLuaCompatibilityDefs.cpp:27.
+        {"getPlayerTask", GetPedTask},
+        {"getPedSimplestTask", GetPedSimplestTask},
+        // CLuaCompatibilityDefs.cpp:28.
+        {"getPlayerSimplestTask", GetPedSimplestTask},
+        {"isPedDoingTask", IsPedDoingTask},
+        // CLuaCompatibilityDefs.cpp:29.
+        {"isPlayerDoingTask", IsPedDoingTask},
+        {"getPedTarget", GetPedTarget},
+        // CLuaCompatibilityDefs.cpp:30.
+        {"getPlayerTarget", GetPedTarget},
+        {"setPedWeaponSlot", SetPedWeaponSlot},
+        // CLuaCompatibilityDefs.cpp:45.
+        {"setPlayerWeaponSlot", SetPedWeaponSlot},
+        {"setPedRotation", SetPedRotation},
+        // CLuaCompatibilityDefs.cpp:47.
+        {"setPlayerRotation", SetPedRotation},
+        {"canPedBeKnockedOffBike", CanPedBeKnockedOffBike},
+        // CLuaCompatibilityDefs.cpp:18.
+        {"canPlayerBeKnockedOffBike", CanPedBeKnockedOffBike},
+        {"setPedCanBeKnockedOffBike", SetPedCanBeKnockedOffBike},
+        // CLuaCompatibilityDefs.cpp:48.
+        {"setPlayerCanBeKnockedOffBike", SetPedCanBeKnockedOffBike},
+        {"getPedControlState", GetPedControlState},
+        // CLuaCompatibilityDefs.cpp:71.
+        {"getControlState", GetPedControlState},
+        {"setPedControlState", SetPedControlState},
+        // CLuaCompatibilityDefs.cpp:70.
+        {"setControlState", SetPedControlState},
         {"getPlayerFromName", GetPlayerFromName},
         {"getPlayerFromNick", GetPlayerFromName},
         {"getPlayerName", GetPlayerName},

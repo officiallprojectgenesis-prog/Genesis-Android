@@ -109,7 +109,7 @@ CATEGORIES = OrderedDict([
         "file": "BROWSER_AND_COMPATIBILITY.md",
         "description": "Embedded Chromium web pages, browser mouse/keyboard input, Discord Rich Presence, and backwards compatibility helpers.",
         "groups": ["CLuaBrowserDefs", "CLuaCompatibilityDefs", "CLuaDiscordDefs"],
-        "subsystem_notes": "Desktop bundles CEF. Android has no web core: createBrowser and guiCreateBrowser still enforce the size errors, getBrowserSettings returns the three flags as false, and page calls return false. Discord checks lengths then returns false. Ped compatibility reads the ENTITY_ADD jetpack flag, PED_SYNC fire/water bits and keysync duck, choke and aim origin. setElementModel stores stock ped and vehicle ids without rebuilding the body. Fourteen old names still alias constant stubs (ground, tasks, controls, attachment)."
+        "subsystem_notes": "Desktop bundles CEF. Android has no web core: createBrowser and guiCreateBrowser still enforce the size errors, getBrowserSettings returns the three flags as false, and page calls return false. Discord checks lengths then returns false. Compatibility names share the modern handlers. Weapon slot, knock-off-bike and control state are stored. Ground height uses FindGroundZFor3DPosition when it returns. Task, target and line-of-sight queries return false because those engine calls are not hooked. setPedRotation applies to a script ped. attachElements and detachElements return false and do not change the server attachment snapshot."
     }),
 ])
 

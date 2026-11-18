@@ -5,8 +5,8 @@ Ped animations, tasks, fighting styles, bone transforms, clothes, stats, voice, 
 ## Parity Status
 
 - **Total Functions:** 206
-- **Implemented:** 39 (18.9%)
-- **Stubs:** 72
+- **Implemented:** 51 (24.8%)
+- **Stubs:** 60
 - **Missing:** 95
 
 > **Technical Requirement:** Requires hooking libGTASA.so `CPed` / `CPlayerPed` (`_ZN10CPlayerPed...`), `CPedIK`, `CTask` hierarchy (wander, fight, duck), and clothing pools.
@@ -27,7 +27,7 @@ Ped animations, tasks, fighting styles, bone transforms, clothes, stats, voice, 
 | `addPedNativeDamageResponseEvent` | *Stub* | `CLuaPedDefs.cpp:359` | `AddPedNativeDamageResponseEvent` | Currently stubbed: `l_true: lua_pushboolean(L, 1)`. Needs native engine wiring. |
 | `addPedNativeGunAimedAtEvent` | Missing | `CLuaPedDefs.cpp:358` | `AddPedNativeGunAimedAtEvent` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
 | `canPedBeDraggedOut` | *Stub* | `CLuaPedDefs.cpp:400` | `ArgumentParser<CanPedBeDraggedOut>` | Currently stubbed: `DefaultValue(kFalse)`. Needs native engine wiring. |
-| `canPedBeKnockedOffBike` | *Stub* | `CLuaPedDefs.cpp:381` | `CanPedBeKnockedOffBike` | Currently stubbed: `DefaultValue(kFalse)`. Needs native engine wiring. |
+| `canPedBeKnockedOffBike` | **Implemented** | `CLuaPedDefs.cpp:381` | `CanPedBeKnockedOffBike` | Operational on Android. (CanPedBeKnockedOffBike) |
 | `cancelPedCarryObject` | Missing | `CLuaPedDefs.cpp:332` | `CancelPedCarryObject` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
 | `clearMissionHelp` | Missing | `CLuaPlayerDefs.cpp:145` | `ArgumentParser<ClearMissionHelp>` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
 | `clearMissionTexts` | Missing | `CLuaPlayerDefs.cpp:144` | `ArgumentParser<ClearMissionTexts>` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
@@ -52,7 +52,7 @@ Ped animations, tasks, fighting styles, bone transforms, clothes, stats, voice, 
 | `getPedCarriedObject` | Missing | `CLuaPedDefs.cpp:330` | `GetPedCarriedObject` | Needs reading/writing CPed / CPlayerPed struct fields in libGTASA.so. |
 | `getPedClothes` | Missing | `CLuaPedDefs.cpp:427` | `GetPedClothes` | Needs reading/writing CPed / CPlayerPed struct fields in libGTASA.so. |
 | `getPedContactElement` | **Implemented** | `CLuaPedDefs.cpp:411` | `GetPedContactElement` | Operational on Android. (GetPedContactElement) |
-| `getPedControlState` | *Stub* | `CLuaPedDefs.cpp:388` | `ArgumentParserWarn<false, GetPedControlState>` | Currently stubbed: `l_false: lua_pushboolean(L, 0)`. Needs native engine wiring. |
+| `getPedControlState` | **Implemented** | `CLuaPedDefs.cpp:388` | `ArgumentParserWarn<false, GetPedControlState>` | Operational on Android. (GetPedControlState) |
 | `getPedFightingStyle` | Missing | `CLuaPedDefs.cpp:391` | `GetPedFightingStyle` | Needs reading/writing CPed / CPlayerPed struct fields in libGTASA.so. |
 | `getPedMoveState` | **Implemented** | `CLuaPedDefs.cpp:428` | `GetPedMoveState` | Operational on Android. (l_getPedMoveState) |
 | `getPedNativeCoupleDiagnostic` | *Stub* | `CLuaPedDefs.cpp:349` | `GetPedNativeCoupleDiagnostic` | Currently stubbed: `l_false: lua_pushboolean(L, 0)`. Needs native engine wiring. |
@@ -64,15 +64,15 @@ Ped animations, tasks, fighting styles, bone transforms, clothes, stats, voice, 
 | `getPedOxygenLevel` | Missing | `CLuaPedDefs.cpp:407` | `GetPedOxygenLevel` | Needs reading/writing CPed / CPlayerPed struct fields in libGTASA.so. |
 | `getPedPhysicalProofs` | *Stub* | `CLuaPedDefs.cpp:404` | `ArgumentParser<GetPedPhysicalProofs>` | Currently stubbed: `DefaultValue(kFalse)`. Needs native engine wiring. |
 | `getPedRotation` | **Implemented** | `CLuaPedDefs.cpp:379` | `GetPedRotation` | Operational on Android. (l_getPedRotation) |
-| `getPedSimplestTask` | *Stub* | `CLuaPedDefs.cpp:413` | `GetPedSimplestTask` | Currently stubbed: `DefaultValue(kEmptyString)`. Needs native engine wiring. |
-| `getPedStat` | *Stub* | `CLuaPedDefs.cpp:406` | `GetPedStat` | Currently stubbed: `l_num0: lua_pushinteger(L, 0)`. Needs native engine wiring. |
+| `getPedSimplestTask` | **Implemented** | `CLuaPedDefs.cpp:413` | `GetPedSimplestTask` | Operational on Android. (GetPedSimplestTask) |
+| `getPedStat` | **Implemented** | `CLuaPedDefs.cpp:406` | `GetPedStat` | Operational on Android. (GetPedStat) |
 | `getPedStayInSamePlace` | *Stub* | `CLuaPedDefs.cpp:402` | `ArgumentParser<GetPedStayInSamePlace>` | Currently stubbed: `l_false: lua_pushboolean(L, 0)`. Needs native engine wiring. |
 | `getPedSuffersCriticalHits` | *Stub* | `CLuaPedDefs.cpp:399` | `ArgumentParser<GetPedSuffersCriticalHits>` | Currently stubbed: `DefaultValue(kFalse)`. Needs native engine wiring. |
-| `getPedTarget` | *Stub* | `CLuaPedDefs.cpp:414` | `GetPedTarget` | Currently stubbed: `l_false: lua_pushboolean(L, 0)`. Needs native engine wiring. |
+| `getPedTarget` | **Implemented** | `CLuaPedDefs.cpp:414` | `GetPedTarget` | Operational on Android. (GetPedTarget) |
 | `getPedTargetCollision` | **Implemented** | `CLuaPedDefs.cpp:417` | `GetPedTargetCollision` | Operational on Android. (GetPedTargetCollision) |
 | `getPedTargetEnd` | **Implemented** | `CLuaPedDefs.cpp:416` | `GetPedTargetEnd` | Operational on Android. (GetPedTargetEnd) |
 | `getPedTargetStart` | **Implemented** | `CLuaPedDefs.cpp:415` | `GetPedTargetStart` | Operational on Android. (GetPedTargetStart) |
-| `getPedTask` | *Stub* | `CLuaPedDefs.cpp:412` | `GetPedTask` | Currently stubbed: `l_false: lua_pushboolean(L, 0)`. Needs native engine wiring. |
+| `getPedTask` | **Implemented** | `CLuaPedDefs.cpp:412` | `GetPedTask` | Operational on Android. (GetPedTask) |
 | `getPedTaskSequenceProgress` | *Stub* | `CLuaPedDefs.cpp:425` | `ArgumentParser<GetPedTaskSequenceProgress>` | Currently stubbed: `DefaultValue(kZero)`. Needs native engine wiring. |
 | `getPedTotalAmmo` | **Implemented** | `CLuaPedDefs.cpp:422` | `GetPedTotalAmmo` | Game-thread GTA ped snapshot plus per-element client cache seeded by ENTITY_ADD/PLAYER_LIST and weapon RPCs. Queries preserve death tasks/network revival, optional weapon slot and uint16 ammo semantics; clip ammo requires a streamed body. Stream-out saves inventory and offscreen RPCs update the cache before body restoration; generation guards reject removed/reused IDs. ARM64 layout is instruction-guarded. Native reload, sync-driven weapons and streaming still need device validation; this is handler coverage, not full gameplay parity. |
 | `getPedVoice` | Missing | `CLuaPedDefs.cpp:374` | `GetPedVoice` | Needs reading/writing CPed / CPlayerPed struct fields in libGTASA.so. |
@@ -102,7 +102,7 @@ Ped animations, tasks, fighting styles, bone transforms, clothes, stats, voice, 
 | `isPedChoking` | **Implemented** | `CLuaPedDefs.cpp:435` | `IsPedChoking` | Operational on Android. (IsPedChoking) |
 | `isPedDead` | **Implemented** | `CLuaPedDefs.cpp:437` | `IsPedDead` | Game-thread GTA ped snapshot plus per-element client cache seeded by ENTITY_ADD/PLAYER_LIST and weapon RPCs. Queries preserve death tasks/network revival, optional weapon slot and uint16 ammo semantics; clip ammo requires a streamed body. Stream-out saves inventory and offscreen RPCs update the cache before body restoration; generation guards reject removed/reused IDs. ARM64 layout is instruction-guarded. Native reload, sync-driven weapons and streaming still need device validation; this is handler coverage, not full gameplay parity. |
 | `isPedDoingGangDriveby` | *Stub* | `CLuaPedDefs.cpp:390` | `IsPedDoingGangDriveby` | Currently stubbed: `DefaultValue(kFalse)`. Needs native engine wiring. |
-| `isPedDoingTask` | *Stub* | `CLuaPedDefs.cpp:434` | `IsPedDoingTask` | Currently stubbed: `DefaultValue(kFalse)`. Needs native engine wiring. |
+| `isPedDoingTask` | **Implemented** | `CLuaPedDefs.cpp:434` | `IsPedDoingTask` | Operational on Android. (IsPedDoingTask) |
 | `isPedDucked` | **Implemented** | `CLuaPedDefs.cpp:436` | `IsPedDucked` | Operational on Android. (IsPedDucked) |
 | `isPedFootBloodEnabled` | Missing | `CLuaPedDefs.cpp:395` | `IsPedFootBloodEnabled` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
 | `isPedFrozen` | Missing | `CLuaPedDefs.cpp:394` | `IsPedFrozen` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
@@ -117,7 +117,7 @@ Ped animations, tasks, fighting styles, bone transforms, clothes, stats, voice, 
 | `isPedNativePointArmActive` | Missing | `CLuaPedDefs.cpp:357` | `IsPedNativePointArmActive` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
 | `isPedNativeTaskReady` | Missing | `CLuaPedDefs.cpp:308` | `ArgumentParser<IsPedNativeTaskReady>` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
 | `isPedNeverTargeted` | *Stub* | `CLuaPedDefs.cpp:403` | `ArgumentParser<IsPedNeverTargeted>` | Currently stubbed: `DefaultValue(kFalse)`. Needs native engine wiring. |
-| `isPedOnGround` | *Stub* | `CLuaPedDefs.cpp:433` | `IsPedOnGround` | Currently stubbed: `l_true: lua_pushboolean(L, 1)`. Needs native engine wiring. |
+| `isPedOnGround` | **Implemented** | `CLuaPedDefs.cpp:433` | `IsPedOnGround` | Operational on Android. (IsPedOnGround) |
 | `isPedOnlyDamagedByPlayer` | *Stub* | `CLuaPedDefs.cpp:401` | `ArgumentParser<IsPedOnlyDamagedByPlayer>` | Currently stubbed: `DefaultValue(kFalse)`. Needs native engine wiring. |
 | `isPedReloadingWeapon` | Missing | `CLuaPedDefs.cpp:438` | `ArgumentParserWarn<false, IsPedReloadingWeapon>` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
 | `isPedStoryProtected` | Missing | `CLuaPedDefs.cpp:398` | `ArgumentParser<IsPedStoryProtected>` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
@@ -159,10 +159,10 @@ Ped animations, tasks, fighting styles, bone transforms, clothes, stats, voice, 
 | `setPedBleeding` | Missing | `CLuaPedDefs.cpp:371` | `ArgumentParser<SetPedBleeding>` | Needs reading/writing CPed / CPlayerPed struct fields in libGTASA.so. |
 | `setPedCameraRotation` | Missing | `CLuaPedDefs.cpp:299` | `SetPedCameraRotation` | Needs reading/writing CPed / CPlayerPed struct fields in libGTASA.so. |
 | `setPedCanBeDraggedOut` | *Stub* | `CLuaPedDefs.cpp:366` | `ArgumentParser<SetPedCanBeDraggedOut>` | Currently stubbed: `DefaultValue(kTrue)`. Needs native engine wiring. |
-| `setPedCanBeKnockedOffBike` | *Stub* | `CLuaPedDefs.cpp:285` | `SetPedCanBeKnockedOffBike` | Currently stubbed: `DefaultValue(kTrue)`. Needs native engine wiring. |
+| `setPedCanBeKnockedOffBike` | **Implemented** | `CLuaPedDefs.cpp:285` | `SetPedCanBeKnockedOffBike` | Operational on Android. (SetPedCanBeKnockedOffBike) |
 | `setPedCarryObject` | Missing | `CLuaPedDefs.cpp:327` | `SetPedCarryObject` | Needs reading/writing CPed / CPlayerPed struct fields in libGTASA.so. |
 | `setPedChatWith` | Missing | `CLuaPedDefs.cpp:311` | `ArgumentParser<SetPedChatWith>` | Needs reading/writing CPed / CPlayerPed struct fields in libGTASA.so. |
-| `setPedControlState` | *Stub* | `CLuaPedDefs.cpp:291` | `ArgumentParserWarn<false, SetPedControlState>` | Currently stubbed: `l_true: lua_pushboolean(L, 1)`. Needs native engine wiring. |
+| `setPedControlState` | **Implemented** | `CLuaPedDefs.cpp:291` | `ArgumentParserWarn<false, SetPedControlState>` | Operational on Android. (SetPedControlState) |
 | `setPedDoingGangDriveby` | Missing | `CLuaPedDefs.cpp:293` | `SetPedDoingGangDriveby` | Needs reading/writing CPed / CPlayerPed struct fields in libGTASA.so. |
 | `setPedDriveBy` | *Stub* | `CLuaPedDefs.cpp:336` | `ArgumentParser<SetPedDriveBy>` | Currently stubbed: `DefaultValue(kTrue)`. Needs native engine wiring. |
 | `setPedDriveMission` | *Stub* | `CLuaPedDefs.cpp:335` | `ArgumentParser<SetPedDriveMission>` | Currently stubbed: `DefaultValue(kTrue)`. Needs native engine wiring. |
@@ -187,7 +187,7 @@ Ped animations, tasks, fighting styles, bone transforms, clothes, stats, voice, 
 | `setPedOnlyDamagedByPlayer` | *Stub* | `CLuaPedDefs.cpp:367` | `ArgumentParser<SetPedOnlyDamagedByPlayer>` | Currently stubbed: `DefaultValue(kTrue)`. Needs native engine wiring. |
 | `setPedOxygenLevel` | Missing | `CLuaPedDefs.cpp:302` | `SetPedOxygenLevel` | Needs reading/writing CPed / CPlayerPed struct fields in libGTASA.so. |
 | `setPedPhysicalProofs` | *Stub* | `CLuaPedDefs.cpp:370` | `ArgumentParser<SetPedPhysicalProofs>` | Currently stubbed: `DefaultValue(kTrue)`. Needs native engine wiring. |
-| `setPedRotation` | *Stub* | `CLuaPedDefs.cpp:283` | `SetPedRotation` | Currently stubbed: `l_true: lua_pushboolean(L, 1)`. Needs native engine wiring. |
+| `setPedRotation` | **Implemented** | `CLuaPedDefs.cpp:283` | `SetPedRotation` | Operational on Android. (SetPedRotation) |
 | `setPedScriptedSpeechMuted` | Missing | `CLuaPedDefs.cpp:322` | `ArgumentParser<SetPedScriptedSpeechMuted>` | Needs reading/writing CPed / CPlayerPed struct fields in libGTASA.so. |
 | `setPedShootAt` | Missing | `CLuaPedDefs.cpp:325` | `ArgumentParser<SetPedShootAt>` | Needs reading/writing CPed / CPlayerPed struct fields in libGTASA.so. |
 | `setPedStandStill` | *Stub* | `CLuaPedDefs.cpp:314` | `ArgumentParser<SetPedStandStill>` | Currently stubbed: `l_true: lua_pushboolean(L, 1)`. Needs native engine wiring. |
@@ -203,7 +203,7 @@ Ped animations, tasks, fighting styles, bone transforms, clothes, stats, voice, 
 | `setPedWander` | **Implemented** | `CLuaPedDefs.cpp:319` | `ArgumentParser<SetPedWander>` | Operational on Android. (l_setPedWander) |
 | `setPedWeaponAccuracy` | *Stub* | `CLuaPedDefs.cpp:307` | `ArgumentParser<SetPedWeaponAccuracy>` | Currently stubbed: `l_true: lua_pushboolean(L, 1)`. Needs native engine wiring. |
 | `setPedWeaponShootingRate` | *Stub* | `CLuaPedDefs.cpp:306` | `ArgumentParser<SetPedWeaponShootingRate>` | Currently stubbed: `l_true: lua_pushboolean(L, 1)`. Needs native engine wiring. |
-| `setPedWeaponSlot` | *Stub* | `CLuaPedDefs.cpp:284` | `SetPedWeaponSlot` | Currently stubbed: `l_true: lua_pushboolean(L, 1)`. Needs native engine wiring. |
+| `setPedWeaponSlot` | **Implemented** | `CLuaPedDefs.cpp:284` | `SetPedWeaponSlot` | Operational on Android. (SetPedWeaponSlot) |
 | `setPlayerHudComponentProperty` | Missing | `CLuaPlayerDefs.cpp:124` | `ArgumentParser<SetPlayerHudComponentProperty>` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
 | `setPlayerHudComponentVisible` | **Implemented** | `CLuaPlayerDefs.cpp:117` | `ShowPlayerHudComponent` | Operational on Android. (l_setPlayerHudComponentVisible) |
 | `setPlayerMoney` | Missing | `CLuaPlayerDefs.cpp:118` | `SetPlayerMoney` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
