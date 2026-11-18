@@ -9,18 +9,18 @@ Each document lists every single function, its current Android implementation st
 | Category | Documentation File | Total | Implemented | Stub | Missing | Parity % |
 |---|---|---|---|---|---|---|
 | **Vehicles (CLuaVehicleDefs)** | [VEHICLES.md](VEHICLES.md) | 165 | 9 | 19 | 137 | 5.5% |
-| **Peds & Players (CLuaPedDefs, CLuaPlayerDefs)** | [PEDS_AND_PLAYERS.md](PEDS_AND_PLAYERS.md) | 206 | 32 | 72 | 102 | 15.5% |
+| **Peds & Players (CLuaPedDefs, CLuaPlayerDefs)** | [PEDS_AND_PLAYERS.md](PEDS_AND_PLAYERS.md) | 206 | 39 | 72 | 95 | 18.9% |
 | **World, Objects & Environment** | [WORLD_AND_OBJECTS.md](WORLD_AND_OBJECTS.md) | 227 | 124 | 11 | 92 | 54.6% |
-| **Element Tree & Data (CLuaElementDefs)** | [ELEMENTS.md](ELEMENTS.md) | 81 | 54 | 8 | 19 | 66.7% |
+| **Element Tree & Data (CLuaElementDefs)** | [ELEMENTS.md](ELEMENTS.md) | 81 | 60 | 7 | 14 | 74.1% |
 | **GUI & 2D/3D Drawing (DX & CEGUI)** | [GUI_AND_DX.md](GUI_AND_DX.md) | 199 | 199 | 0 | 0 | 100.0% |
 | **Engine & Model Replacement (DFF, TXD, COL)** | [ENGINE_AND_MODELS.md](ENGINE_AND_MODELS.md) | 125 | 1 | 15 | 109 | 0.8% |
 | **Audio & Voice System (CLuaAudioDefs)** | [AUDIO_AND_VOICE.md](AUDIO_AND_VOICE.md) | 57 | 21 | 1 | 35 | 36.8% |
 | **Camera & Viewport (CLuaCameraDefs)** | [CAMERA.md](CAMERA.md) | 47 | 47 | 0 | 0 | 100.0% |
-| **Weapons & Projectiles (CLuaWeaponDefs, CLuaProjectileDefs)** | [WEAPONS_AND_COMBAT.md](WEAPONS_AND_COMBAT.md) | 31 | 20 | 0 | 11 | 64.5% |
+| **Weapons & Projectiles (CLuaWeaponDefs, CLuaProjectileDefs)** | [WEAPONS_AND_COMBAT.md](WEAPONS_AND_COMBAT.md) | 31 | 31 | 0 | 0 | 100.0% |
 | **Core System, Networking & Utilities** | [CORE_AND_UTILITY.md](CORE_AND_UTILITY.md) | 195 | 171 | 0 | 24 | 87.7% |
-| **Markers, Blips, ColShapes & Spatial** | [MARKERS_AND_SPATIAL.md](MARKERS_AND_SPATIAL.md) | 145 | 0 | 3 | 142 | 0.0% |
-| **Web Browser & Compatibility (CEF / Discord)** | [BROWSER_AND_COMPATIBILITY.md](BROWSER_AND_COMPATIBILITY.md) | 103 | 4 | 0 | 99 | 3.9% |
-| **TOTAL** | **All Categories** | **1581** | **682** | **129** | **770** | **43.1%** |
+| **Markers, Blips, ColShapes & Spatial** | [MARKERS_AND_SPATIAL.md](MARKERS_AND_SPATIAL.md) | 145 | 2 | 2 | 141 | 1.4% |
+| **Web Browser & Compatibility (CEF / Discord)** | [BROWSER_AND_COMPATIBILITY.md](BROWSER_AND_COMPATIBILITY.md) | 103 | 89 | 14 | 0 | 86.4% |
+| **TOTAL** | **All Categories** | **1581** | **793** | **141** | **647** | **50.2%** |
 
 ## Implementation Priority Tiers
 

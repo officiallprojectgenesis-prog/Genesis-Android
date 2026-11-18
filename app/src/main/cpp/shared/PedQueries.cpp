@@ -10,6 +10,7 @@ namespace {
 struct Entry { Snapshot state; };
 std::mutex mutex;
 std::unordered_map<uint32_t, Entry> entries;
+std::unordered_map<uint32_t, Presentation> presentation;
 uint64_t generation = 0;
 Entry New(bool player, const Entity::PedSpawn* spawn) {
     Entry e;
@@ -28,6 +29,20 @@ Entry New(bool player, const Entity::PedSpawn* spawn) {
     return e;
 }
 bool Valid(uint32_t id) { return id && id != UINT32_MAX; }
+void ApplyPresentation(uint32_t id, Snapshot& out) {
+    auto found = presentation.find(id);
+    if (found == presentation.end()) return;
+    const Presentation& flags = found->second;
+    out.onFire = flags.onFire;
+    out.inWater = flags.inWater;
+    out.ducked = flags.ducked;
+    out.choking = flags.choking;
+    out.aim = flags.aim;
+    out.aimX = flags.aimX;
+    out.aimY = flags.aimY;
+    out.aimZ = flags.aimZ;
+}
+Presentation& Flags(uint32_t id) { return presentation[id]; }
 }
 // CWeaponNames.cpp:94-97. Includes the unused/invalid weapon holes.
 int WeaponSlot(unsigned type) {
@@ -45,13 +60,22 @@ void Create(uint32_t id, bool player, const Entity::PedSpawn* spawn) {
     std::lock_guard lock(mutex);
     entries[id] = New(player, spawn);
 }
-void Forget(uint32_t id) { std::lock_guard lock(mutex); entries.erase(id); }
-void Reset() { std::lock_guard lock(mutex); entries.clear(); }
+void Forget(uint32_t id) {
+    std::lock_guard lock(mutex);
+    entries.erase(id);
+    presentation.erase(id);
+}
+void Reset() {
+    std::lock_guard lock(mutex);
+    entries.clear();
+    presentation.clear();
+}
 bool Copy(uint32_t id, Snapshot& out) {
     std::lock_guard lock(mutex);
     auto it = entries.find(id);
     if (it == entries.end()) return false;
     out = it->second.state;
+    ApplyPresentation(id, out);
     return true;
 }
 bool CopyRestore(uint32_t id, Snapshot& out) {
@@ -60,6 +84,7 @@ bool CopyRestore(uint32_t id, Snapshot& out) {
     if (it == entries.end()) return false;
     out = it->second.state;
     for (unsigned i = 0; i < Slots; ++i) out.weapons[i].total = out.cachedAmmo[i];
+    ApplyPresentation(id, out);
     return true;
 }
 bool Current(uint32_t id, uint64_t generation) {
@@ -113,6 +138,38 @@ uint64_t WeaponRpc(uint32_t id, const Game::PedRpcOp& op) {
     }
     return s.generation;
 }
+Presentation ReadPresentation(uint32_t id) {
+    if (!Valid(id)) return {};
+    std::lock_guard lock(mutex);
+    auto found = presentation.find(id);
+    return found == presentation.end() ? Presentation{} : found->second;
+}
+void OnFire(uint32_t id, bool onFire) {
+    if (!Valid(id)) return;
+    std::lock_guard lock(mutex);
+    Flags(id).onFire = onFire;
+}
+void InWater(uint32_t id, bool inWater) {
+    if (!Valid(id)) return;
+    std::lock_guard lock(mutex);
+    Flags(id).inWater = inWater;
+}
+void Keys(uint32_t id, bool ducked, bool choking) {
+    if (!Valid(id)) return;
+    std::lock_guard lock(mutex);
+    Presentation& flags = Flags(id);
+    flags.ducked = ducked;
+    flags.choking = choking;
+}
+void Aim(uint32_t id, float x, float y, float z) {
+    if (!Valid(id)) return;
+    std::lock_guard lock(mutex);
+    Presentation& flags = Flags(id);
+    flags.aim = true;
+    flags.aimX = x;
+    flags.aimY = y;
+    flags.aimZ = z;
+}
 void Health(uint32_t id, float health, bool clearDead) {
     if (!std::isfinite(health)) return;
     std::lock_guard lock(mutex);
@@ -134,6 +191,7 @@ void Spawn(uint32_t id) {
     std::lock_guard lock(mutex);
     auto it = entries.find(id);
     if (it != entries.end()) it->second = New(it->second.state.player, nullptr);
+    presentation.erase(id);
 }
 void StreamOut(uint32_t id, const Snapshot& native) {
     std::lock_guard lock(mutex);

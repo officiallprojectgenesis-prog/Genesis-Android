@@ -546,6 +546,8 @@ void InstallXmlLua(lua_State* L) {
         {"xmlCreateChild", l_xmlCreateChild},
         {"xmlDestroyNode", l_xmlDestroyNode},
         {"xmlFindChild", l_xmlFindChild},
+        // CLuaCompatibilityDefs.cpp:66. Same function as xmlFindChild.
+        {"xmlNodeFindChild", l_xmlFindChild},
         {"xmlNodeGetChildren", l_xmlNodeGetChildren},
         {"xmlNodeGetParent", l_xmlNodeGetParent},
         {"xmlNodeGetValue", l_xmlNodeGetValue},

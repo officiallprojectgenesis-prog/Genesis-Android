@@ -377,6 +377,7 @@ float CopyLocalArmor() { return 0.f; }
 // No libGTASA in this build, so getGroundPosition cannot query the world.
 bool FindGroundZFor3DPosition(float, float, float, float&) { return false; }
 uint32_t NoteScriptPed(int, float, float, float, float) { return 0; }
+bool NoteScriptPedModel(uint32_t, int) { return false; }
 bool ReleaseScriptPed(uint32_t) { return false; }
 bool ScriptPedAlive(uint32_t) { return false; }
 void NoteScriptClothes(uint32_t, const char*, const char*, int, bool) {}
@@ -394,6 +395,7 @@ void NoteDamage(uint32_t, float, uint8_t) {}
 bool ConsumeDamage(uint32_t&, uint8_t&) { return false; }
 void NoteRemoteAim(uint32_t, float, float, int, int, bool, bool) {}
 void NoteRemoteWeapon(uint32_t, int) {}
+bool CopySpatialScene(std::vector<Spatial::Element>&) { return false; }
 bool CopyPedQuery(uint32_t id, PedQueries::Snapshot& out) {
     if (!PedQueries::Copy(id, out)) return false;
     Headless::CopyPedQueryNative(id, out);

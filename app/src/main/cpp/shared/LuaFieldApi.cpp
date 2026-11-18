@@ -9,6 +9,7 @@
 // Engine writes that are not hooked stay as DIAG. The value is still stored.
 
 #include "LuaFieldApi.h"
+#include "LuaSpatialApi.h"
 #include "LuaApiExtra.h"
 #include "LuaVMStub.h"
 #include "ServerWorld.h"
@@ -28,7 +29,12 @@ extern "C" {
 namespace WorldRPG::Script {
 namespace {
 
+uint64_t AreaGeneration(uint32_t id) {
+    const auto generation=ServerWorld::ElementGeneration(id);
+    return !generation&&Game::ScriptPedAlive(id)?id:generation;
+}
 struct Fields {
+    uint64_t areaGeneration=0;
     bool alphaSet = false;
     unsigned char alpha = 255;
     bool interiorSet = false;
@@ -309,14 +315,16 @@ int l_getElementInterior(lua_State* L) {
         lua_pushboolean(L, 0);
         return 1;
     }
+    Spatial::Element shape;
+    if(CopySpatialShape(id,shape)) { lua_pushinteger(L,shape.interior); return 1; }
     const auto found = g_fields.find(id);
-    if (found != g_fields.end() && found->second.interiorSet) {
+    if (found != g_fields.end() && found->second.areaGeneration==AreaGeneration(id) && found->second.interiorSet) {
         lua_pushinteger(L, found->second.interior);
         return 1;
     }
     ServerWorld::ActorSpawn visual;
     if (ServerWorld::CopyVisual(id, visual) || id == ServerWorld::LocalPlayer() || KindOf(id) != Kind::None) {
-        lua_pushinteger(L, ServerWorld::CopyVisual(id, visual) ? visual.interior : 0);
+        lua_pushinteger(L, ServerWorld::InteriorOf(id));
         return 1;
     }
     lua_pushboolean(L, 0);
@@ -330,6 +338,16 @@ int l_setElementInterior(lua_State* L) {
         lua_pushboolean(L, 0);
         return 1;
     }
+    if(SpatialSetArea(id,static_cast<unsigned>(value),false)) { lua_pushboolean(L,1); return 1; }
+    if(ServerWorld::ElementGeneration(id)) {
+        ServerWorld::NoteElementInterior(id,static_cast<uint8_t>(value));
+        g_fields[id].interiorSet=false;
+        Diag(g_diagInterior,"DIAG setElementInterior: client area updated; native CWorld::SetCurrentArea remains unported");
+        lua_pushboolean(L,1); return 1;
+    }
+    auto& area=g_fields[id];
+    const auto generation=AreaGeneration(id);
+    if(area.areaGeneration!=generation) { area.interiorSet=false; area.dimensionSet=false; area.areaGeneration=generation; }
     g_fields[id].interiorSet = true;
     g_fields[id].interior = static_cast<unsigned char>(value);
     Diag(g_diagInterior, "DIAG setElementInterior: CWorld::SetCurrentArea is not hooked; the area is stored");
@@ -338,14 +356,15 @@ int l_setElementInterior(lua_State* L) {
 }
 
 int l_getElementDimension(lua_State* L) {
-    const uint32_t id = ElementIdOf(L, 1);
-    if (id == 0) {
-        lua_pushboolean(L, 0);
-        return 1;
-    }
-    const auto found = g_fields.find(id);
-    lua_pushinteger(L, found != g_fields.end() && found->second.dimensionSet ? found->second.dimension : 0);
-    return 1;
+    const uint32_t id=ElementIdOf(L,1);
+    if(!id) { lua_pushboolean(L,0); return 1; }
+    Spatial::Element shape;
+    if(CopySpatialShape(id,shape)) { lua_pushinteger(L,shape.dimension); return 1; }
+    uint8_t interior=0; uint16_t dimension=0;
+    ServerWorld::ActorSpawn visual;
+    if(ServerWorld::CopyVisual(id,visual)||id==ServerWorld::LocalPlayer()) dimension=ServerWorld::DimensionOf(id);
+    ApplySpatialArea(id,AreaGeneration(id),interior,dimension);
+    lua_pushinteger(L,dimension); return 1;
 }
 
 int l_setElementDimension(lua_State* L) {
@@ -361,6 +380,16 @@ int l_setElementDimension(lua_State* L) {
         lua_pushboolean(L, 0);
         return 1;
     }
+    if(SpatialSetArea(id,static_cast<unsigned>(value),true)) { lua_pushboolean(L,1); return 1; }
+    if(ServerWorld::ElementGeneration(id)) {
+        ServerWorld::NoteElementDimension(id,static_cast<uint16_t>(value));
+        g_fields[id].dimensionSet=false;
+        Diag(g_diagDimension,"DIAG setElementDimension: client dimension updated; native vehicle streaming by dimension remains unported");
+        lua_pushboolean(L,1); return 1;
+    }
+    auto& area=g_fields[id];
+    const auto generation=AreaGeneration(id);
+    if(area.areaGeneration!=generation) { area.interiorSet=false; area.dimensionSet=false; area.areaGeneration=generation; }
     g_fields[id].dimensionSet = true;
     g_fields[id].dimension = static_cast<unsigned short>(value);
     Diag(g_diagDimension, "DIAG setElementDimension: dimension is stored; streamer distance is not hooked");
@@ -1415,10 +1444,25 @@ int l_resetOcclusionRegion(lua_State* L) {
 
 }  // namespace
 
+void ApplySpatialArea(uint32_t id,uint64_t generation,uint8_t& interior,uint16_t& dimension) {
+    auto it=g_fields.find(id);
+    if(it==g_fields.end() || it->second.areaGeneration!=generation) return;
+    if(it->second.interiorSet) interior=it->second.interior;
+    if(it->second.dimensionSet) dimension=it->second.dimension;
+}
+
 void InstallFieldLua(lua_State* L) {
     const struct { const char* name; lua_CFunction fn; } binds[] = {
         {"getElementModel", l_getElementModel},
+        // CLuaCompatibilityDefs.cpp:41, 50, 51 and 56. Same function as getElementModel.
+        {"getPlayerSkin", l_getElementModel},
+        {"getPedSkin", l_getElementModel},
+        {"getVehicleModel", l_getElementModel},
+        {"getVehicleID", l_getElementModel},
         {"getElementRotation", l_getElementRotation},
+        // CLuaCompatibilityDefs.cpp:53 and 57. Same function as getElementRotation.
+        {"getObjectRotation", l_getElementRotation},
+        {"getVehicleRotation", l_getElementRotation},
         {"getElementMatrix", l_getElementMatrix},
         {"getElementAlpha", l_getElementAlpha},
         {"setElementAlpha", l_setElementAlpha},

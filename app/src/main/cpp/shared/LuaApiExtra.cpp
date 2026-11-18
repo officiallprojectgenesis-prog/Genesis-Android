@@ -639,13 +639,19 @@ void InstallExtraBindings(lua_State* L) {
         {"setVehicleLoadCollisionFlag", kTrue}, {"setVehicleStraightLineDistance", kTrue},
         {"setVehicleTyresCanBurst", kTrue}, {"setVehicleOverrideLights", kTrue}, {"setVehicleEngineState", kTrue},
         {"setVehicleColor", kTrue},
-        {"isPedDoingTask", kFalse}, {"isPedMissionActor", kFalse},
-        {"setPedMissionActor", kTrue}, {"getPedSimplestTask", kEmptyString}, {"getPedTaskSequenceProgress", kZero},
+        // CLuaCompatibilityDefs.cpp:28-29. Same defaults as the ped task queries.
+        {"isPedDoingTask", kFalse}, {"isPlayerDoingTask", kFalse}, {"isPedMissionActor", kFalse},
+        {"setPedMissionActor", kTrue}, {"getPedSimplestTask", kEmptyString}, {"getPlayerSimplestTask", kEmptyString},
+        {"getPedTaskSequenceProgress", kZero},
         {"getPedPhysicalProofs", kFalse}, {"getPedSuffersCriticalHits", kFalse}, {"canPedBeKnockedOffBike", kFalse},
+        // CLuaCompatibilityDefs.cpp:18. Same default as canPedBeKnockedOffBike.
+        {"canPlayerBeKnockedOffBike", kFalse},
         {"canPedBeDraggedOut", kFalse}, {"isPedOnlyDamagedByPlayer", kFalse}, {"isPedNeverTargeted", kFalse},
         {"isPedDoingGangDriveby", kFalse}, {"getPedNativeVehicleResponse", kNil}, {"getPedCameraRotation", kZero},
         {"getPedBonePosition", kZero3}, {"getPedNativeGroupDiagnostic", kFalse},
-        {"setPedPhysicalProofs", kTrue}, {"setPedCanBeKnockedOffBike", kTrue}, {"setPedSuffersCriticalHits", kTrue},
+        {"setPedPhysicalProofs", kTrue}, {"setPedCanBeKnockedOffBike", kTrue},
+        // CLuaCompatibilityDefs.cpp:48.
+        {"setPlayerCanBeKnockedOffBike", kTrue}, {"setPedSuffersCriticalHits", kTrue},
         {"setPedOnlyDamagedByPlayer", kTrue}, {"setPedNeverTargeted", kTrue}, {"setPedDriveBy", kTrue},
         {"setPedDriveMission", kTrue}, {"setPedKillOnFoot", kTrue}, {"setPedDriveTo", kTrue}, {"setPedGoTo", kTrue},
         {"setPedTurnToFace", kTrue}, {"setPedAimAt", kTrue}, {"setPedHandsUp", kTrue}, {"setPedEnterVehicle", kTrue},
@@ -655,6 +661,8 @@ void InstallExtraBindings(lua_State* L) {
         {"getScreenFromWorldPosition", kNil},
         // Physical attachment has no mobile hook yet; do not report a successful mutation.
         {"executeCommandHandler", kFalse}, {"attachElements", kFalse}, {"detachElements", kFalse},
+        // CLuaCompatibilityDefs.cpp:60-61. Same defaults as attachElements and detachElements.
+        {"attachElementToElement", kFalse}, {"detachElementFromElement", kFalse},
         {"setObjectMaterial", kTrue},
         {"playSoundFrontEnd", kFalse}, {"playSound3D", kFalse}, {"playSound", kFalse}, {"stopSound", kTrue},
         {"setSoundVolume", kTrue}, {"setSoundMaxDistance", kTrue}, {"setSoundMinDistance", kTrue},

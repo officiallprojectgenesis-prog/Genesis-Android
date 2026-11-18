@@ -123,6 +123,173 @@ int IsPedDead(lua_State* L) {
     return 1;
 }
 
+void DiagOnce(bool& once, const char* text) {
+    if (once) return;
+    once = true;
+    LUA_LOGI("%s", text);
+}
+
+// CLuaPedDefs.cpp:1240-1259. ENTITY_ADD stores SetHasJetPack. The local jetpack task is not read.
+int DoesPedHaveJetPack(lua_State* L) {
+    uint32_t id = 0;
+    if (!ReadPed(L, id)) {
+        LUA_LOGE("doesPedHaveJetPack: expected a ped");
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+    Entity::PedSpawn spawn;
+    const bool has = ServerWorld::CopyPedSpawn(id, spawn) && spawn.hasJetpack;
+    if (id == ServerWorld::LocalPlayer()) {
+        static bool once = false;
+        DiagOnce(once, "DIAG doesPedHaveJetPack: the local CPed jetpack task is not read");
+    }
+    lua_pushboolean(L, has ? 1 : 0);
+    return 1;
+}
+
+// CLuaPedDefs.cpp:1975-1995 and CStaticFunctionDefinitions.cpp:1960-1963.
+int IsPedOnFire(lua_State* L) {
+    uint32_t id = 0;
+    if (!ReadPed(L, id)) {
+        LUA_LOGE("isPedOnFire: expected a ped");
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+    lua_pushboolean(L, PedQueries::ReadPresentation(id).onFire ? 1 : 0);
+    return 1;
+}
+
+// CLuaPedDefs.cpp:1998-2019 and CStaticFunctionDefinitions.cpp:2719-2730.
+// Only a client-created ped or the local player. CPed::SetOnFire is not called.
+int SetPedOnFire(lua_State* L) {
+    uint32_t id = 0;
+    if (!ReadPed(L, id) || lua_type(L, 2) != LUA_TBOOLEAN) {
+        LUA_LOGE("setPedOnFire: expected a ped and a boolean");
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+    if (id != ServerWorld::LocalPlayer() && !Game::ScriptPedAlive(id)) {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+    const bool onFire = lua_toboolean(L, 2) != 0;
+    PedQueries::OnFire(id, onFire);
+    Game::SetPedOnFire(id, onFire);
+    static bool once = false;
+    DiagOnce(once, "DIAG setPedOnFire: CPed::SetOnFire is not hooked; the flag is stored");
+    lua_pushboolean(L, 1);
+    return 1;
+}
+
+// CLuaPedDefs.cpp:1171-1189. A bad ped is nil. The keysync choking bit is SKeysyncFlags bit 1.
+int IsPedChoking(lua_State* L) {
+    uint32_t id = 0;
+    if (!ReadPed(L, id)) {
+        LUA_LOGE("isPedChoking: expected a ped");
+        lua_pushnil(L);
+        return 1;
+    }
+    lua_pushboolean(L, PedQueries::ReadPresentation(id).choking ? 1 : 0);
+    return 1;
+}
+
+// CLuaPedDefs.cpp:1192-1211. Same nil-on-error rule as isPedChoking.
+int IsPedDucked(lua_State* L) {
+    uint32_t id = 0;
+    if (!ReadPed(L, id)) {
+        LUA_LOGE("isPedDucked: expected a ped");
+        lua_pushnil(L);
+        return 1;
+    }
+    lua_pushboolean(L, PedQueries::ReadPresentation(id).ducked ? 1 : 0);
+    return 1;
+}
+
+// CLuaPedDefs.cpp:1286-1306. GetContactEntity is not stored, so a valid ped has no contact.
+int GetPedContactElement(lua_State* L) {
+    uint32_t id = 0;
+    if (!ReadPed(L, id)) {
+        LUA_LOGE("getPedContactElement: expected a ped");
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+    static bool once = false;
+    DiagOnce(once, "DIAG getPedContactElement: CClientPed::GetContactEntity is not stored");
+    lua_pushboolean(L, 0);
+    return 1;
+}
+
+// CLuaPedDefs.cpp:809-831. GetShotData returns false without a weapon or a wrist bone.
+int GetPedWeaponMuzzlePosition(lua_State* L) {
+    uint32_t id = 0;
+    if (!ReadPed(L, id)) {
+        LUA_LOGE("getPedWeaponMuzzlePosition: expected a ped");
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+    PedQueries::Snapshot state;
+    const bool known = Game::CopyPedQuery(id, state);
+    const unsigned slot = known && state.currentSlot < PedQueries::Slots ? state.currentSlot : 0;
+    if (!known || state.weapons[slot].type == 0) {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+    static bool once = false;
+    DiagOnce(once, "DIAG getPedWeaponMuzzlePosition: GetTransformedBonePosition is not hooked");
+    lua_pushboolean(L, 0);
+    return 1;
+}
+
+// CLuaPedDefs.cpp:998-1021. A valid ped returns three numbers. The keysync aim origin is used
+// when a shot was synced. Otherwise the vector stays zero: the camera and muzzle paths are not run.
+int GetPedTargetStart(lua_State* L) {
+    uint32_t id = 0;
+    if (!ReadPed(L, id)) {
+        LUA_LOGE("getPedTargetStart: expected a ped");
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+    const PedQueries::Presentation aim = PedQueries::ReadPresentation(id);
+    if (!aim.aim) {
+        static bool once = false;
+        DiagOnce(once, "DIAG getPedTargetStart: camera and muzzle shot origin are not computed");
+    }
+    lua_pushnumber(L, aim.aim ? aim.aimX : 0);
+    lua_pushnumber(L, aim.aim ? aim.aimY : 0);
+    lua_pushnumber(L, aim.aim ? aim.aimZ : 0);
+    return 3;
+}
+
+// CLuaPedDefs.cpp:1045-1068. End = origin + front * weapon range. The range is not available.
+int GetPedTargetEnd(lua_State* L) {
+    uint32_t id = 0;
+    if (!ReadPed(L, id)) {
+        LUA_LOGE("getPedTargetEnd: expected a ped");
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+    static bool once = false;
+    DiagOnce(once, "DIAG getPedTargetEnd: weapon range is not applied to the aim vector");
+    lua_pushnumber(L, 0);
+    lua_pushnumber(L, 0);
+    lua_pushnumber(L, 0);
+    return 3;
+}
+
+// CLuaPedDefs.cpp:1092-1116 and CStaticFunctionDefinitions.cpp:1760-1776.
+int GetPedTargetCollision(lua_State* L) {
+    uint32_t id = 0;
+    if (!ReadPed(L, id)) {
+        LUA_LOGE("getPedTargetCollision: expected a ped");
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+    static bool once = false;
+    DiagOnce(once, "DIAG getPedTargetCollision: CWorld::ProcessLineOfSight is not hooked");
+    lua_pushboolean(L, 0);
+    return 1;
+}
+
 // CLuaFunctionDefs.Util.cpp:13-54. Only stock models are available: the port's
 // engineRequestModel is still a stub, so both custom-model walks are empty.
 // The stock validity set follows CPlayerManager::IsValidPlayerModel
@@ -480,14 +647,52 @@ void BindPedLua(lua_State* L) {
         lua_CFunction fn;
     } binds[] = {
         {"isPedDead", IsPedDead},
+        // CLuaCompatibilityDefs.cpp:67. Same function as isPedDead.
+        {"isPlayerDead", IsPedDead},
         {"getPedWeapon", GetPedWeapon},
+        // CLuaCompatibilityDefs.cpp:35.
+        {"getPlayerWeapon", GetPedWeapon},
         {"getPedWeaponSlot", GetPedWeaponSlot},
+        // CLuaCompatibilityDefs.cpp:34.
+        {"getPlayerWeaponSlot", GetPedWeaponSlot},
         {"getPedTotalAmmo", GetPedTotalAmmo},
+        // CLuaCompatibilityDefs.cpp:37.
+        {"getPlayerTotalAmmo", GetPedTotalAmmo},
         {"getPedAmmoInClip", GetPedAmmoInClip},
+        // CLuaCompatibilityDefs.cpp:36.
+        {"getPlayerAmmoInClip", GetPedAmmoInClip},
         {"getValidPedModels", GetValidPedModels},
         {"getPedOccupiedVehicle", GetPedOccupiedVehicle},
+        // CLuaCompatibilityDefs.cpp:39.
+        {"getPlayerOccupiedVehicle", GetPedOccupiedVehicle},
         {"getPedOccupiedVehicleSeat", GetPedOccupiedVehicleSeat},
         {"isPedInVehicle", IsPedInVehicle},
+        // CLuaCompatibilityDefs.cpp:20.
+        {"isPlayerInVehicle", IsPedInVehicle},
+        {"doesPedHaveJetPack", DoesPedHaveJetPack},
+        // CLuaCompatibilityDefs.cpp:21.
+        {"doesPlayerHaveJetPack", DoesPedHaveJetPack},
+        {"isPedOnFire", IsPedOnFire},
+        {"setPedOnFire", SetPedOnFire},
+        {"isPedChoking", IsPedChoking},
+        // CLuaCompatibilityDefs.cpp:42.
+        {"isPlayerChoking", IsPedChoking},
+        {"isPedDucked", IsPedDucked},
+        // CLuaCompatibilityDefs.cpp:43.
+        {"isPlayerDucked", IsPedDucked},
+        {"getPedContactElement", GetPedContactElement},
+        // CLuaCompatibilityDefs.cpp:19.
+        {"getPlayerContactElement", GetPedContactElement},
+        {"getPedWeaponMuzzlePosition", GetPedWeaponMuzzlePosition},
+        {"getPedTargetStart", GetPedTargetStart},
+        // CLuaCompatibilityDefs.cpp:31.
+        {"getPlayerTargetStart", GetPedTargetStart},
+        {"getPedTargetEnd", GetPedTargetEnd},
+        // CLuaCompatibilityDefs.cpp:32.
+        {"getPlayerTargetEnd", GetPedTargetEnd},
+        {"getPedTargetCollision", GetPedTargetCollision},
+        // CLuaCompatibilityDefs.cpp:33.
+        {"getPlayerTargetCollision", GetPedTargetCollision},
         {"getPlayerFromName", GetPlayerFromName},
         {"getPlayerFromNick", GetPlayerFromName},
         {"getPlayerName", GetPlayerName},

@@ -703,8 +703,12 @@ void Register(lua_State* L) {
         {"getVehicleOccupant", GetVehicleOccupant},
         {"getVehicleOccupants", GetVehicleOccupants},
         {"getVehicleModelFromName", GetVehicleModelFromName},
+        // CLuaCompatibilityDefs.cpp:55.
+        {"getVehicleIDFromName", GetVehicleModelFromName},
         {"getVehicleName", GetVehicleName},
         {"getVehicleNameFromModel", GetVehicleNameFromModel},
+        // CLuaCompatibilityDefs.cpp:58.
+        {"getVehicleNameFromID", GetVehicleNameFromModel},
         {"getVehicleType", GetVehicleType},
         {"getVehicleUpgradeSlotName", GetVehicleUpgradeSlotName},
     };

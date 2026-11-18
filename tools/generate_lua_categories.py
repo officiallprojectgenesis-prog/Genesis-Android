@@ -109,7 +109,7 @@ CATEGORIES = OrderedDict([
         "file": "BROWSER_AND_COMPATIBILITY.md",
         "description": "Embedded Chromium web pages, browser mouse/keyboard input, Discord Rich Presence, and backwards compatibility helpers.",
         "groups": ["CLuaBrowserDefs", "CLuaCompatibilityDefs", "CLuaDiscordDefs"],
-        "subsystem_notes": "Desktop bundles CEF (Chromium Embedded Framework). On Android, this requires an off-screen Android `WebView` rendering to OpenGL texture or native popup."
+        "subsystem_notes": "Desktop bundles CEF. Android has no web core: createBrowser and guiCreateBrowser still enforce the size errors, getBrowserSettings returns the three flags as false, and page calls return false. Discord checks lengths then returns false. Ped compatibility reads the ENTITY_ADD jetpack flag, PED_SYNC fire/water bits and keysync duck, choke and aim origin. setElementModel stores stock ped and vehicle ids without rebuilding the body. Fourteen old names still alias constant stubs (ground, tasks, controls, attachment)."
     }),
 ])
 

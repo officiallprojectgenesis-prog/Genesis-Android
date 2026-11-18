@@ -9,8 +9,8 @@
 // client root, and createElement parents to a map element of type "map" named
 // "dynamic" under the running resource, which is the desktop parent chain
 // (CResource.cpp 887-894). That map stands in for the server dynamic entity, so
-// it is not a local element. Streamed parent links, attachment and model data
-// are not stored; those functions stay unregistered.
+// Streamed parent links and attachment are stored. Model changes update the stored id.
+// CModelInfo::SetModel and onClientElementModelChange are not run.
 
 #include "LuaApiExtra.h"
 #include "LuaGuiApi.h"
@@ -18,9 +18,12 @@
 #include "LuaCameraApi.h"
 #include "LuaStoredElementApi.h"
 #include "LuaDxApi.h"
+#include "LuaSpatialApi.h"
 #include "ResourceLoader.h"
 #include "ServerWorld.h"
+#include "PedQueries.h"
 #include "../gtasa/GameEngine.h"
+#include "../gtasa/RemoteVehicle.h"
 
 extern "C" {
 #include "lua.h"
@@ -132,6 +135,7 @@ bool DestroyNode(uint32_t id) {
     if (!IsLocal(id) || node->system) return false;
     node->beingDeleted = true;
     Link(id, 0);
+    SpatialRelease(id);
     g_nodes.erase(id);
     g_localNames.erase(id);
     g_callProp.erase(id);
@@ -204,6 +208,7 @@ void ResetCatalog() {
 bool KnownElement(uint32_t id) {
     if (id == 0) return false;
     if (Find(id)) return true;
+    if (ServerWorld::IsKnownPlayer(id)) return true;
     if (id == ServerWorld::LocalPlayer() || id == ServerWorld::LastResourceRoot() || GuiIsElement(id) || DxElementType(id)) return true;
     if (Game::ScriptPedAlive(id) || SoundElementAlive(id) || CameraElementAlive(id) || FoliageElementAlive(id) ||
         EffectElementAlive(id) || StoredElementType(id) != nullptr)
@@ -897,6 +902,26 @@ void Bind(lua_State* L, const char* name, lua_CFunction fn) {
 }  // namespace
 
 uint32_t ClientRootElement() { return g_root; }
+bool KnownClientElement(uint32_t id) { return KnownElement(id); }
+bool ClientDescendantOf(uint32_t id,uint32_t ancestor) {
+    for(unsigned depth=0;id&&depth<64;++depth) {
+        if(id==ancestor) return true;
+        Node* node=Find(id);
+        id=node&&node->parent?node->parent:(id!=g_root?g_root:0);
+    }
+    return false;
+}
+bool DestroyClientElement(uint32_t id) { return DestroyNode(id); }
+uint32_t CreateResourceElement(const char* type) {
+    const std::string owner=ActiveVmOwner(); ResourceLoader::ResourceView caller;
+    if(owner.empty()||!ResourceLoader::CopyCallerResource(ActiveVmOwnerNet(),ActiveVmOwnerGeneration(),owner,caller)||!caller.root) return 0;
+    const uint32_t map=EnsureMap(caller.root,caller.name,caller.dynamic);
+    const uint32_t id=map?AllocId():0;
+    if(!id) return 0;
+    Node node; node.id=id; node.type=type; node.ownsType=true;
+    g_nodes.emplace(id,std::move(node)); Link(id,map); return id;
+}
+
 
 void EnsureResourceNode(uint32_t resourceRoot, const std::string& name) {
     if (!resourceRoot || Find(resourceRoot)) return;
@@ -979,6 +1004,120 @@ void CollectEventChain(uint32_t base, std::vector<uint32_t>& out) {
     }
 }
 
+bool StockPedModel(unsigned model) {
+    return model <= 312 && model != 74 && model != 149 && model != 208;
+}
+
+int CurrentModel(uint32_t id) {
+    int model = 0;
+    float heading = 0.f;
+    bool frozen = false;
+    if (Game::CopyScriptPedFacts(id, model, heading, frozen)) return model;
+    return ServerWorld::ModelOf(id);
+}
+
+// CLuaElementDefs.cpp:1450-1470 and CStaticFunctionDefinitions.cpp:806-834.
+// A ped in a vehicle uses the vehicle's IsInWater. That bit is not stored.
+int IsElementInWater(lua_State* L) {
+    const uint32_t id = ElementIdOf(L, 1);
+    const char* kind = ServerWorld::ElementKindName(id);
+    const bool ped = kind && (std::strcmp(kind, "ped") == 0 || std::strcmp(kind, "player") == 0);
+    const bool vehicle = kind && std::strcmp(kind, "vehicle") == 0;
+    if (!ped && !vehicle) {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+    if (ped) {
+        uint32_t occupied = 0;
+        uint8_t seat = 0;
+        if (WorldRPG::RemoteVehicle::FindOccupant(id, occupied, seat) ||
+            (id == ServerWorld::LocalPlayer() && Game::LocalVehicleId() != 0 &&
+             Game::LocalVehicleId() != 0xFFFFFFFFu)) {
+            static bool once = false;
+            if (!once) {
+                once = true;
+                LUA_LOGI("DIAG isElementInWater: CClientVehicle::IsInWater is not stored");
+            }
+            lua_pushboolean(L, 0);
+            return 1;
+        }
+        PedQueries::Presentation flags = PedQueries::ReadPresentation(id);
+        lua_pushboolean(L, flags.inWater ? 1 : 0);
+        return 1;
+    }
+    static bool once = false;
+    if (!once) {
+        once = true;
+        LUA_LOGI("DIAG isElementInWater: CClientVehicle::IsInWater is not stored");
+    }
+    lua_pushboolean(L, 0);
+    return 1;
+}
+
+// CLuaElementDefs.cpp:2419-2430 and CStaticFunctionDefinitions.cpp:1530-1712.
+// Stock ped and vehicle ids are stored. Object models need CModelInfo. The native
+// body is not rebuilt and onClientElementModelChange is not fired. Children are not walked.
+int SetElementModel(lua_State* L) {
+    const uint32_t id = ElementIdOf(L, 1);
+    if (!lua_isnumber(L, 2)) {
+        LUA_LOGE("setElementModel: expected a number");
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+    const double raw = lua_tonumber(L, 2);
+    if (!std::isfinite(raw) || raw < 0 || raw > 65535) {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+    const unsigned model = static_cast<unsigned>(raw);
+    const char* kind = ServerWorld::ElementKindName(id);
+    const bool scriptPed = Game::ScriptPedAlive(id);
+    const bool ped = scriptPed || (kind && (std::strcmp(kind, "ped") == 0 || std::strcmp(kind, "player") == 0));
+    const bool vehicle = kind && std::strcmp(kind, "vehicle") == 0;
+    if (!ped && !vehicle) {
+        static bool once = false;
+        if (!once) {
+            once = true;
+            LUA_LOGI("DIAG setElementModel: CModelInfo is not available for objects");
+        }
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+    if (ped && !StockPedModel(model)) {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+    if (vehicle && (model < 400 || model > 611)) {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+    const int current = CurrentModel(id);
+    if (current == static_cast<int>(model)) {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+    bool stored = false;
+    if (scriptPed) stored = Game::NoteScriptPedModel(id, static_cast<int>(model));
+    else if (kind && std::strcmp(kind, "player") == 0) {
+        ServerWorld::NotePlayerSkin(id, static_cast<int>(model));
+        stored = ServerWorld::ModelOf(id) == static_cast<int>(model);
+    } else {
+        ServerWorld::NoteElementModel(id, static_cast<int>(model));
+        stored = ServerWorld::ModelOf(id) == static_cast<int>(model);
+    }
+    if (!stored) {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+    static bool once = false;
+    if (!once) {
+        once = true;
+        LUA_LOGI("DIAG setElementModel: CPed/CVehicle::SetModel and onClientElementModelChange are not run");
+    }
+    lua_pushboolean(L, 1);
+    return 1;
+}
+
 void InstallElementBindings(lua_State* L) {
     ResetCatalog();
     EnsureRoot();
@@ -1011,6 +1150,15 @@ void InstallElementBindings(lua_State* L) {
     Bind(L, "getElementType", GetElementType);
     Bind(L, "destroyElement", DestroyElement);
     Bind(L, "getAllElementData", GetAllElementData);
+    Bind(L, "isElementInWater", IsElementInWater);
+    // CLuaCompatibilityDefs.cpp:22-23. Same function as isElementInWater.
+    Bind(L, "isPedInWater", IsElementInWater);
+    Bind(L, "isPlayerInWater", IsElementInWater);
+    Bind(L, "setElementModel", SetElementModel);
+    // CLuaCompatibilityDefs.cpp:46, 49 and 52.
+    Bind(L, "setPlayerSkin", SetElementModel);
+    Bind(L, "setVehicleModel", SetElementModel);
+    Bind(L, "setPedSkin", SetElementModel);
 }
 
 }  // namespace WorldRPG::Script

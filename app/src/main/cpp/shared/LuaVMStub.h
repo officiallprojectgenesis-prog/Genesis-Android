@@ -74,7 +74,7 @@ public:
     /// Shutdown and release resources
     void shutdown();
 
-    /// Physical pixels the client scripts see from guiGetScreenSize.
+    /// Logical UI pixels the client scripts see from guiGetScreenSize.
     void setScreenSize(int width, int height);
 
     /// Delivers a CHAT_ECHO into onClientChatMessage when a resource
@@ -111,7 +111,7 @@ std::string ActiveVmResourceFile(const std::string& path);
 lua_State* ActiveVmState();
 void ActiveVmSetScreen(int width, int height);
 // Touch on the DX overlay while the cursor is showing. Any thread. action: 0 down, 1 up, 2 move;
-// x and y are in the pixels guiGetScreenSize reports.
+// x and y are in the logical pixels guiGetScreenSize reports.
 void ActiveVmQueueCursor(int action, float x, float y);
 // Soft-keyboard edit from the UI thread. text is the characters inserted since the
 // previous value, backspaces is how many characters were removed before that, and
@@ -141,6 +141,11 @@ void ActiveVmRunAsOwner(const std::string& owner, uint16_t netId, uint32_t gener
 bool ActiveVmChatHooked();
 // Client root id, or 0 before the element bindings are installed.
 uint32_t ClientRootElement();
+bool KnownClientElement(uint32_t id);
+bool ClientDescendantOf(uint32_t id,uint32_t ancestor);
+uint32_t CreateResourceElement(const char* type);
+bool DestroyClientElement(uint32_t id);
+void ActiveVmFireSpatialEvent(const char* name,uint32_t source,uint32_t other,bool matching);
 // The element an event is triggered on, then each parent while call propagation
 // is enabled. An element that is not in the tree still reaches the root.
 // CClientEntity::CallParentEvent (CClientEntity.cpp 811-823).

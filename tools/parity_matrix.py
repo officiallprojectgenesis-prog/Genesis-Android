@@ -319,6 +319,7 @@ FOLLOW_INSTALLS = {
     "InstallCategoryLua",
     "InstallCameraLua",
     "InstallFieldLua",
+    "InstallSpatialLua",
     "InstallUtilLua",
     "InstallFileLua",
     "InstallXmlLua",
@@ -334,6 +335,8 @@ FOLLOW_INSTALLS = {
     "InstallModelEffectsLua",
     "InstallShaderLua",
     "InstallSvgLua",
+    "InstallBrowserLua",
+    "InstallDiscordLua",
     "InstallElementLua",
     "InstallElementBindings",
     "InstallPedLua",
@@ -397,7 +400,7 @@ def port_lua_bindings(shared_dir, helpers, fn_bodies):
             if open_idx <= m.start() < close:
                 events.append((m.start(), "bind", m))
         for m in re.finditer(
-                r'lua_pushcfunction\(\s*L\s*,\s*(\w+)\s*\)\s*;\s*lua_setglobal\(\s*L\s*,\s*"(\w+)"\s*\)',
+                r'lua_pushc(?:function|closure)\(\s*L\s*,\s*(\w+)\s*(?:,\s*\d+\s*)?\)\s*;\s*lua_setglobal\(\s*L\s*,\s*"(\w+)"\s*\)',
                 src.clean):
             if open_idx <= m.start() < close:
                 events.append((m.start(), "push", m))
@@ -467,7 +470,7 @@ def desktop_events(client_root):
 
 def port_fired_events():
     fired = OrderedDict()
-    pattern = re.compile(r'(?:\bfireHandlers\(\s*|handlers\.find\(\s*|handlers\[\s*)"(on\w+)"')
+    pattern = re.compile(r'(?:\b(?:fireHandlers|ActiveVmFireSpatialEvent)\(\s*|handlers\.find\(\s*|handlers\[\s*)"(on\w+)"')
     for path in walk(PORT_CPP, {".cpp", ".h"}, skip=("lua53", "opus")):
         src = Src(path)
         for m in pattern.finditer(src.clean):

@@ -30,6 +30,12 @@ constexpr uint8_t PedTask = 101;
 
 // eElementRPCFunctions (rpc_enums.h). NUM_RPC_FUNCS is 225.
 namespace Rpc {
+constexpr uint8_t SetColshapeRadius = 201;
+constexpr uint8_t SetColshapeSize = 202;
+constexpr uint8_t AddColPolygonPoint = 203;
+constexpr uint8_t RemoveColPolygonPoint = 204;
+constexpr uint8_t UpdateColPolygonPoint = 205;
+constexpr uint8_t SetColPolygonHeight = 208;
 constexpr uint8_t SetElementData = 6;
 constexpr uint8_t SetElementPosition = 7;
 constexpr uint8_t RemoveElementData = 133;

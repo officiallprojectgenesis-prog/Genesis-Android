@@ -7,6 +7,7 @@
 
 #include "../shared/entity/PedSpawn.h"
 #include "../shared/PedQueries.h"
+#include "../shared/SpatialWorld.h"
 
 #ifdef __ANDROID__
 #include <android/log.h>
@@ -164,6 +165,9 @@ bool FindGroundZFor3DPosition(float x, float y, float z, float& out);
 // The id is not a server element. The body is created on the game thread.
 // Model 0 stays CJ. 0 means the call was rejected.
 uint32_t NoteScriptPed(int model, float x, float y, float z, float rotationDegrees);
+// CStaticFunctionDefinitions::SetElementModel for a client-created ped. Writes the stored
+// model only. The GTA body is not rebuilt here (CPed::SetModel is not called).
+bool NoteScriptPedModel(uint32_t id, int model);
 bool ReleaseScriptPed(uint32_t id);
 bool ScriptPedAlive(uint32_t id);
 // addPedClothes / removePedClothes. type is the clothing slot. remove clears it.
@@ -192,6 +196,8 @@ void NoteRemoteAim(uint32_t id, float heading, float camera, int stickX, int sti
 void NoteRemoteWeapon(uint32_t id, int weapon);
 // One game-thread snapshot; false on unavailable native data or a stale element.
 bool CopyPedQuery(uint32_t id, PedQueries::Snapshot& out);
+// Enrich known elements with game-thread body positions and model bounds; adds script peds.
+bool CopySpatialScene(std::vector<Spatial::Element>& elements);
 // True when the remote ped is in front of itself and within melee reach of us.
 bool RemoteFacingLocal(uint32_t id, float facing, float reach);
 // Buttons the local ped is actually using, so outgoing keysync can set them.

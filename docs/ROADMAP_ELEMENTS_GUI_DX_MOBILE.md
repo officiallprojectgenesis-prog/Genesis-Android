@@ -1,11 +1,31 @@
 # Elementos, GUI e DX no mobile
 
-Revisão em 2026-11-16 na branch `staging`.
+Revisão em 2026-11-18 na branch `staging`.
+
+## Web browser and compatibility (2026-11-18)
+
+Catalog: **89 of 103 implemented (86.4%), 14 stubs, 0 missing.** Overall Lua catalog **793 / 1,581 (50.2%)**. Elements **60 / 81**. Peds **39 / 206**.
+
+The 14 stubs are old names that still call a constant modern function: ground is always true, rotation/weapon-slot/control setters always return true, and attach/detach return false. They are not desktop behavior.
+
+What the new handlers actually do:
+
+| Area | What runs | What does not |
+|---|---|---|
+| Browser | Size errors for `createBrowser` / `guiCreateBrowser`. `getBrowserSettings` returns RemoteEnabled, RemoteJavascript and PluginsEnabled, all false. Domain check returns nil. | No WebView and no CEF. A valid `createBrowser` returns false. A local `guiCreateBrowser` raises the desktop create-failure error. Pages are not drawn. |
+| Discord | Length, party-size and button-URL checks raise the desktop errors. | No Discord client, so a valid call returns false and the user id is empty. |
+| Ped compatibility | Jetpack from ENTITY_ADD. Fire and water from PED_SYNC. Duck, choke and aim origin from keysync, stored beside the weapon snapshot so a keysync cannot invent an inventory. | `CPed::SetOnFire`, the wrist bone, weapon range and `ProcessLineOfSight` are not called. Contact is always false. `setPedOnFire` only accepts the local player or a script ped. |
+| `setElementModel` | Stock ped ids 0–312 except 74, 149 and 208, and vehicle ids 400–611, are stored. The same id returns false. | The GTA body is not rebuilt. `onClientElementModelChange` is not fired. Object models return false. |
+
+Host check: `neon_resource_tests`, 305 checks, 0 failures, including the alias, fire, skin, browser-size and Discord-length cases. Not run on a device.
+
+The attack button is no longer copied into the remote ped duck flag.
 
 ## Progresso das funções Lua
 
-**Geral: 682 de 1.581 funções com handler não constante — 43,1%.**
-Elementos: **54/81 — 66,7%**. GUI/DX: **199/199 — 100% dos bindings**.
+**Geral: 793 de 1.581 funções com handler não constante — 50,2%.**
+Elementos: **60/81 — 74,1%**. GUI/DX: **199/199 — 100% dos bindings**.
+Browser e compatibilidade: **89/103 — 86,4%**, com 14 stubs constantes.
 
 As 24 funções antes ausentes agora têm handlers e caminhos de execução.
 **Isso não significa 100% de compatibilidade com o desktop.** Os três novos

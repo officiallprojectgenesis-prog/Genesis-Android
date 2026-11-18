@@ -1,6 +1,7 @@
 #include "../shared/DebugFlags.h"
 #include "GameEngine.h"
 #include "GameTasks.h"
+#include "SpatialNative.h"
 #include "ProjectileEngine.h"
 #include "PlayerPedPort.h"
 #include "PlayerClothesTable.h"
@@ -391,6 +392,7 @@ struct CarSeed {
     float health = 0;
 };
 struct RemoteCar {
+    uint64_t spatialGeneration = 0;
     void* body = nullptr;
     std::unique_ptr<std::byte[]> owned;
     int model = 0;
@@ -3297,11 +3299,9 @@ static void ApplyRemotePeds() {
             if (intel && api.clearTasks) api.clearTasks(intel, true, true);
             live->second.animationKilled = false;
         }
-        if (ped.fire != found->second.ducked) {
-            // OnFire state — GTA uses CPed::SetOnFire(bool). For now we track
-            // it in RemoteBody for future native call integration.
-            found->second.ducked = ped.fire;
-        }
+        // ped.fire is the attack button from NoteRemotePlayerSync / NoteRemoteAim, not
+        // CPed::IsOnFire. Copying it into ducked made an attacking ped duck.
+        // The on-fire bit is PED_SYNC ucFlags 0x20, stored by PedQueries::OnFire.
         if (ped.inWater) {
             // IsInWater state — tracked for future native call integration.
             // No immediate GTA native available without further dlsym work.
@@ -3416,6 +3416,7 @@ static void ApplyRemotePeds() {
                 g_worldAdd(body);
             }
             found->second.body = body;
+            found->second.spatialGeneration = ServerWorld::ElementGeneration(id);
             found->second.shownX = car.x;
             found->second.shownY = car.y;
             found->second.shownZ = car.z;
@@ -3783,6 +3784,18 @@ bool ReleaseScriptPed(uint32_t id) {
     return false;
 }
 
+bool NoteScriptPedModel(uint32_t id, int model) {
+    if (model < 0 || model > 312 || model == 74 || model == 149 || model == 208) return false;
+    std::lock_guard<std::mutex> lock(g_scriptMu);
+    for (auto& slot : g_scriptPeds) {
+        if (!slot.used || slot.id != id || slot.drop) continue;
+        if (slot.model == model) return false;
+        slot.model = model;
+        return true;
+    }
+    return false;
+}
+
 bool ScriptPedAlive(uint32_t id) {
     std::lock_guard<std::mutex> lock(g_scriptMu);
     for (const auto& slot : g_scriptPeds)
@@ -3876,6 +3889,35 @@ bool CopyScriptWeather(int& weather) {
     if (!g_scriptWeatherOn) return false;
     weather = g_scriptWeather;
     return true;
+}
+
+bool CopySpatialScene(std::vector<Spatial::Element>& elements) {
+    return GameTasks::Run([&] {
+        auto sample=[](Spatial::Element& e,void* body) {
+            if(!body || IsPlaceableVtable(body)) return;
+            float x=0,y=0,z=0,h=0;
+            if(ReadBodyPos(body,x,y,z,h)) { e.position={x,y,z}; e.bounds.center=e.position; }
+            // GetBoundCentre 0x4cba84 loads CEntity model from +0x32.
+            e.model=*reinterpret_cast<const int16_t*>(static_cast<const unsigned char*>(body)+0x32);
+        };
+        for(auto& e:elements) {
+            if(e.id==ServerWorld::LocalPlayer()) { sample(e,g_findPlayer?g_findPlayer(0):nullptr); continue; }
+            std::lock_guard lock(g_remoteMutex);
+            auto ped=g_remoteBodies.find(e.id);
+            if(ped!=g_remoteBodies.end() && PedQueries::Current(e.id,ped->second.queryGeneration)) sample(e,ped->second.ped);
+            auto car=g_remoteCars.find(e.id);
+            if(car!=g_remoteCars.end() && car->second.spatialGeneration==e.generation) sample(e,car->second.body);
+        }
+        {
+            std::lock_guard lock(g_scriptMu);
+            for(const auto& ped:g_scriptPeds) if(ped.used&&!ped.drop) {
+                Spatial::Element e; e.id=ped.id; e.generation=e.id; e.type="ped"; e.model=ped.model;
+                e.position={ped.x,ped.y,ped.z}; e.bounds.center=e.position; sample(e,ped.body);
+                elements.push_back(e);
+            }
+        }
+        SpatialNative::ModelBounds(elements);
+    });
 }
 
 bool CopyPedQuery(uint32_t id, PedQueries::Snapshot& out) {
@@ -5057,6 +5099,7 @@ bool ConsumeDamage(uint32_t&, uint8_t&) { return false; }
 void NoteRemoteAim(uint32_t, float, float, int, int, bool, bool) {}
 void NoteRemoteWeapon(uint32_t, int) {}
 bool CopyPedQuery(uint32_t id, PedQueries::Snapshot& out) { return PedQueries::Copy(id, out); }
+bool CopySpatialScene(std::vector<Spatial::Element>&) { return false; }
 bool RemoteFacingLocal(uint32_t, float, float) { return false; }
 void CopyOnFoot(float, float, float, OnFootKeys& keys) { keys = {}; }
 void ConsumeLocalJump() {}

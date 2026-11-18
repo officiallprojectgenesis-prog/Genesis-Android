@@ -5,6 +5,8 @@
 #include "LuaUtilApi.h"
 #include "LuaFileApi.h"
 #include "LuaXmlApi.h"
+#include "LuaBrowserApi.h"
+#include "LuaDiscordApi.h"
 #include "LuaStoredElementApi.h"
 #include "LuaClothesApi.h"
 #include "LuaWeaponApi.h"
@@ -14,6 +16,7 @@
 #include "LuaEventRegistry.h"
 #include "LuaKeyBindApi.h"
 #include "LuaDxApi.h"
+#include "LuaSpatialApi.h"
 #include "DxShader.h"
 #include "LuaSvgApi.h"
 #include "LuaApiExtra.h"
@@ -1444,6 +1447,10 @@ static int l_getElementType(lua_State* L) {
 
 static int l_getElementPosition(lua_State* L) {
     const uint32_t id = ElementIdOf(L, 1);
+    Spatial::Element shape;
+    if(CopySpatialShape(id,shape)) {
+        lua_pushnumber(L,shape.position.x); lua_pushnumber(L,shape.position.y); lua_pushnumber(L,shape.position.z); return 3;
+    }
     Projectiles::Snapshot projectile;
     if (Projectiles::Copy(id, projectile)) {
         lua_pushnumber(L, projectile.position.x); lua_pushnumber(L, projectile.position.y); lua_pushnumber(L, projectile.position.z);
@@ -2058,6 +2065,9 @@ static void installWardrobeBindings(lua_State* L) {
         {"addPedClothes", l_addPedClothes},
         {"removePedClothes", l_removePedClothes},
         {"setElementRotation", l_setElementRotation},
+        // CLuaCompatibilityDefs.cpp:54 and 59. Same setter as setElementRotation.
+        {"setObjectRotation", l_setElementRotation},
+        {"setVehicleRotation", l_setElementRotation},
         {"setElementFrozen", l_setElementFrozen},
         {"setCameraMatrix", l_setCameraMatrix},
         {"setCameraTarget", l_setCameraTarget},
@@ -2114,6 +2124,8 @@ static void installDxBindings(lua_State* L) {
         {"setTimer", l_setTimer},
         {"getElementHealth", l_getElementHealth},
         {"getPedArmor", l_getPedArmor},
+        // CLuaCompatibilityDefs.cpp:40. Same function as getPedArmor.
+        {"getPlayerArmor", l_getPedArmor},
         {"getTime", l_getTime},
         {"getPlayerWantedLevel", l_num0},
         {"getElementModel", l_num0},
@@ -2132,6 +2144,8 @@ static void installDxBindings(lua_State* L) {
         {"engineStreamingGetModelLoadState", l_engineStreamingGetModelLoadState},
         // Ped and element natives the ped-traffic client calls. Defaults until the engine exposes them.
         {"getPedRotation", l_getPedRotation},
+        // CLuaCompatibilityDefs.cpp:17. Same function as getPedRotation.
+        {"getPlayerRotation", l_getPedRotation},
         {"getPedAmmoInClip", l_num0},
         {"getPedTotalAmmo", l_num0},
         {"getPedWeapon", l_num0},
@@ -2139,15 +2153,25 @@ static void installDxBindings(lua_State* L) {
         {"getPedWeaponAccuracy", l_num0},
         {"getPedWeaponShootingRate", l_num0},
         {"getPedStat", l_num0},
+        // CLuaCompatibilityDefs.cpp:44. Same stub as getPedStat until that query is ported.
+        {"getPlayerStat", l_num0},
         {"getVehicleType", l_num0},
         {"getGroundPosition", l_getGroundPosition},
         {"getPedTask", l_false},
+        // CLuaCompatibilityDefs.cpp:27.
+        {"getPlayerTask", l_false},
         {"getPedTarget", l_false},
+        // CLuaCompatibilityDefs.cpp:30.
+        {"getPlayerTarget", l_false},
         {"getPedControlState", l_false},
+        // CLuaCompatibilityDefs.cpp:71.
+        {"getControlState", l_false},
         {"getPedStayInSamePlace", l_false},
         {"isElementFrozen", l_false},
         {"isElementOnScreen", l_false},
         {"isPedOnGround", l_true},
+        // CLuaCompatibilityDefs.cpp:26.
+        {"isPlayerOnGround", l_true},
         {"isPedNativeCoupleActive", l_false},
         {"isPedNativeCouplePresentationActive", l_false},
         {"isPedNativeGroupActive", l_false},
@@ -2167,12 +2191,18 @@ static void installDxBindings(lua_State* L) {
         {"setElementDimension", l_true},
         {"setElementInterior", l_true},
         {"setPedControlState", l_true},
+        // CLuaCompatibilityDefs.cpp:70.
+        {"setControlState", l_true},
         {"setPedJump", l_true},
         {"setPedNavigateTo", l_true},
         {"setPedRotation", l_true},
+        // CLuaCompatibilityDefs.cpp:47.
+        {"setPlayerRotation", l_true},
         {"setPedStandStill", l_true},
         {"setPedStayInSamePlace", l_true},
         {"setPedWeaponSlot", l_true},
+        // CLuaCompatibilityDefs.cpp:45.
+        {"setPlayerWeaponSlot", l_true},
         {"setPedWeaponAccuracy", l_true},
         {"setPedWeaponShootingRate", l_true},
         // setCameraMatrix is installed by installWardrobeBindings, which runs after this
@@ -2227,6 +2257,8 @@ static void installDxBindings(lua_State* L) {
     InstallUtilLua(L);
     InstallFileLua(L);
     InstallXmlLua(L);
+    InstallBrowserLua(L);
+    InstallDiscordLua(L);
     InstallStoredElementLua(L);
     InstallClothesLua(L);
     InstallWeaponLua(L);
@@ -2235,6 +2267,7 @@ static void installDxBindings(lua_State* L) {
     InstallKeyBindLua(L);
     InstallDxLua(L);
     InstallSvgLua(L);
+    InstallSpatialLua(L);
     // These two stay on this file even if extra bindings register the same names.
     lua_pushcfunction(L, l_getNetworkStats);
     lua_setglobal(L, "getNetworkStats");
@@ -2722,6 +2755,7 @@ std::string LuaVMStub::pumpDx() {
     g_dx.postGuiFrame.clear();
     DxBeginFrame(g_dx.frame);
     PulseCamera();
+    PulseSpatial();
     // login_camera.lua moves the tour in onClientPreRender, before the DX menu.
     fireHandlers("onClientPreRender", 0, ClientRootElement());
     if (!WorldRPG::Debug::Flag("nodx")) fireHandlers("onClientRender", 0, ClientRootElement());
@@ -2737,6 +2771,12 @@ std::string LuaVMStub::pumpDx() {
         const char* keyboard = GuiFocusedMemo() ? "K multiline\n" : "K\n";
         if (out.compare(0, 2, "C\n") == 0) out.insert(2, keyboard);
         else out.insert(0, keyboard);
+    }
+    if (!out.empty()) {
+        // Frame-local UI coordinates: Java scales the screen canvas and inversely
+        // maps touches. Render targets retain their explicit bitmap dimensions.
+        const std::string viewport = "V " + std::to_string(g_dx.screenW) + " " + std::to_string(g_dx.screenH) + "\n";
+        out.insert(out.compare(0, 2, "C\n") == 0 ? 2 : 0, viewport);
     }
     if (out.size() > 24000) {
         // Cut at the end of a line, so the overlay never parses half a draw command.
@@ -2755,6 +2795,7 @@ void LuaVMStub::shutdown() {
     if (!pImpl_->initialized) return;
     StopOwnedSounds();
     Projectiles::Reset();
+    ResetSpatial();
     DxReset();
     if (g_active == this) g_active = nullptr;
     g_imeDismissed = false;
@@ -2870,6 +2911,15 @@ static bool ReadLuaArg(lua_State* L, Net::BitStreamReader& reader, int depth) {
     return false;
 }
 
+void ActiveVmFireSpatialEvent(const char* name,uint32_t source,uint32_t other,bool matching) {
+    if(!g_dx.L) return;
+    lua_State* L=g_dx.L;
+    lua_getglobal(L,"source"); PushElement(L,source); lua_setglobal(L,"source");
+    PushElement(L,other); lua_pushboolean(L,matching);
+    fireHandlers(name,2,source);
+    lua_setglobal(L,"source");
+}
+
 bool ActiveVmOnServerEvent(const uint8_t* body, size_t length, size_t bits) {
     if (!g_dx.L || !body) return false;
     Net::BitStreamReader reader(body, length, bits);
@@ -2926,6 +2976,7 @@ bool ActiveVmOnServerEvent(const uint8_t* body, size_t length, size_t bits) {
 // Removes the handlers and timers that a resource registered, and the resource's
 // Lua state with them (its environment is only referenced by those closures).
 static void DropResourceState(lua_State* L, const std::string& name, uint16_t netId, uint32_t generation) {
+    SpatialDropResource(name, netId, generation);
     Projectiles::DropOwner(name, netId, generation);
     StopOwnedSounds(&name, netId, generation);
     GuiDropResource(name, netId, generation);

@@ -795,6 +795,43 @@ void CheckDxTextLayout(WorldRPG::Script::LuaVMStub& vm) {
     )LUA");
 }
 
+void CheckUiViewport(WorldRPG::Script::LuaVMStub& vm) {
+    using namespace WorldRPG::Script;
+    int oldWidth=0,oldHeight=0;
+    ActiveVmScreenSize(oldWidth,oldHeight);
+    vm.setScreenSize(832,384);
+    RunLua(vm,"ui-dpi-setup",R"LUA(
+        local w,h=guiGetScreenSize()
+        assert(w==832 and h==384, 'scripts use the logical viewport')
+        _G.dpiEdit=guiCreateEdit(100,100,200,40,'dpi',false)
+        _G.dpiClicked=false
+        _G.dpiClick=function(button,state,x,y)
+            if state=='down' then assert(x==150 and y==120); dpiClicked=true end
+        end
+        assert(addEventHandler('onClientClick',root,dpiClick))
+        showCursor(true)
+    )LUA");
+    ActiveVmQueueCursor(0,150,120);
+    std::string frame=vm.pumpDx();
+    CHECK(frame.rfind("C\nV 832 384\n",0)==0);
+    CHECK(frame.find("K\n")!=std::string::npos);
+    RunLua(vm,"ui-dpi-click",R"LUA(
+        assert(dpiClicked, 'logical coordinates reach onClientClick')
+        local x,y=getCursorPosition()
+        assert(math.abs(x-150/832)<0.00001 and math.abs(y-120/384)<0.00001,
+            'normalized cursor and CGUI edit hit test use the same coordinates')
+    )LUA");
+    vm.setScreenSize(1664,768);
+    CHECK(vm.pumpDx().find("V 1664 768\n")!=std::string::npos);
+    RunLua(vm,"ui-dpi-cleanup",R"LUA(
+        assert(removeEventHandler('onClientClick',root,dpiClick))
+        assert(destroyElement(dpiEdit))
+        showCursor(false)
+        guiSetInputEnabled(false)
+    )LUA");
+    vm.setScreenSize(oldWidth,oldHeight);
+}
+
 void CheckMemoInput(WorldRPG::Script::LuaVMStub& vm) {
     using namespace WorldRPG::Script;
     RunLua(vm,"memo-input-setup",R"LUA(
@@ -885,6 +922,104 @@ void CheckAudioQueries(WorldRPG::Script::LuaVMStub& vm) {
 }
 
 // Stock model lookup and command-key queries need no GTA native or MTA server.
+// CLuaCompatibilityDefs.cpp:13-78. Old names are the same C functions as the modern names.
+void CheckCompatibilityAliases(WorldRPG::Script::LuaVMStub& vm) {
+    RunLua(vm, "compatibility-aliases", R"LUA(
+        local me = {id = 777, element = true}
+        local function same(old, modern, ...)
+            local a, b = {old(...)}, {modern(...)}
+            assert(#a == #b, 'result count')
+            for i = 1, #a do
+                assert(a[i] == b[i], 'result ' .. i .. ' ' .. tostring(a[i]) .. ' ~= ' .. tostring(b[i]))
+            end
+        end
+        same(getPlayerRotation, getPedRotation, me)
+        same(getPlayerArmor, getPedArmor, me)
+        same(isPlayerDead, isPedDead, me)
+        same(getPlayerWeapon, getPedWeapon, me)
+        same(getPlayerWeaponSlot, getPedWeaponSlot, me)
+        same(getPlayerTotalAmmo, getPedTotalAmmo, me)
+        same(getPlayerAmmoInClip, getPedAmmoInClip, me)
+        same(getPlayerOccupiedVehicle, getPedOccupiedVehicle, me)
+        same(isPlayerInVehicle, isPedInVehicle, me)
+        same(isPlayerInVehicle, isPedInVehicle)
+        same(getPlayerSkin, getElementModel, me)
+        same(getPedSkin, getElementModel, me)
+        same(getVehicleModel, getElementModel, me)
+        same(getVehicleID, getElementModel, me)
+        same(getObjectRotation, getElementRotation, me)
+        same(getVehicleRotation, getElementRotation, me)
+        same(setObjectRotation, setElementRotation, me, 0, 0, 90)
+        same(setVehicleRotation, setElementRotation, me, 0, 0, 90)
+        same(getVehicleIDFromName, getVehicleModelFromName, 'Infernus')
+        same(getVehicleNameFromID, getVehicleNameFromModel, 411)
+        same(getVehicleNameFromID, getVehicleNameFromModel, -1)
+        assert(setCameraDrunkLevel(12) == true and getCameraDrunkLevel() == 12, 'drunk level')
+        assert(setCameraShakeLevel(40) == true and getCameraShakeLevel() == 40 and getCameraDrunkLevel() == 40, 'shake writes drunk level')
+        assert(setCameraShakeLevel(300) == false and getCameraShakeLevel() == 40, 'shake range')
+        assert(setCameraDrunkLevel(0) == true and getCameraShakeLevel() == 0, 'shake restore')
+        local xml = xmlLoadString('<meta><info name="x">hi</info></meta>')
+        local found = xmlFindChild(xml, 'info', 0)
+        assert(found ~= false and xmlNodeFindChild(xml, 'info', 0) == found, 'xmlNodeFindChild')
+        assert(xmlNodeFindChild(xml, 'missing', 0) == false, 'missing child')
+        assert(xmlUnloadFile(xml) == true, 'xml unload')
+        local edit = guiCreateEdit(0, 0, 80, 20, 'ab', false)
+        assert(guiEditSetCaratIndex(edit, 1) == true and guiEditGetCaretIndex(edit) == 1, 'edit carat')
+        assert(destroyElement(edit) == true, 'edit destroy')
+        local memo = guiCreateMemo(0, 0, 80, 40, 'ab', false)
+        assert(guiMemoSetCaratIndex(memo, 1) == true and guiMemoGetCaretIndex(memo) == 1, 'memo carat')
+        assert(destroyElement(memo) == true, 'memo destroy')
+        same(canPlayerBeKnockedOffBike, canPedBeKnockedOffBike, me)
+        same(getPlayerSimplestTask, getPedSimplestTask, me)
+        same(isPlayerDoingTask, isPedDoingTask, me, 'TASK_SIMPLE_PLAYER_ON_FOOT')
+        same(setPlayerCanBeKnockedOffBike, setPedCanBeKnockedOffBike, me, false)
+        same(attachElementToElement, attachElements, me, me)
+        same(detachElementFromElement, detachElements, me)
+        same(getPlayerStat, getPedStat, me, 24)
+        same(getPlayerTask, getPedTask, me, 'primary', 0)
+        same(getPlayerTarget, getPedTarget, me)
+        same(getControlState, getPedControlState, me, 'forwards')
+        same(isPlayerOnGround, isPedOnGround, me)
+        same(setControlState, setPedControlState, me, 'forwards', true)
+        same(setPlayerRotation, setPedRotation, me, 90)
+        same(setPlayerWeaponSlot, setPedWeaponSlot, me, 0)
+        assert(setPedOnFire(me, true) == true and isPedOnFire(me) == true, 'local ped can be set on fire')
+        assert(setPedOnFire(me, false) == true and isPedOnFire(me) == false, 'fire clears')
+        assert(doesPedHaveJetPack(me) == false and doesPlayerHaveJetPack(me) == false, 'no jetpack stored')
+        assert(isPedDucked(me) == false and isPlayerDucked(me) == false, 'not ducked')
+        assert(isPedChoking(me) == false and isPlayerChoking(me) == false, 'not choking')
+        assert(getPedContactElement(me) == false and getPlayerContactElement(me) == false, 'no contact')
+        assert(getPedWeaponMuzzlePosition(me) == false, 'no weapon muzzle')
+        local sx, sy, sz = getPedTargetStart(me)
+        assert(sx == 0 and sy == 0 and sz == 0, 'no aim origin')
+        assert(getPlayerTargetStart(me) == sx, 'alias start')
+        local ex, ey, ez = getPedTargetEnd(me)
+        assert(ex == 0 and ey == 0 and ez == 0, 'range not applied')
+        assert(getPedTargetCollision(me) == false and getPlayerTargetCollision(me) == false, 'no line of sight')
+        assert(isElementInWater(me) == false and isPedInWater(me) == false and isPlayerInWater(me) == false, 'not in water')
+        assert(setPlayerSkin(me, 7) == true and getPlayerSkin(me) == 7, 'skin stored')
+        assert(setPlayerSkin(me, 7) == false, 'same skin is false')
+        assert(setPlayerSkin(me, 74) == false and getPlayerSkin(me) == 7, 'invalid ped model')
+        assert(setVehicleModel(me) == false, 'player is not a vehicle')
+        local settings = getBrowserSettings()
+        assert(settings.RemoteEnabled == false and settings.RemoteJavascript == false and settings.PluginsEnabled == false, 'no web core')
+        assert(createBrowser(1, 1, true) == false and isBrowserGPUEnabled() == false, 'create needs a web core')
+        local ok, err = pcall(createBrowser, 0, 1, true)
+        assert(not ok and err:find('at least 1x1'), 'browser size: ' .. tostring(err))
+        ok, err = pcall(guiCreateBrowser, 0, 0, 8, 8, true, false, false)
+        assert(not ok and err:find('Failed to create browser'), 'local gui browser: ' .. tostring(err))
+        assert(guiCreateBrowser(0, 0, 8, 8, false, false, false) == false, 'remote gui browser')
+        assert(isBrowserDomainBlocked('example.com') == nil, 'domain check needs web core')
+        assert(setDiscordApplicationID('1234') == false and isDiscordRichPresenceConnected() == false, 'discord off')
+        assert(getDiscordRichPresenceUserID() == '', 'no discord user')
+        ok, err = pcall(setDiscordRichPresenceState, string.rep('a', 129))
+        assert(not ok and err:find('less than/equal to 128'), 'state length: ' .. tostring(err))
+        ok, err = pcall(setDiscordRichPresencePartySize, 3, 1)
+        assert(not ok and err:find('Party size'), 'party size: ' .. tostring(err))
+        assert(setDiscordRichPresenceButton(3, 'Go', 'https://example.com') == false, 'button index')
+    )LUA");
+}
+
 void CheckLowRiskLuaQueries(WorldRPG::Script::LuaVMStub& vm) {
     RunLua(vm, "valid-ped-models", R"LUA(
         local models = getValidPedModels()
@@ -2786,7 +2921,9 @@ int main(int argc, char** argv) {
            "assert(getGroundPosition(10, 20, 30) == false, \"host triple\")");
     WorldRPG::ServerWorld::SetLocalPlayer(777);
     WorldRPG::ServerWorld::NotePlayerNick(777, "Sam");
+    CheckCompatibilityAliases(vm);
 
+    CheckUiViewport(vm);
     CheckJson(vm, argc > 1 ? argv[1] : nullptr);
     CheckLowRiskLuaQueries(vm);
     CheckHelpers(vm);

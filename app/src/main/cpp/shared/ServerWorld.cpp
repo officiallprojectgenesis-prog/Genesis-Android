@@ -32,8 +32,10 @@ using namespace WorldRPG::Entity;
 
 std::mutex g_lock;
 uint32_t g_local = 0;
+uint64_t g_generation = 0, g_localGeneration = 0;
 // CClientGame::SetAllDimensions: the local player's dimension (PLAYER_SPAWN, PLAYER_LIST, SET_ELEMENT_DIMENSION).
 std::atomic<uint16_t> g_localDimension{0};
+std::atomic<uint8_t> g_localInterior{0};
 uint32_t g_resourceRoot = 0;
 std::unordered_map<uint32_t, Visual> g_visuals;
 std::unordered_map<uint32_t, Attachment> g_attachments;
@@ -233,6 +235,7 @@ void Remember(uint32_t id, const Visual& visual) {
     const int oldBlip = stored.blipHandle;
     const bool live = stored.blipLive;
     stored = visual;
+    stored.generation = ++g_generation;
     if (visual.kind == 14) PedQueries::Create(id, false, visual.ped.get());
     else if (visual.kind == 1) PedQueries::Ensure(id, true);
     stored.blipHandle = oldBlip;
@@ -268,6 +271,7 @@ void ResetSession() {
         }
         g_visuals.clear();
         PedQueries::Reset();
+        g_localGeneration = ++g_generation;
         g_attachments.clear();
         g_attachmentOrder.clear();
         g_data.clear();
@@ -275,6 +279,7 @@ void ResetSession() {
         g_resourceRoot = 0;
     }
     g_localDimension = 0;
+    g_localInterior = 0;
     // Hosted and observer ped state is keyed by ElementID, which the new session reuses.
     for (uint32_t id : peds) {
         WorldRPG::Sync::PedSyncState::Forget(id);
@@ -283,7 +288,11 @@ void ResetSession() {
     SW_LOGI("ServerWorld reset for a new session (%zu ped state(s) forgotten)", peds.size());
 }
 
-void SetLocalPlayer(uint32_t id) { g_local = id; PedQueries::Ensure(id, true); }
+void SetLocalPlayer(uint32_t id) {
+    std::lock_guard lock(g_lock);
+    if (g_local != id || !g_localGeneration) g_localGeneration = ++g_generation;
+    g_local = id; PedQueries::Ensure(id, true);
+}
 uint32_t LocalPlayer() { return g_local; }
 uint32_t LastResourceRoot() { return g_resourceRoot; }
 
@@ -382,6 +391,60 @@ bool CopyVisual(uint32_t id, ActorSpawn& out) {
     return true;
 }
 
+uint64_t ElementGeneration(uint32_t id) {
+    std::lock_guard lock(g_lock);
+    if (id && id == g_local) return g_localGeneration;
+    auto it=g_visuals.find(id);
+    if(it==g_visuals.end()) return 0;
+    if(!it->second.generation) it->second.generation=++g_generation;
+    return it->second.generation;
+}
+void CopySpatialElements(std::vector<Spatial::Element>& out) {
+    std::lock_guard lock(g_lock);
+    out.clear();
+    for(auto& [id,v]:g_visuals) {
+        const char* type=nullptr;
+        switch(v.kind) {
+            case 1:type="player";break; case 2:type="vehicle";break; case 3:type="object";break;
+            case 4:type="marker";break; case 5:type="blip";break; case 6:type="pickup";break;
+            case 7:type="radararea";break; case 14:type="ped";break; case 15:type="colshape";break;
+            case 18:type="weapon";break; default:continue;
+        }
+        if(!v.generation) v.generation=++g_generation;
+        Spatial::Element e;
+        e.id=id; e.generation=v.generation; e.shapeRevision=v.shapeRevision; e.type=type; e.position={v.x,v.y,v.z};
+        e.model=v.model; e.interior=id==g_local?g_localInterior.load():v.interior; e.dimension=id==g_local?g_localDimension.load():v.dimension;
+        e.bounds={e.position,v.kind==4?v.size:0.f};
+        if(v.colshape) { e.shape=*v.colshape; e.bounds=Spatial::ShapeBounds(e.position,*e.shape); }
+        out.push_back(std::move(e));
+    }
+    if(g_local && std::none_of(out.begin(),out.end(),[](const auto& e){return e.id==g_local;})) {
+        Spatial::Element e; e.id=g_local; e.generation=g_localGeneration; e.type="player"; e.dimension=g_localDimension; e.interior=g_localInterior;
+        out.push_back(e);
+    }
+}
+bool CopyColshape(uint32_t id,Spatial::Element& out) {
+    std::lock_guard lock(g_lock);
+    auto it=g_visuals.find(id);
+    if(it==g_visuals.end() || !it->second.colshape) return false;
+    auto& v=it->second;
+    if(!v.generation) v.generation=++g_generation;
+    out={}; out.id=id; out.generation=v.generation; out.shapeRevision=v.shapeRevision; out.type="colshape";
+    out.position={v.x,v.y,v.z}; out.interior=v.interior; out.dimension=v.dimension; out.shape=*v.colshape;
+    out.bounds=Spatial::ShapeBounds(out.position,*out.shape);
+    return true;
+}
+bool UpdateColshape(uint32_t id,const std::function<bool(Spatial::Geometry&)>& update) {
+    std::lock_guard lock(g_lock);
+    auto it=g_visuals.find(id);
+    if(it==g_visuals.end() || !it->second.colshape) return false;
+    auto geometry=std::make_shared<Spatial::Geometry>(*it->second.colshape);
+    if(!update(*geometry)) return false;
+    it->second.colshape=std::move(geometry);
+    it->second.shapeRevision=++g_generation;
+    return true;
+}
+
 uint8_t SyncTimeContext(uint32_t id) {
     std::lock_guard<std::mutex> lock(g_lock);
     auto found = g_visuals.find(id);
@@ -431,10 +494,14 @@ const char* ElementKindName(uint32_t id) {
     switch (found->second.kind) {
         case 1: return "player";
         case 2: return "vehicle";
+        case 3: return "object";
+        case 5: return "blip";
+        case 6: return "pickup";
+        case 7: return "radararea";
+        case 15: return "colshape";
         case 14: return "ped";
         case 18: return "weapon";
         case 4: return "marker";
-        case 5: return "blip";
         default: return "element";
     }
 }
@@ -640,6 +707,12 @@ void NoteElementPosition(uint32_t id, float x, float y, float z) {
     std::lock_guard<std::mutex> lock(g_lock);
     auto found = g_visuals.find(id);
     if (found == g_visuals.end()) return;
+    auto& v=found->second;
+    if(v.colshape && v.colshape->type==Spatial::ShapeType::Polygon) {
+        auto geometry=std::make_shared<Spatial::Geometry>(*v.colshape);
+        for(auto& point:geometry->points) { point.x+=x-v.x; point.y+=y-v.y; }
+        v.colshape=std::move(geometry);
+    }
     found->second.x = x;
     found->second.y = y;
     found->second.z = z;
@@ -647,22 +720,30 @@ void NoteElementPosition(uint32_t id, float x, float y, float z) {
 
 void NoteElementInterior(uint32_t id, uint8_t interior) {
     std::lock_guard<std::mutex> lock(g_lock);
+    if(id==g_local) g_localInterior=interior;
     auto found = g_visuals.find(id);
     if (found != g_visuals.end()) found->second.interior = interior;
 }
 
 void NoteElementDimension(uint32_t id, uint16_t dimension) {
     std::lock_guard<std::mutex> lock(g_lock);
+    if(id==g_local) g_localDimension=dimension;
     auto found = g_visuals.find(id);
     if (found != g_visuals.end()) found->second.dimension = dimension;
 }
 
 uint16_t DimensionOf(uint32_t id) {
     std::lock_guard<std::mutex> lock(g_lock);
+    if(id==g_local) return g_localDimension;
     auto found = g_visuals.find(id);
     return found != g_visuals.end() ? found->second.dimension : g_localDimension.load();
 }
 
+uint8_t InteriorOf(uint32_t id) {
+    std::lock_guard lock(g_lock);
+    if(id==g_local) return g_localInterior;
+    auto it=g_visuals.find(id); return it==g_visuals.end()?0:it->second.interior;
+}
 void SetLocalDimension(uint16_t dimension) { g_localDimension = dimension; }
 uint16_t LocalDimension() { return g_localDimension.load(); }
 
@@ -882,6 +963,8 @@ void OnPlayerList(const uint8_t* body, size_t length, size_t bits) {
         g_visuals[id].dimension = static_cast<uint16_t>(dimension);
         if (id == g_local) g_localDimension = static_cast<uint16_t>(dimension);
         if (!ReadCompressed(reader, 1, alpha) || !reader.Read(interior)) { DIAG("PLAYER_LIST id=%u stop at alpha/interior bit=%zu", id, reader.GetReadOffsetBits()); break; }
+        g_visuals[id].interior=interior;
+        if(id==g_local) g_localInterior=interior;
         bool animated = false;
         for (int slot = 0; slot < 16; ++slot) {
             bool occupied = false;

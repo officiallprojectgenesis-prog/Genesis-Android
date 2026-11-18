@@ -15,6 +15,7 @@
 
 #include "../../net/raknet/RakNetWrapper.h"
 #include "PedSpawn.h"
+#include "../SpatialWorld.h"
 #include "WeaponSpawn.h"
 
 #ifdef __ANDROID__
@@ -56,6 +57,8 @@ enum ElementType : uint8_t {
 };
 
 struct Visual {
+    uint64_t generation = 0, shapeRevision = 0;
+    std::shared_ptr<const Spatial::Geometry> colshape;
     int kind = 0; // 4 marker, 5 blip, 7 area, 14 ped, 1 player
     int model = -1;
     float x = 0, y = 0, z = 0, w = 0, h = 0, size = 1;

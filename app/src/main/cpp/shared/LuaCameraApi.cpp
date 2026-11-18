@@ -906,6 +906,8 @@ void InstallCameraLua(lua_State* L) {
         {"getCameraGoggleEffect", l_getCameraGoggleEffect},
         {"getCameraFieldOfView", l_getCameraFieldOfView},
         {"getCameraDrunkLevel", l_getCameraDrunkLevel},
+        // CLuaCompatibilityDefs.cpp:73. Same function as getCameraDrunkLevel.
+        {"getCameraShakeLevel", l_getCameraDrunkLevel},
         {"setCameraMatrix", l_setCameraMatrix},
         {"setCameraFieldOfView", l_setCameraFieldOfView},
         {"setCameraTarget", l_setCameraTarget},
@@ -916,6 +918,8 @@ void InstallCameraLua(lua_State* L) {
         {"setCameraViewMode", l_setCameraViewMode},
         {"setCameraGoggleEffect", l_setCameraGoggleEffect},
         {"setCameraDrunkLevel", l_setCameraDrunkLevel},
+        // CLuaCompatibilityDefs.cpp:72.
+        {"setCameraShakeLevel", l_setCameraDrunkLevel},
         {"shakeCamera", l_shakeCamera},
         {"resetShakeCamera", l_resetShakeCamera},
         {"getCameraAimDirection", l_getCameraAimDirection},

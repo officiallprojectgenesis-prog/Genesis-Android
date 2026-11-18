@@ -140,6 +140,61 @@ bool HandleLuaElementRPC(const uint8_t* body, size_t length, size_t bits) {
             PKT_LOGI("DIAG LUA_ELEMENT_RPC func=%u id=%u kind=%s %s", static_cast<unsigned>(func), id, kind ? kind : "?", why);
         }
     };
+    // CColShapeRPCs.cpp:30-111. Same payload widths/order as desktop; only
+    // the client geometry changes. Collider refresh runs on the VM pulse.
+    using Shape=WorldRPG::Spatial::ShapeType;
+    auto updateShape=[&](const auto& update) { WorldRPG::ServerWorld::UpdateColshape(id,update); };
+    switch(func) {
+        case Rpc::SetColshapeRadius: {
+            float radius=0; if(!reader.Read(radius)) return false;
+            updateShape([&](auto& g) {
+                if(g.type!=Shape::Circle&&g.type!=Shape::Sphere&&g.type!=Shape::Tube) return false;
+                g.radius=(radius<0?0.f:radius); return true;
+            });
+            return true;
+        }
+        case Rpc::SetColshapeSize: {
+            float x=0,y=0,z=0; if(!reader.Read(x)||!reader.Read(y)||!reader.Read(z)) return false;
+            updateShape([&](auto& g) {
+                if(g.type==Shape::Cuboid||g.type==Shape::Rectangle) g.size={(x<0?0.f:x),(y<0?0.f:y),(z<0?0.f:z)};
+                else if(g.type==Shape::Tube) g.height=(x<0?0.f:x); else return false;
+                return true;
+            });
+            return true;
+        }
+        case Rpc::SetColPolygonHeight: {
+            float floor=0,ceiling=0; if(!reader.Read(floor)||!reader.Read(ceiling)) return false;
+            updateShape([&](auto& g) {
+                if(g.type!=Shape::Polygon || (g.floor==floor && g.ceiling==ceiling)) return false;
+                g.floor=floor; g.ceiling=ceiling; return true;
+            });
+            return true;
+        }
+        case Rpc::AddColPolygonPoint:
+        case Rpc::UpdateColPolygonPoint: {
+            float x=0,y=0; uint32_t index=0;
+            if(!WorldRPG::Entity::ReadPosition2(reader,x,y)) return false;
+            bool indexed=reader.Read(index);
+            if(func==Rpc::UpdateColPolygonPoint && !indexed) return false;
+            updateShape([&](auto& g) {
+                if(g.type!=Shape::Polygon) return false;
+                if(func==Rpc::UpdateColPolygonPoint) { if(index>=g.points.size()) return false; g.points[index]={x,y,0}; }
+                else if(!indexed) g.points.push_back({x,y,0});
+                else { if(index>g.points.size()) return false; g.points.insert(g.points.begin()+index,{x,y,0}); }
+                return true;
+            });
+            return true;
+        }
+        case Rpc::RemoveColPolygonPoint: {
+            uint32_t index=0; if(!reader.Read(index)) return false;
+            updateShape([&](auto& g) {
+                if(g.type!=Shape::Polygon || g.points.size()<=3 || index>=g.points.size()) return false;
+                g.points.erase(g.points.begin()+index); return true;
+            });
+            return true;
+        }
+        default: break;
+    }
     switch (func) {
         case Rpc::SetElementData:
             // Any element type (CElementRPCs.cpp:84-102). onClientElementDataChange is not fired yet.
@@ -153,7 +208,8 @@ bool HandleLuaElementRPC(const uint8_t* body, size_t length, size_t bits) {
             uint8_t context = 0;
             if (!reader.Read(x) || !reader.Read(y) || !reader.Read(z) || !reader.Read(context)) return false;
             WorldRPG::ServerWorld::SetSyncTimeContext(id, context);
-            if (!pedLike) { logUnported("position on a non-ped element not ported"); return true; }
+            if(kind && std::strcmp(kind,"colshape")==0) { WorldRPG::ServerWorld::NoteElementPosition(id,x,y,z); return true; }
+            if (!pedLike) { WorldRPG::ServerWorld::NoteElementPosition(id,x,y,z); logUnported("native position on a non-ped element not ported; client pose stored"); return true; }
             WorldRPG::ServerWorld::NoteElementPosition(id, x, y, z);
             PedSyncState::Teleport(id, {x, y, z});
             WorldRPG::Game::RpcSetPosition(id, x, y, z);
@@ -228,7 +284,20 @@ bool HandleLuaElementRPC(const uint8_t* body, size_t length, size_t bits) {
             // CElementRPCs::SetElementInterior (252-280): u8 interior, u8 setPosition, then x, y, z when it is 1.
             uint8_t interior = 0, setPosition = 0;
             if (!reader.Read(interior) || !reader.Read(setPosition)) return false;
-            if (!pedLike) { logUnported("interior on a non-ped element not ported"); return true; }
+            if(kind && std::strcmp(kind,"colshape")==0) {
+                float x=0,y=0,z=0;
+                if(setPosition==1 && (!reader.Read(x)||!reader.Read(y)||!reader.Read(z))) return false;
+                WorldRPG::ServerWorld::NoteElementInterior(id,interior);
+                if(setPosition==1) WorldRPG::ServerWorld::NoteElementPosition(id,x,y,z);
+                return true;
+            }
+            if (!pedLike) {
+                float x=0,y=0,z=0;
+                if(setPosition==1 && (!reader.Read(x)||!reader.Read(y)||!reader.Read(z))) return false;
+                WorldRPG::ServerWorld::NoteElementInterior(id,interior);
+                if(setPosition==1) WorldRPG::ServerWorld::NoteElementPosition(id,x,y,z);
+                logUnported("native interior on a non-ped element not ported; client area stored"); return true;
+            }
             WorldRPG::ServerWorld::NoteElementInterior(id, interior);
             WorldRPG::Game::RpcSetInterior(id, interior);
             if (setPosition == 1) {
@@ -521,14 +590,20 @@ bool HandlePlayerSpawn(const uint8_t* body, size_t length, size_t bits) {
     WorldRPG::Game::QueuePedRpc(playerId, clearWeapons);
     if (mine) {
         if (local == 0) WorldRPG::ServerWorld::SetLocalPlayer(playerId);
-        if (haveDimension) WorldRPG::ServerWorld::SetLocalDimension(spawnDimension);
+        if (haveDimension) {
+            WorldRPG::ServerWorld::SetLocalDimension(spawnDimension);
+            WorldRPG::ServerWorld::NoteElementInterior(playerId,spawnInterior);
+        }
         WorldRPG::Game::ApplyServerSpawn(x, y, z);
         WorldRPG::JniBridge::PostGameLine(2, "100|");
         WorldRPG::JniBridge::PostGameLine(1, line);
         return true;
     }
     WorldRPG::ServerWorld::NotePlayerSkin(playerId, static_cast<int>(skin));
-    if (haveDimension) WorldRPG::ServerWorld::NoteElementDimension(playerId, spawnDimension);
+    if (haveDimension) {
+        WorldRPG::ServerWorld::NoteElementDimension(playerId, spawnDimension);
+        WorldRPG::ServerWorld::NoteElementInterior(playerId,spawnInterior);
+    }
     WorldRPG::Game::NoteRemoteSpawn(playerId);
     float heading = rotation;
     if (std::fabs(heading) > 6.5f) heading = heading * 3.14159265f / 180.f;
@@ -852,6 +927,8 @@ bool HandlePedSync(const uint8_t* body, size_t length, size_t bits) {
             if (flags2 & 0x01) WorldRPG::Game::SetPedCameraRotation(id, cameraRotation);
             WorldRPG::Game::SetPedOnFire(id, bOnFire);
             WorldRPG::Game::SetPedInWater(id, bIsInWater);
+            WorldRPG::PedQueries::OnFire(id, bOnFire);
+            WorldRPG::PedQueries::InWater(id, bIsInWater);
             if (animationKilled) WorldRPG::Game::KillPedAnimation(id);
             ++applied;
         }
@@ -904,6 +981,9 @@ bool HandleKeySync(const uint8_t* body, size_t length, size_t bits) {
     const int sx = static_cast<int>(static_cast<int8_t>(stickX)) * 128 / 127;
     const int sy = static_cast<int>(static_cast<int8_t>(stickY)) * 128 / 127;
     const bool ducked = (flag & 0x01u) != 0;
+    // SKeysyncFlags (SyncStructures.h 930-936): bit 0 ducked, bit 1 choking.
+    const bool choking = (flag & 0x02u) != 0;
+    WorldRPG::PedQueries::Keys(id, ducked, choking);
     const bool attack = (keys & 0x12u) != 0;
     bool punch = false;
     unsigned slot = 0;
@@ -928,8 +1008,8 @@ bool HandleKeySync(const uint8_t* body, size_t length, size_t bits) {
     static bool loggedKeyGaps = false;
     if (!loggedKeyGaps) {
         loggedKeyGaps = true;
-        PKT_LOGI("DIAG ReadKeysync (CNetAPI.cpp 573-727): controller, camera and duck flag are stored. "
-                 "Not run: weapon slot / aim (SetAimInterpolated), SetChoking, "
+        PKT_LOGI("DIAG ReadKeysync (CNetAPI.cpp 573-727): controller, camera, duck and choking are stored. "
+                 "Not run: weapon slot / aim (SetAimInterpolated), "
                  "vehicle keysync tail, SwitchContext write of TheCamera+0x154.");
     }
     if (!attack || punch || !SlotHasAmmo(slot)) return true;
@@ -941,7 +1021,9 @@ bool HandleKeySync(const uint8_t* body, size_t length, size_t bits) {
     if (!reader.Read(ox) || !reader.Read(oy) || !reader.Read(oz)) return true;
     float nx = 0, nz = 0, ny = 0;
     if (!ReadMtaNorm(reader, nx, nz, ny)) return true;
-    (void)armRaw; (void)clip; (void)ox; (void)oy; (void)oz; (void)nx; (void)ny; (void)nz; (void)flag;
+    // CNetAPI::ReadKeysync aim origin. The muzzle bone and weapon range are not applied.
+    WorldRPG::PedQueries::Aim(id, ox, oy, oz);
+    (void)armRaw; (void)clip; (void)nx; (void)ny; (void)nz; (void)flag;
     return true;
 }
 

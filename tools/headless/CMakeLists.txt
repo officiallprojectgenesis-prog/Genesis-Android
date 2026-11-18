@@ -43,6 +43,9 @@ set(NATIVE_SOURCES
     "${NATIVE_DIR}/shared/LuaElementApi.cpp"
     "${NATIVE_DIR}/shared/LuaPedApi.cpp"
     "${NATIVE_DIR}/shared/PedQueries.cpp"
+    "${NATIVE_DIR}/shared/SpatialWorld.cpp"
+    "${NATIVE_DIR}/shared/LuaSpatialApi.cpp"
+    "${NATIVE_DIR}/gtasa/SpatialNative.cpp"
     "${NATIVE_DIR}/shared/LuaVehicleApi.cpp"
     "${NATIVE_DIR}/shared/LuaCategoryHooks.cpp"
     "${NATIVE_DIR}/shared/LuaCameraApi.cpp"
@@ -52,6 +55,8 @@ set(NATIVE_SOURCES
     "${NATIVE_DIR}/shared/SharedCrypto.cpp"
     "${NATIVE_DIR}/shared/LuaFileApi.cpp"
     "${NATIVE_DIR}/shared/LuaXmlApi.cpp"
+    "${NATIVE_DIR}/shared/LuaBrowserApi.cpp"
+    "${NATIVE_DIR}/shared/LuaDiscordApi.cpp"
     "${NATIVE_DIR}/shared/LuaStoredElementApi.cpp"
     "${NATIVE_DIR}/shared/LuaClothesApi.cpp"
     "${NATIVE_DIR}/shared/LuaWeaponApi.cpp"
@@ -182,10 +187,11 @@ add_executable(neon_headless "${HEADLESS_DIR}/main.cpp" $<TARGET_OBJECTS:neon_co
 add_executable(neon_resource_tests "${HEADLESS_DIR}/resource_tests.cpp" $<TARGET_OBJECTS:neon_core>)
 add_executable(neon_dx_conversion_tests "${HEADLESS_DIR}/dx_conversion_tests.cpp" $<TARGET_OBJECTS:neon_core>)
 add_executable(neon_ped_query_tests "${HEADLESS_DIR}/ped_query_tests.cpp" $<TARGET_OBJECTS:neon_core>)
+add_executable(neon_spatial_tests "${HEADLESS_DIR}/spatial_tests.cpp" $<TARGET_OBJECTS:neon_core>)
 target_link_options(neon_dx_conversion_tests PRIVATE
     "-Wl,--wrap=eglCreatePbufferSurface" "-Wl,--wrap=eglMakeCurrent")
 
-foreach(headless_target neon_headless neon_resource_tests neon_dx_conversion_tests neon_ped_query_tests)
+foreach(headless_target neon_headless neon_resource_tests neon_dx_conversion_tests neon_ped_query_tests neon_spatial_tests)
     target_include_directories(${headless_target} PRIVATE ${HEADLESS_INCLUDE_DIRS})
     target_link_options(${headless_target} PRIVATE
         "-Wl,--wrap=_ZN8WorldRPG3Net13RakNetWrapper10SendPacketEhRKNS0_15BitStreamWriterENS0_14PacketPriorityENS0_17PacketReliabilityENS0_14PacketOrderingE")

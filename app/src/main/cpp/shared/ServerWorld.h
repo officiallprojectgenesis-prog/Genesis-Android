@@ -1,11 +1,13 @@
 #pragma once
 
 #include <cstdint>
+#include <functional>
 #include <string>
 #include <utility>
 #include <vector>
 
 #include "entity/PedSpawn.h"
+#include "SpatialWorld.h"
 #include "entity/WeaponSpawn.h"
 
 namespace WorldRPG::Net {
@@ -83,6 +85,10 @@ void SetActorHost(uint32_t id, bool host);
 bool ActorHosted(uint32_t id);
 bool ElementPose(uint32_t id, float& x, float& y, float& z);
 bool CopyVisual(uint32_t id, ActorSpawn& out);
+void CopySpatialElements(std::vector<Spatial::Element>& out);
+uint64_t ElementGeneration(uint32_t id);
+bool CopyColshape(uint32_t id,Spatial::Element& out);
+bool UpdateColshape(uint32_t id, const std::function<bool(Spatial::Geometry&)>& update);
 const char* ElementKindName(uint32_t id);
 // Sync time context from ENTITY_ADD (0 when this id has none). Desktop CClientEntity::GetSyncTimeContext.
 uint8_t SyncTimeContext(uint32_t id);
@@ -113,6 +119,7 @@ void NoteElementModel(uint32_t id, int model);
 // out (no body). DimensionOf returns the local dimension for an element this session has no record of.
 void NoteElementDimension(uint32_t id, uint16_t dimension);
 uint16_t DimensionOf(uint32_t id);
+uint8_t InteriorOf(uint32_t id);
 void SetLocalDimension(uint16_t dimension);
 uint16_t LocalDimension();
 

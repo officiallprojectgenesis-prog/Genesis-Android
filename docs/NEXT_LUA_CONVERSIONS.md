@@ -1,6 +1,12 @@
 # Lotes Lua: consultas de peds e próximas conversões
 
-Prioridade revista em 2026-11-16 após inspecionar os scripts client/shared dos
+Prioridade revista em 2026-11-18. O lote de browser e compatibilidade está no
+catálogo: **89/103 implementadas, 14 stubs, nenhuma ausente**
+([roadmap](ROADMAP_ELEMENTS_GUI_DX_MOBILE.md)). Os 14 stubs continuam constantes
+(`isPlayerOnGround`, rotação, controles, attach/detach). Não há WebView nem
+cliente Discord. A validação no aparelho continua pendente.
+
+Prioridade anterior, 2026-11-16, após inspecionar os scripts client/shared dos
 recursos disponíveis em `backend_mta/mods/deathmatch/resources`.
 A seleção considera chamadas reais no código, e não somente a quantidade de
 funções ausentes no catálogo. As cinco consultas abaixo já têm handlers e

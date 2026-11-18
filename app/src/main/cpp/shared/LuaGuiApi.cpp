@@ -3103,6 +3103,8 @@ static void RegisterGuiExtensions(lua_State* L) {
         {"guiEditGetMaxLength", GuiEditGetMaxLength},
         {"guiEditIsReadOnly", GuiEditIsReadOnly},
         {"guiEditSetCaretIndex", GuiEditSetCaretIndex},
+        // CLuaCompatibilityDefs.cpp:68. The old spelling calls the same caret setter.
+        {"guiEditSetCaratIndex", GuiEditSetCaretIndex},
         {"guiEditSetMaxLength", GuiEditSetMaxLength},
         {"guiEditSetReadOnly", GuiEditSetReadOnly},
         {"guiGetCursorType", GuiGetCursorType},
@@ -3152,6 +3154,8 @@ static void RegisterGuiExtensions(lua_State* L) {
         {"guiMemoGetVerticalScrollPosition", GetMemoScroll},
         {"guiMemoIsReadOnly", GuiMemoIsReadOnly},
         {"guiMemoSetCaretIndex", GuiMemoSetCaretIndex},
+        // CLuaCompatibilityDefs.cpp:69.
+        {"guiMemoSetCaratIndex", GuiMemoSetCaretIndex},
         {"guiMemoSetReadOnly", GuiMemoSetReadOnly},
         {"guiMemoSetVerticalScrollPosition", SetMemoScroll},
         {"guiMoveToBack", GuiMoveToBack},

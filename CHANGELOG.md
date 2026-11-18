@@ -8,6 +8,39 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added — Old client Lua names from CLuaCompatibilityDefs (2026-11-18)
+
+- Registered the backwards-compatible names in desktop `CLuaCompatibilityDefs::LoadFunctions` (`CLuaCompatibilityDefs.cpp:13-78`) as the same functions the modern names already call. `getPlayerRotation`, ped weapon and vehicle queries, element model and rotation, vehicle name lookup, `xmlNodeFindChild`, the `gui*SetCaratIndex` spellings and `*CameraShakeLevel` follow the real handlers. Names whose modern function is still a constant default (`attachElementToElement`, task and control queries, and the rest of that list) stay on that same default.
+- Ped jetpack, fire, water, duck, choking, contact, muzzle and target queries follow `CLuaPedDefs.cpp` and read the ENTITY_ADD jetpack flag, the PED_SYNC fire/water bits, and the keysync duck, choke and aim origin. `setElementModel` stores a stock ped or vehicle model. `CPed::SetOnFire`, `CPed::SetModel`, bone muzzle and `ProcessLineOfSight` are not called. Discord follows `CLuaDiscordDefs.cpp` and returns false after the length checks because there is no Discord client. Browser follows `CLuaBrowserDefs.cpp` for a missing web core: size errors still raise, `getBrowserSettings` returns the three flags, and page calls return false. No WebView is created. The attack button is no longer written into the remote ped duck flag. Not yet run on a device.
+
+### Fixed — Engine libraries in the join/Identity debug APK (2026-11-16)
+
+- Replaced the inadvertently delivered `-PnoGameFiles` debug variant with the normal developer debug build, containing the three existing GTA ARM64 libraries. The CDN's 397 verified game-data files do not contain those libraries; repeating Sync cannot supply them. Existing downloaded data is reused.
+- Sync completion now reports game-data verification instead of claiming engine readiness. Release/external-library packaging policy is unchanged; the replacement debug APK must pass the strict bundled-library audit.
+
+### Added — Standard/legacy joins and Neon Identity (2026-11-16)
+
+- Per-server Automatic / Standard / Legacy mobile connection modes. Automatic preserves packet 19 for the existing World RPG endpoints and uses logical `PLAYER_JOINDATA` (4) elsewhere, without blind fallback after refusals.
+- Ported the standard game join fields from desktop `CClientGame::StartGame` (`Client/mods/deathmatch/logic/CClientGame.cpp:715-769`) and the matching server reader, including password MD5 and the trailing Identity ticket. Android honestly advertises the implemented peer bitstream `0x0030`; legacy retains the captured envelope that the adapter rewrites to that layout.
+- Added the native network join prefix required before the game packet. The accepted ARM64 network-module reader and hash are documented in `docs/NEON_JOIN_COMPATIBILITY.md`. Preserve the last partial byte when copying the game stream, including odd final JWT signature characters.
+- SA:O Discord browser sign-in, bounded polling, Keystore-encrypted session storage shared safely with `:engine`, sign-out, and one-use per-server connection tickets. Required browser sign-in releases the pending handshake and reconnects afterward. Stale asynchronous responses cannot authorize a different attempt. The actual connected IPv4 endpoint binds ticket requests.
+- Legacy servers with the old 256-byte extraction limit explicitly reject tickets instead of truncating them or bypassing authentication. Server capability and client-check requirements remain enforced.
+- Native wire/state tests and Kotlin Identity API contract tests; full network joins validated with the World RPG legacy adapter and an unmodified loopback-only Oracle server, including a 900-second stable standard session and a signed 1911-byte ticket. Required/optional authentication and invalid/replayed/expired/wrong-audience tickets were tested. Phone/browser validation is still pending; no device was available over ADB. See `docs/NEON_JOIN_COMPATIBILITY.md` for remaining compatibility limits.
+
+### Added — Manual favorites and the official Neon server catalogue (2026-11-16)
+
+- Add a + button to Favorites and an IP/hostname + port dialog. Normalize endpoints, validate IPv4/DNS and ports 1-65535, reject duplicate favorites, persist the address and query it without requiring the server to be online. The dialog uses Fragment results so the list refreshes safely after adding a server.
+- Server Browser now uses the same catalogue as `CNeonServerRegistry::RefreshRemote` / `ParseManifest` in desktop `Client/core/ServerBrowser/CServerBrowserWeb.cpp:536-788`, with the identity base from `CClientVariables.cpp:471`: `https://identity.mta-neon.com/.well-known/neon-server-registry`. All published endpoints are listed, then queried over ASE with up to twelve queries at once. Registry names remain authoritative, and registry-cached logos are displayed.
+- Match desktop registry bounds and validation: schema v1, at most 256 servers / 256 KiB, canonical IPv4 endpoints, unique IDs/endpoints and bounded metadata. A valid empty catalogue clears previous entries; a failed refresh retains the session's last successful catalogue, or falls back to configured/saved servers with a visible retry message. Favorite changes survive in-flight query updates. High game ports wrap the ASE offset as the desktop ushort does.
+- Validation: host regressions passed for endpoint/registry parsing, live catalogue data, progressive results, favorite flags, refresh failure, empty catalogue, cancellation and query concurrency. An isolated S25 app using the production UI showed all 11 live Neon endpoints and passed the + dialog, invalid fields, duplicate rejection, tab refresh and preference-file persistence checks. The installed user launcher was preserved.
+
+### Fixed — GPU-specific startup assets and engine failure logs (2026-11-16)
+
+- Validate texture files against the device's actual OpenGL capabilities before starting GTA. Follow GTA SA 2.10 ARM64's PVR/DXT/ETC selection, with explicit PVR for player/menu, and show an English `Missing game files for MALI…` / `Adreno…` message listing unavailable files. This prevents the A54 startup path reaching `TextureDatabaseRuntime::SortEntries` with a null thumbnail table (`0x286f68`, fault `0x688`).
+- Add an immediately saved Engine debug switch in launcher Settings. Enabled sessions retain bounded private engine logs and a session marker; the launcher displays a selectable failure log with Copy log after a crash, including Android exit details and decoded native tombstones when available. Normal exits and already reported failures do not reopen the dialog. Debug is off by default.
+- Publish only the missing GPU databases and the user-selected complete original interior database, plus their manifest, to the Hugging Face dataset in commit `041c6281d8251557f662e54c4b612081f89b75b0`. All 28 remote texture file hashes/sizes were verified; other assets were preserved. See `docs/ENGINE_GPU_ASSETS.md` for format rules, dataset details and validation.
+- Validation: host regressions and actual ETC/DXT/PVR file checks passed; debug/release APK builds and signatures passed. An isolated S25 instrumentation app exercised the production diagnostics through a native SIGSEGV, decoded the Android tombstone and verified both debug and non-debug failure dialogs. The affected A54 has not been tested yet.
+
 ### Added — Bundled connection loading artwork (2026-11-16)
 
 - Bundle all fourteen desktop `MTA/cgui/images/loadscreens/loadsc1..14.jpg` images in the APK, including builds without GTA game files. The installed CDN image takes priority, with the bundled image used if the synced copy is absent, unreadable or undecodable. Only the selected image is decoded, with screen-sized sampling and closed input streams.

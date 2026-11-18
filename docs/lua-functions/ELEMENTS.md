@@ -5,9 +5,9 @@ Core element hierarchy (parent/child), element data (synced/local), collisions, 
 ## Parity Status
 
 - **Total Functions:** 81
-- **Implemented:** 54 (66.7%)
-- **Stubs:** 8
-- **Missing:** 19
+- **Implemented:** 60 (74.1%)
+- **Stubs:** 7
+- **Missing:** 14
 
 > **Technical Requirement:** Implemented via `LuaElementApi.cpp` and `ServerWorld.cpp`. Attachment queries read ENTITY_ADD metadata, resolve references after the batch and clear references on removal. Physical attachment, attachment RPCs, spatial octree lookup and complete element matrix math remain pending.
 
@@ -18,7 +18,7 @@ Core element hierarchy (parent/child), element data (synced/local), collisions, 
 | `acquireElementStreamingLease` | Missing | `CLuaElementDefs.cpp:96` | `AcquireElementStreamingLease` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
 | `attachElements` | *Stub* | `CLuaElementDefs.cpp:89` | `AttachElements` | Returns false until native physical attachment and its lifecycle/events are ported. Server attachment queries are metadata-only; these calls do not mutate that snapshot. |
 | `createElement` | **Implemented** | `CLuaElementDefs.cpp:76` | `CreateElement` | Operational on Android. (CreateElement) |
-| `destroyElement` | **Implemented** | `CLuaElementDefs.cpp:77` | `DestroyElement` | Operational on Android. (DestroyElement) |
+| `destroyElement` | **Implemented** | `CLuaElementDefs.cpp:77` | `DestroyElement` | Operational on Android. (DestroyElementDispatch) |
 | `detachElements` | *Stub* | `CLuaElementDefs.cpp:90` | `DetachElements` | Returns false until native physical attachment and its lifecycle/events are ported. Server attachment queries are metadata-only; these calls do not mutate that snapshot. |
 | `getAllElementData` | **Implemented** | `CLuaElementDefs.cpp:27` | `ArgumentParserWarn<false, GetAllElementData>` | Operational on Android. (GetAllElementData) |
 | `getAttachedElements` | **Implemented** | `CLuaElementDefs.cpp:50` | `GetAttachedElements` | Reads server ENTITY_ADD attachment metadata, including forward references in the batch and offsets in degrees. Removal clears references before ID reuse. Physical attachment, local attach/detach and later attachment RPCs remain pending. Host-tested; not device-verified. |
@@ -49,9 +49,9 @@ Core element hierarchy (parent/child), element data (synced/local), collisions, 
 | `getElementRotation` | **Implemented** | `CLuaElementDefs.cpp:30` | `GetElementRotation` | Operational on Android. (l_getElementRotation) |
 | `getElementType` | **Implemented** | `CLuaElementDefs.cpp:33` | `GetElementType` | Operational on Android. (GetElementType) |
 | `getElementVelocity` | **Implemented** | `CLuaElementDefs.cpp:31` | `GetElementVelocity` | Operational on Android. (l_getElementVelocity) |
-| `getElementsByType` | **Implemented** | `CLuaElementDefs.cpp:39` | `GetElementsByType` | Operational on Android. (l_getElementsByType) |
-| `getElementsWithinColShape` | Missing | `CLuaElementDefs.cpp:43` | `GetElementsWithinColShape` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `getElementsWithinRange` | Missing | `CLuaElementDefs.cpp:44` | `ArgumentParserWarn<false, GetElementsWithinRange>` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
+| `getElementsByType` | **Implemented** | `CLuaElementDefs.cpp:39` | `GetElementsByType` | Operational on Android. (GetElementsByType) |
+| `getElementsWithinColShape` | **Implemented** | `CLuaElementDefs.cpp:43` | `GetElementsWithinColShape` | Operational on Android. (GetElementsWithinColShape) |
+| `getElementsWithinRange` | **Implemented** | `CLuaElementDefs.cpp:44` | `ArgumentParserWarn<false, GetElementsWithinRange>` | Operational on Android. (GetElementsWithinRange) |
 | `getLowLODElement` | Missing | `CLuaElementDefs.cpp:69` | `GetLowLodElement` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
 | `getRootElement` | **Implemented** | `CLuaElementDefs.cpp:22` | `GetRootElement` | Operational on Android. (GetRootElement) |
 | `hasElementData` | **Implemented** | `CLuaElementDefs.cpp:53` | `HasElementData` | Operational on Android. (HasElementData) |
@@ -61,7 +61,7 @@ Core element hierarchy (parent/child), element data (synced/local), collisions, 
 | `isElementCollidableWith` | **Implemented** | `CLuaElementDefs.cpp:65` | `IsElementCollidableWith` | Operational on Android. (IsElementCollidableWith) |
 | `isElementDoubleSided` | **Implemented** | `CLuaElementDefs.cpp:66` | `IsElementDoubleSided` | Operational on Android. (l_isElementDoubleSided) |
 | `isElementFrozen` | **Implemented** | `CLuaElementDefs.cpp:68` | `IsElementFrozen` | Operational on Android. (l_isElementFrozen) |
-| `isElementInWater` | Missing | `CLuaElementDefs.cpp:63` | `IsElementInWater` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
+| `isElementInWater` | **Implemented** | `CLuaElementDefs.cpp:63` | `IsElementInWater` | Operational on Android. (IsElementInWater) |
 | `isElementLocal` | **Implemented** | `CLuaElementDefs.cpp:52` | `IsElementLocal` | Operational on Android. (IsElementLocal) |
 | `isElementLowLOD` | Missing | `CLuaElementDefs.cpp:70` | `IsElementLowLod` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
 | `isElementOnFire` | Missing | `CLuaElementDefs.cpp:73` | `ArgumentParser<IsElementOnFire>` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
@@ -70,7 +70,7 @@ Core element hierarchy (parent/child), element data (synced/local), collisions, 
 | `isElementStreamedIn` | **Implemented** | `CLuaElementDefs.cpp:60` | `IsElementStreamedIn` | Operational on Android. (l_isElement) |
 | `isElementSyncer` | **Implemented** | `CLuaElementDefs.cpp:64` | `IsElementSyncer` | Operational on Android. (l_isElementSyncer) |
 | `isElementWaitingForGroundToLoad` | Missing | `CLuaElementDefs.cpp:72` | `IsElementWaitingForGroundToLoad` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `isElementWithinColShape` | Missing | `CLuaElementDefs.cpp:41` | `IsElementWithinColShape` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
+| `isElementWithinColShape` | **Implemented** | `CLuaElementDefs.cpp:41` | `IsElementWithinColShape` | Operational on Android. (IsElementWithinColShape) |
 | `isElementWithinMarker` | Missing | `CLuaElementDefs.cpp:42` | `IsElementWithinMarker` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
 | `releaseElementStreamingLease` | Missing | `CLuaElementDefs.cpp:97` | `ReleaseElementStreamingLease` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
 | `setElementAlpha` | **Implemented** | `CLuaElementDefs.cpp:92` | `SetElementAlpha` | Operational on Android. (l_setElementAlpha) |
@@ -88,10 +88,10 @@ Core element hierarchy (parent/child), element data (synced/local), collisions, 
 | `setElementInterior` | **Implemented** | `CLuaElementDefs.cpp:87` | `SetElementInterior` | Operational on Android. (l_setElementInterior) |
 | `setElementLighting` | **Implemented** | `CLuaElementDefs.cpp:104` | `ArgumentParser<SetElementLighting>` | Operational on Android. (l_setElementLighting) |
 | `setElementMatrix` | Missing | `CLuaElementDefs.cpp:82` | `SetElementMatrix` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `setElementModel` | Missing | `CLuaElementDefs.cpp:94` | `SetElementModel` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
+| `setElementModel` | **Implemented** | `CLuaElementDefs.cpp:94` | `SetElementModel` | Operational on Android. (SetElementModel) |
 | `setElementOnFire` | Missing | `CLuaElementDefs.cpp:105` | `ArgumentParser<SetElementOnFire>` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
 | `setElementParent` | **Implemented** | `CLuaElementDefs.cpp:79` | `SetElementParent` | Operational on Android. (SetElementParent) |
-| `setElementPosition` | *Stub* | `CLuaElementDefs.cpp:83` | `SetElementPosition` | Currently stubbed: `TrueResult: lua_pushboolean(L, 1)`. Needs native engine wiring. |
+| `setElementPosition` | **Implemented** | `CLuaElementDefs.cpp:83` | `SetElementPosition` | Operational on Android. (SetElementPosition) |
 | `setElementRotation` | **Implemented** | `CLuaElementDefs.cpp:84` | `SetElementRotation` | Operational on Android. (l_setElementRotation) |
 | `setElementStreamable` | **Implemented** | `CLuaElementDefs.cpp:95` | `SetElementStreamable` | Operational on Android. (l_setElementStreamable) |
 | `setElementVelocity` | *Stub* | `CLuaElementDefs.cpp:85` | `SetElementVelocity` | Currently stubbed: `DefaultValue(kTrue)`. Needs native engine wiring. |
