@@ -523,4 +523,23 @@ std::string MapSnapshot(float playerX, float playerY, float playerHeading) {
     return out;
 }
 
+void ResetSession() {
+    std::lock_guard<std::mutex> lock(g_lock);
+#ifdef __ANDROID__
+    if (g_clearBlip) {
+        for (auto& [id, visual] : g_visuals) {
+            if (visual.blipLive) {
+                g_clearBlip(visual.blipHandle);
+                visual.blipLive = false;
+            }
+            (void)id;
+        }
+    }
+#endif
+    g_local = 0;
+    g_resourceRoot = 0;
+    g_visuals.clear();
+    g_data.clear();
+}
+
 } // namespace WorldRPG::ServerWorld

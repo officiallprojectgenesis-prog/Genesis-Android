@@ -28,4 +28,7 @@ void ApplyOccupied(uint32_t playerId, uint32_t vehicleId, uint8_t seat, const Ve
 // no-op for now (see RemoteVehicle.cpp).
 void ApplyEngineMotion(uint32_t vehicleId, const VehicleSync::Vec3& velocity, const VehicleSync::Vec3& turnVelocity, float health);
 
+// Clears all session-scoped remote vehicle states and occupant bindings.
+void ResetSession();
+
 } // namespace WorldRPG::RemoteVehicle

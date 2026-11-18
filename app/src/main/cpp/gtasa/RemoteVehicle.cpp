@@ -186,4 +186,10 @@ void ApplyEngineMotion(uint32_t vehicleId, const Vec3& velocity, const Vec3& tur
          velocity.z, turnVelocity.x, turnVelocity.y, turnVelocity.z, health);
 }
 
+void ResetSession() {
+    std::lock_guard<std::mutex> lock(g_mutex);
+    g_vehicles.clear();
+    g_occupants.clear();
+}
+
 } // namespace WorldRPG::RemoteVehicle
