@@ -3,142 +3,221 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:paddingBottom="56dp">
+    android:background="@color/genesis_bg_deep">
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        android:padding="16dp">
+        android:padding="20dp">
 
-        <!-- Username Section -->
-        <com.google.android.material.textfield.TextInputLayout
-            android:id="@+id/usernameInputLayout"
-            style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
+        <!-- Header -->
+        <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:hint="Username"
-            app:boxStrokeColor="?attr/colorPrimary">
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingBottom="16dp">
 
-            <com.google.android.material.textfield.TextInputEditText
-                android:id="@+id/editUsername"
+            <ImageView
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:contentDescription="@string/app_name"
+                android:src="@drawable/genesis_logo" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="10dp"
+                android:text="@string/settings"
+                android:textColor="@color/genesis_text_primary"
+                android:textSize="22sp"
+                android:textStyle="bold" />
+
+        </LinearLayout>
+
+        <!-- Player & Controls Card -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="@drawable/bg_genesis_card"
+            android:orientation="vertical"
+            android:padding="16dp">
+
+            <com.google.android.material.textfield.TextInputLayout
+                android:id="@+id/usernameInputLayout"
+                style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:inputType="textPersonName"
-                android:maxLength="24" />
+                android:hint="Username"
+                app:boxBackgroundColor="@color/genesis_bg_deep"
+                app:boxCornerRadiusBottomEnd="10dp"
+                app:boxCornerRadiusBottomStart="10dp"
+                app:boxCornerRadiusTopEnd="10dp"
+                app:boxCornerRadiusTopStart="10dp"
+                app:boxStrokeColor="@color/genesis_emerald"
+                app:hintTextColor="@color/genesis_emerald_bright">
 
-        </com.google.android.material.textfield.TextInputLayout>
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/editUsername"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="textPersonName"
+                    android:maxLength="24"
+                    android:textColor="@color/genesis_text_primary" />
 
-        <!-- Graphics Quality -->
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="24dp"
-            android:text="Graphics Quality"
-            android:textAppearance="?attr/textAppearanceTitleMedium"
-            android:textColor="?attr/colorPrimary" />
+            </com.google.android.material.textfield.TextInputLayout>
 
-        <RadioGroup
-            android:id="@+id/radioGraphicsQuality"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp">
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="20dp"
+                android:letterSpacing="0.08"
+                android:text="GRAPHICS QUALITY"
+                android:textColor="@color/genesis_emerald_bright"
+                android:textSize="12sp"
+                android:textStyle="bold" />
 
-            <RadioButton
-                android:id="@+id/radioLow"
+            <RadioGroup
+                android:id="@+id/radioGraphicsQuality"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="Low" />
+                android:layout_marginTop="8dp"
+                android:orientation="horizontal">
 
-            <RadioButton
-                android:id="@+id/radioMedium"
+                <RadioButton
+                    android:id="@+id/radioLow"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:buttonTint="@color/genesis_emerald"
+                    android:text="Low"
+                    android:textColor="@color/genesis_text_primary" />
+
+                <RadioButton
+                    android:id="@+id/radioMedium"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:buttonTint="@color/genesis_emerald"
+                    android:checked="true"
+                    android:text="Medium"
+                    android:textColor="@color/genesis_text_primary" />
+
+                <RadioButton
+                    android:id="@+id/radioHigh"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:buttonTint="@color/genesis_emerald"
+                    android:text="High"
+                    android:textColor="@color/genesis_text_primary" />
+
+            </RadioGroup>
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:letterSpacing="0.08"
+                android:text="AUDIO VOLUME"
+                android:textColor="@color/genesis_emerald_bright"
+                android:textSize="12sp"
+                android:textStyle="bold" />
+
+            <com.google.android.material.slider.Slider
+                android:id="@+id/sliderVolume"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:checked="true"
-                android:text="Medium" />
+                android:layout_marginTop="4dp"
+                android:stepSize="1"
+                android:value="80"
+                android:valueFrom="0"
+                android:valueTo="100"
+                app:thumbColor="@color/genesis_emerald"
+                app:trackColorActive="@color/genesis_emerald"
+                app:trackColorInactive="@color/genesis_border" />
 
-            <RadioButton
-                android:id="@+id/radioHigh"
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:letterSpacing="0.08"
+                android:text="TOUCH SENSITIVITY"
+                android:textColor="@color/genesis_emerald_bright"
+                android:textSize="12sp"
+                android:textStyle="bold" />
+
+            <com.google.android.material.slider.Slider
+                android:id="@+id/sliderTouchSensitivity"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="High" />
+                android:layout_marginTop="4dp"
+                android:stepSize="1"
+                android:value="5"
+                android:valueFrom="1"
+                android:valueTo="10"
+                app:thumbColor="@color/genesis_emerald"
+                app:trackColorActive="@color/genesis_emerald"
+                app:trackColorInactive="@color/genesis_border" />
 
-        </RadioGroup>
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnSaveSettings"
+                android:layout_width="match_parent"
+                android:layout_height="48dp"
+                android:layout_marginTop="18dp"
+                android:text="Save Settings"
+                android:textColor="@color/genesis_bg_deep"
+                android:textStyle="bold"
+                app:backgroundTint="@color/genesis_emerald"
+                app:cornerRadius="10dp" />
 
-        <!-- Audio Volume -->
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="24dp"
-            android:text="Audio Volume"
-            android:textAppearance="?attr/textAppearanceTitleMedium"
-            android:textColor="?attr/colorPrimary" />
+        </LinearLayout>
 
-        <com.google.android.material.slider.Slider
-            android:id="@+id/sliderVolume"
+        <!-- Game Assets Card -->
+        <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:valueFrom="0"
-            android:valueTo="100"
-            android:stepSize="1"
-            android:value="80" />
+            android:layout_marginTop="16dp"
+            android:background="@drawable/bg_genesis_card"
+            android:orientation="vertical"
+            android:padding="16dp">
 
-        <!-- Touch Sensitivity -->
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="24dp"
-            android:text="Touch Sensitivity"
-            android:textAppearance="?attr/textAppearanceTitleMedium"
-            android:textColor="?attr/colorPrimary" />
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:letterSpacing="0.08"
+                android:text="GAME ASSETS"
+                android:textColor="@color/genesis_emerald_bright"
+                android:textSize="12sp"
+                android:textStyle="bold" />
 
-        <com.google.android.material.slider.Slider
-            android:id="@+id/sliderTouchSensitivity"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:valueFrom="1"
-            android:valueTo="10"
-            android:stepSize="1"
-            android:value="5" />
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btn_sync_assets"
+                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                android:layout_width="match_parent"
+                android:layout_height="48dp"
+                android:layout_marginTop="10dp"
+                android:tag="btn_sync_assets"
+                android:text="Sync Game Assets"
+                android:textColor="@color/genesis_emerald_bright"
+                app:cornerRadius="10dp"
+                app:strokeColor="@color/genesis_emerald" />
 
-        <!-- Save Button -->
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/btnSaveSettings"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="32dp"
-            android:text="Save Settings"
-            app:backgroundTint="?attr/colorSecondary" />
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnTestGta"
+                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                android:layout_width="match_parent"
+                android:layout_height="48dp"
+                android:layout_marginTop="8dp"
+                android:enabled="false"
+                android:text="Test GTA Engine"
+                android:textColor="@color/genesis_text_secondary"
+                android:visibility="gone"
+                app:cornerRadius="10dp"
+                app:strokeColor="@color/genesis_border" />
 
-        <!-- Asset Sync Section (Phase 9) -->
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="24dp"
-            android:text="Game Assets"
-            android:textAppearance="?attr/textAppearanceTitleMedium"
-            android:textColor="?attr/colorPrimary" />
-
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/btn_sync_assets"
-            android:tag="btn_sync_assets"
-            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:text="Sync Game Assets" />
-
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/btnTestGta"
-            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:enabled="false"
-            android:visibility="gone"
-            android:text="Testar GTA" />
+        </LinearLayout>
 
     </LinearLayout>
 

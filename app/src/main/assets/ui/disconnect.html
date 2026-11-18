@@ -1,29 +1,29 @@
 <!doctype html>
-<html lang="pt-BR">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Conexao perdida</title>
+<title>Project Genesis — Connection Lost</title>
 <style>
-  html, body { margin: 0; height: 100%; background: rgba(0,0,0,0.6); font-family: Roboto, Arial, sans-serif; color: #fff; }
+  html, body { margin: 0; height: 100%; background: rgba(5, 8, 10, 0.78); font-family: Roboto, Arial, sans-serif; color: #f1f5f9; }
   .panel { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(520px, 88vw);
-           background: #1f1f1f; border-radius: 10px; overflow: hidden; box-shadow: 0 8px 28px rgba(0,0,0,0.6); }
-  .header { background: #1c5e20; padding: 18px 22px; font-size: 20px; font-weight: 700; letter-spacing: .3px; }
-  .body { padding: 20px 22px 8px; font-size: 16px; line-height: 1.45; color: #e6e6e6; }
+           background: #0e171d; border: 1px solid rgba(16, 185, 129, 0.35); border-radius: 14px; overflow: hidden; box-shadow: 0 12px 36px rgba(0,0,0,0.7); }
+  .header { background: linear-gradient(90deg, #064e3b, #0e171d); border-bottom: 1px solid rgba(16, 185, 129, 0.25); padding: 18px 22px; font-size: 19px; font-weight: 700; letter-spacing: .4px; color: #34d399; }
+  .body { padding: 20px 22px 8px; font-size: 15px; line-height: 1.5; color: #cbd5e1; }
   .actions { display: flex; gap: 12px; padding: 16px 22px 22px; }
-  button { flex: 1; border: 0; border-radius: 6px; padding: 14px 10px; font-size: 16px; font-weight: 700;
-           letter-spacing: 1px; color: #1c1c1c; background: #ff6f00; }
-  button.secondary { background: #3a3a3a; color: #fff; }
+  button { flex: 1; border: 0; border-radius: 8px; padding: 14px 10px; font-size: 14px; font-weight: 700;
+           letter-spacing: 0.8px; color: #042f2e; background: #10b981; }
+  button.secondary { background: #1e293b; color: #f1f5f9; border: 1px solid rgba(148, 163, 184, 0.25); }
   button:active { opacity: .85; }
 </style>
 </head>
 <body>
   <div class="panel">
-    <div class="header">Conexao perdida</div>
-    <div class="body" id="msg">O servidor encerrou a sessao.</div>
+    <div class="header">PROJECT GENESIS — CONNECTION LOST</div>
+    <div class="body" id="msg">The server closed the session.</div>
     <div class="actions">
-      <button onclick="Neon.retry()">TENTAR NOVAMENTE</button>
-      <button class="secondary" onclick="Neon.quit()">SAIR</button>
+      <button onclick="Neon.retry()">RECONNECT</button>
+      <button class="secondary" onclick="Neon.quit()">EXIT</button>
     </div>
   </div>
   <script>

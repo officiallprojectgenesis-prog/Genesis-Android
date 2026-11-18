@@ -21,43 +21,36 @@ class MainActivity : AppCompatActivity() {
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        binding.toolbar.title = BuildConfig.LAUNCHER_TITLE
-
         setupViewPager()
         setupBottomNavigation()
     }
 
     private fun setupViewPager() {
         binding.viewPager.adapter = object : FragmentStateAdapter(supportFragmentManager, lifecycle) {
-            override fun getItemCount(): Int = 3
+            override fun getItemCount(): Int = 2
 
             override fun createFragment(position: Int): Fragment {
                 return when (position) {
-                    0 -> ServerBrowserFragment()
-                    1 -> FavoritesFragment()
-                    2 -> SettingsFragment()
-                    else -> ServerBrowserFragment()
+                    0 -> GenesisHomeFragment()
+                    1 -> SettingsFragment()
+                    else -> GenesisHomeFragment()
                 }
             }
         }
 
-        // Disable swiping to prevent accidental tab changes during server list scroll
+        // Disable swiping to prevent accidental tab changes
         binding.viewPager.isUserInputEnabled = false
     }
 
     private fun setupBottomNavigation() {
         binding.bottomNavigation.setOnItemSelectedListener { item ->
             when (item.itemId) {
-                R.id.nav_servers -> {
+                R.id.nav_home -> {
                     binding.viewPager.currentItem = 0
                     true
                 }
-                R.id.nav_favorites -> {
-                    binding.viewPager.currentItem = 1
-                    true
-                }
                 R.id.nav_settings -> {
-                    binding.viewPager.currentItem = 2
+                    binding.viewPager.currentItem = 1
                     true
                 }
                 else -> false
@@ -66,15 +59,22 @@ class MainActivity : AppCompatActivity() {
     }
 
     /**
-     * Opens the real GTA activity. That host draws the world and the MobileSA
-     * touch controls. The blank GameActivity surface only pumped the network.
+     * Launches the dedicated Project Genesis server session.
      */
-    fun launchGame(server: ServerInfo) {
+    fun launchGenesisServer() {
         val intent = Intent(this, EngineHostActivity::class.java).apply {
-            putExtra(GameActivity.EXTRA_SERVER_IP, server.ip)
-            putExtra(GameActivity.EXTRA_SERVER_PORT, server.port)
-            putExtra(GameActivity.EXTRA_SERVER_NAME, server.name)
+            putExtra(GameActivity.EXTRA_SERVER_IP, BuildConfig.DEFAULT_SERVER_IP)
+            putExtra(GameActivity.EXTRA_SERVER_PORT, BuildConfig.DEFAULT_SERVER_PORT)
+            putExtra(GameActivity.EXTRA_SERVER_NAME, BuildConfig.DEFAULT_SERVER_NAME)
         }
         startActivity(intent)
+    }
+
+    /**
+     * Kept for compatibility; always routes to the dedicated Project Genesis server.
+     */
+    @Suppress("UNUSED_PARAMETER")
+    fun launchGame(server: ServerInfo) {
+        launchGenesisServer()
     }
 }

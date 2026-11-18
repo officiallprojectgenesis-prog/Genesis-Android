@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="genesis_bg_deep">#070B0E</color>
+    <color name="genesis_bg_surface">#0E171D</color>
+    <color name="genesis_bg_card">#D90E171D</color>
+    <color name="genesis_bg_card_solid">#121D24</color>
+    <color name="genesis_emerald">#10B981</color>
+    <color name="genesis_emerald_bright">#34D399</color>
+    <color name="genesis_emerald_neon">#00FF9D</color>
+    <color name="genesis_emerald_dark">#059669</color>
+    <color name="genesis_emerald_deep">#064E3B</color>
+    <color name="genesis_border">#3310B981</color>
+    <color name="genesis_text_primary">#F1F5F9</color>
+    <color name="genesis_text_secondary">#94A3B8</color>
+    <color name="genesis_text_muted">#64748B</color>
+    <color name="genesis_status_online">#10B981</color>
+    <color name="genesis_status_offline">#F59E0B</color>
+    <color name="colorPrimaryVariant">#05080A</color>
+</resources>

@@ -203,9 +203,9 @@ class GameActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // Extract server parameters from intent
-        serverIp = intent.getStringExtra(EXTRA_SERVER_IP)?.takeIf { it.isNotBlank() } ?: BuildConfig.DEFAULT_SERVER_IP
-        serverPort = intent.getIntExtra(EXTRA_SERVER_PORT, BuildConfig.DEFAULT_SERVER_PORT)
+        // Project Genesis: hard-lock client to the dedicated Project Genesis server.
+        serverIp = BuildConfig.DEFAULT_SERVER_IP
+        serverPort = BuildConfig.DEFAULT_SERVER_PORT
 
         val assetPath = NativeAssetBridge(this).getReadyStoragePath()
         if (assetPath == null) {

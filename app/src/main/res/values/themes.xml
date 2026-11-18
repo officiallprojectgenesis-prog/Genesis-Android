@@ -1,12 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <style name="Theme.WorldRPGNeon" parent="Theme.MaterialComponents.DayNight.NoActionBar">
-        <item name="colorPrimary">#1B5E20</item>
-        <item name="colorPrimaryVariant">#003300</item>
-        <item name="colorOnPrimary">#FFFFFF</item>
-        <item name="colorSecondary">#FF6F00</item>
-        <item name="colorSecondaryVariant">#E65100</item>
-        <item name="colorOnSecondary">#FFFFFF</item>
+        <item name="colorPrimary">@color/genesis_emerald</item>
+        <item name="colorPrimaryVariant">@color/genesis_emerald_dark</item>
+        <item name="colorOnPrimary">@color/genesis_bg_deep</item>
+        <item name="colorSecondary">@color/genesis_emerald_bright</item>
+        <item name="colorSecondaryVariant">@color/genesis_emerald_dark</item>
+        <item name="colorOnSecondary">@color/genesis_bg_deep</item>
+        <item name="colorSurface">@color/genesis_bg_surface</item>
+        <item name="colorOnSurface">@color/genesis_text_primary</item>
+        <item name="android:windowBackground">@color/genesis_bg_deep</item>
+        <item name="android:colorBackground">@color/genesis_bg_deep</item>
+        <item name="android:textColorPrimary">@color/genesis_text_primary</item>
+        <item name="android:textColorSecondary">@color/genesis_text_secondary</item>
         <item name="android:statusBarColor">@color/colorPrimaryVariant</item>
         <item name="android:navigationBarColor">@color/colorPrimaryVariant</item>
     </style>
@@ -17,6 +23,4 @@
         <item name="windowActionBar">false</item>
         <item name="windowNoTitle">true</item>
     </style>
-
-    <color name="colorPrimaryVariant">#003300</color>
 </resources>

@@ -120,10 +120,10 @@ public final class EngineHostActivity extends GTASA {
     }
 
     private void startMtaSession() {
-        String ip = getIntent().getStringExtra(GameActivity.EXTRA_SERVER_IP);
-        if (ip == null || ip.isEmpty()) ip = BuildConfig.DEFAULT_SERVER_IP;
+        // Project Genesis: hard-lock client to the dedicated Project Genesis server.
+        String ip = BuildConfig.DEFAULT_SERVER_IP;
         if (ip == null || ip.isEmpty() || netRunning) return;
-        int port = getIntent().getIntExtra(GameActivity.EXTRA_SERVER_PORT, BuildConfig.DEFAULT_SERVER_PORT);
+        int port = BuildConfig.DEFAULT_SERVER_PORT;
         try {
             // Same directory the :engine linker searches for DT_NEEDED.
 // libc++ is linked statically into WorldRPGNeon (c++_static); no shared runtime to preload.
@@ -167,12 +167,12 @@ public final class EngineHostActivity extends GTASA {
     private void installTransferAndChat() {
         LinearLayout transfer = new LinearLayout(this);
         transfer.setOrientation(LinearLayout.VERTICAL);
-        transfer.setBackgroundColor(0xE0101820);
+        transfer.setBackgroundColor(0xE60B1115);
         transfer.setPadding(dp(16), dp(12), dp(16), dp(12));
         transfer.setVisibility(View.GONE);
         TextView heading = new TextView(this);
-        heading.setText("Downloading");
-        heading.setTextColor(Color.WHITE);
+        heading.setText("Project Genesis • Downloading");
+        heading.setTextColor(0xFF10B981);
         heading.setTextSize(TypedValue.COMPLEX_UNIT_SP, 16);
         transfer.addView(heading);
         downloadBar = new ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal);
@@ -216,8 +216,8 @@ public final class EngineHostActivity extends GTASA {
         chatLog.setOnClickListener(v -> openChatInput());
         Button chatButton = new Button(this);
         chatButton.setText("Chat");
-        chatButton.setTextColor(Color.WHITE);
-        chatButton.setBackgroundColor(0xCC101820);
+        chatButton.setTextColor(0xFF34D399);
+        chatButton.setBackgroundColor(0xCC0B1115);
         chatButton.setOnClickListener(v -> openChatInput());
         FrameLayout.LayoutParams buttonParams = new FrameLayout.LayoutParams(dp(88), dp(40), Gravity.BOTTOM | Gravity.START);
         buttonParams.leftMargin = chatParams.leftMargin;
@@ -477,8 +477,8 @@ public final class EngineHostActivity extends GTASA {
         Button button = new Button(this);
         button.setText(label);
         button.setAllCaps(false);
-        button.setTextColor(Color.WHITE);
-        button.setBackgroundColor(0xFF243140);
+        button.setTextColor(0xFFF1F5F9);
+        button.setBackgroundColor(0xFF121D24);
         LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(dp(280), dp(48));
         params.topMargin = dp(8);
         button.setLayoutParams(params);
