@@ -3664,6 +3664,358 @@ void CheckEngineModelNames(WorldRPG::Script::LuaVMStub& vm) {
     )LUA");
 }
 
+void CheckObjects(WorldRPG::Script::LuaVMStub& vm) {
+    using namespace WorldRPG;
+    RunLua(vm, "object-outside-resource", R"LUA(
+        assert(createObject(1337, 0, 0, 0) == false, "createObject needs a resource")
+        assert(isObjectBreakable(625) == true and isObjectBreakable(1337) == false, "breakable list")
+        assert(isObjectBreakable(0) == false and isObjectBreakable(20000) == false, "breakable range")
+        assert(pcall(isObjectMoving) == false, "isObjectMoving argument")
+    )LUA");
+    Net::ResourceStartInfo info;
+    info.name = "objects";
+    info.resourceId = 91;
+    info.entityId = 0x3910;
+    info.dynamicEntityId = 0x3911;
+    info.noClientCacheScripts = 1;
+    info.startCounter = 1;
+    Script::ActiveVmOnResourceStart(info);
+    const std::vector<uint8_t> body = NoCacheScriptBody(91, R"LUA(
+        assert(createObject(0, 0, 0, 0) == false and createObject(400, 0, 0, 0) == false, "ped and vehicle models")
+        assert(createObject(300, 0, 0, 0) == false and createObject(1337) == false, "cutscene and short args")
+        local obj = createObject(1337, 1, 2, 3, 0, 90, 0, true)
+        assert(isElement(obj) and getElementType(obj) == "object", "object element")
+        local x, y, z = getElementPosition(obj)
+        assert(x == 1 and y == 2 and z == 3, "create position")
+        assert(setElementPosition(obj, 8, 9, 10) == true, "set position")
+        x, y, z = getElementPosition(obj)
+        assert(x == 8 and y == 9 and z == 10, "position stored")
+        local sx, sy, sz = getObjectScale(obj)
+        assert(sx == 1 and sy == 1 and sz == 1, "default scale")
+        assert(setObjectScale(obj, 2) == true, "uniform scale")
+        sx, sy, sz = getObjectScale(obj)
+        assert(sx == 2 and sy == 2 and sz == 2, "uniform read")
+        assert(setObjectScale(obj, 2, 1) == true, "partial scale")
+        sx, sy, sz = getObjectScale(obj)
+        assert(sx == 2 and sy == 1 and sz == 2, "z follows x")
+        local child = createObject(1337, 0, 0, 0)
+        assert(setElementParent(child, obj) == true, "parent")
+        assert(setObjectScale(obj, 3, 3, 3) == true, "parent scale")
+        sx = getObjectScale(child)
+        assert(sx == 3, "child scale")
+        assert(setElementCallPropagationEnabled(obj, false) == true, "propagation off")
+        assert(setObjectScale(obj, 4) == true, "parent only")
+        assert(getObjectScale(child) == 3, "child stays")
+        assert(getObjectMass(obj) == -1, "default mass")
+        assert(setObjectMass(obj, -1) == false and getObjectMass(obj) == -1, "negative mass")
+        assert(setObjectMass(obj, 12) == true and getObjectMass(obj) == 12, "mass")
+        assert(setObjectProperty(obj, "all", 1) == false, "property all")
+        assert(setObjectProperty(obj, "turn_mass", 4) == true, "turn mass")
+        assert(setObjectProperty(obj, "center_of_mass", 1, 2, 3) == true, "center")
+        local cx, cy, cz = getObjectProperty(obj, "center_of_mass")
+        assert(cx == 1 and cy == 2 and cz == 3, "center read")
+        local props = getObjectProperty(obj, "all")
+        assert(props.mass == 12 and props.turn_mass == 4 and props.center_of_mass.x == 1, "property table")
+        assert(getObjectProperty(obj, "nope") == false, "bad property")
+        assert(isObjectStatic(obj) == false and setObjectStatic(obj, true) == true and isObjectStatic(obj) == true, "static")
+        assert(isObjectBreakable(obj) == false, "bin is not breakable")
+        local glass = createObject(625, 0, 0, 0)
+        assert(isObjectBreakable(glass) == true, "breakable object")
+        assert(setObjectBreakable(glass, true) == false, "already breakable")
+        assert(setObjectBreakable(glass, false) == true and isObjectBreakable(glass) == false, "disable break")
+        assert(breakObject(glass) == false, "no CObject")
+        assert(isObjectRespawnable(glass) == true, "respawn default")
+        assert(toggleObjectRespawn(glass, false) == true and isObjectRespawnable(glass) == false, "respawn off")
+        assert(respawnObject(glass) == true and respawnObject(glass) == false, "respawn once")
+        assert(moveObject(obj, 0, 5, 6, 7) == true and isObjectMoving(obj) == false, "instant move")
+        x, y, z = getElementPosition(obj)
+        assert(x == 5 and y == 6 and z == 7, "moved")
+        assert(moveObject(obj, 60000, 1, 1, 1) == true and isObjectMoving(obj) == true, "moving")
+        assert(stopObject(obj) == true and isObjectMoving(obj) == false, "stopped")
+        assert(setObjectMaterial(obj, 0, -1, "txd", "tex") == true, "color material")
+        assert(removeObjectMaterial(obj, 0) == true, "remove material")
+        assert(setObjectMaterial(obj, 0, 1337, "txd", "tex") == false, "texture miss")
+        assert(setObjectMaterial(obj, 16, -1, "a", "b") == false, "slot")
+        local tag = createObject(1490, 0, 0, 0)
+        assert(acquireObjectGangTag(obj) == false, "not a tag")
+        assert(acquireObjectGangTag(tag) == true and getObjectGangTagProgress(tag) == 0, "acquire")
+        assert(setObjectGangTagProgress(tag, 10) == true and getObjectGangTagProgress(tag) == 10, "progress")
+        assert(setObjectGangTagProgress(tag, 300) == false, "progress range")
+        assert(setObjectGangTagAlpha(tag, 128) == false, "no tag renderer")
+        assert(releaseObjectGangTag(tag) == true and getObjectGangTagProgress(tag) == false, "release")
+        assert(destroyElement(child) == true and isElement(child) == false, "destroy")
+        _G.obj = obj
+        _G.objectOk = true
+    )LUA");
+    CHECK(Script::ActiveVmFeedScripts(body.data(), body.size(), body.size() * 8));
+    Script::ActiveVmPulseResources();
+    RunLua(vm, "object-created", "assert(_G.objectOk == true and getElementType(_G.obj) == 'object', 'object script')");
+    Net::BitStreamWriter stop;
+    stop.Write(static_cast<uint16_t>(91));
+    Script::ActiveVmOnResourceStop(stop.GetData(), stop.GetByteLength(), stop.GetBitLength());
+    RunLua(vm, "object-resource-stop", "assert(isElement(_G.obj) == false, 'object left with the resource')");
+}
+
+void CheckWater(WorldRPG::Script::LuaVMStub& vm) {
+    using namespace WorldRPG;
+    RunLua(vm, "water-outside-resource",
+           "assert(createWater(0, 0, 0, 1, 0, 0, 0, 1, 0) == false, 'createWater needs a resource')");
+    Net::ResourceStartInfo info;
+    info.name = "water";
+    info.resourceId = 92;
+    info.entityId = 0x3920;
+    info.dynamicEntityId = 0x3921;
+    info.noClientCacheScripts = 1;
+    info.startCounter = 1;
+    Script::ActiveVmOnResourceStart(info);
+    const std::vector<uint8_t> body = NoCacheScriptBody(92, R"LUA(
+        local bad = createWater(0, 0, 0, 1, 0, 0, 0, 1, 0, 9)
+        assert(bad == false, "flag")
+        local w = createWater(0, 0, 5, 10, 0, 5, 0, 10, 5)
+        assert(isElement(w) and getElementType(w) == "water", "water element")
+        assert(getWaterLevel(w) == 5, "average level")
+        local x, y, z = getWaterVertexPosition(w, 1)
+        assert(x == 0 and y == 0 and z == 5, "vertex 1")
+        assert(getWaterVertexPosition(w, 0) == false and getWaterVertexPosition(w, 4) == false, "vertex range")
+        assert(setWaterVertexPosition(w, 2, 10, 0, 7) == true, "move vertex")
+        x, y, z = getWaterVertexPosition(w, 2)
+        assert(x == 10 and y == 0 and z == 7, "vertex 2")
+        local surface = getWaterLevel(1, 1, 5)
+        assert(type(surface) == "number", "point on the triangle")
+        assert(getWaterLevel(50, 50, 0) == false, "no polygon")
+        local hit, hx, hy, hz = testLineAgainstWater(1, 1, 20, 1, 1, -10)
+        assert(hit == true and hx == 1 and hy == 1 and hz > 4 and hz < 8, "line hits the triangle")
+        assert(testLineAgainstWater(50, 50, 10, 50, 50, -10) == false, "line misses inside the map")
+        local sea, sx, sy, sz = testLineAgainstWater(-4000, -4000, 10, -4000, -4000, -10)
+        assert(sea == true and sz == 0, "outside ocean")
+        assert(setWaterLevel(w, 2) == true and getWaterLevel(w) == 2, "element level")
+        assert(setWaterLevel(4, true, false) == true and getWaterLevel(w) == 2, "world level leaves the polygon")
+        assert(setWaterLevel(6) == true and getWaterLevel(w) == 6, "world level includes polygons")
+        assert(setWaterLevel(50, 50, 0, 1) == false, "no polygon at the point")
+        assert(resetWaterLevel() == true, "reset")
+        _G.water = w
+        _G.waterOk = true
+    )LUA");
+    CHECK(Script::ActiveVmFeedScripts(body.data(), body.size(), body.size() * 8));
+    Script::ActiveVmPulseResources();
+    RunLua(vm, "water-created", "assert(_G.waterOk == true and getElementType(_G.water) == 'water', 'water script')");
+    Net::BitStreamWriter stop;
+    stop.Write(static_cast<uint16_t>(92));
+    Script::ActiveVmOnResourceStop(stop.GetData(), stop.GetByteLength(), stop.GetBitLength());
+    RunLua(vm, "water-resource-stop", "assert(isElement(_G.water) == false, 'water left with the resource')");
+}
+
+void CheckFires(WorldRPG::Script::LuaVMStub& vm) {
+    using namespace WorldRPG;
+    RunLua(vm, "fire-outside-resource", R"LUA(
+        assert(createFire(0, 0, 1, 2) == true and createFire("no") == false, "numeric fire")
+        assert(createFire(0, 0, 0, {}) == false, "managed fire needs a resource")
+    )LUA");
+    Net::ResourceStartInfo info;
+    info.name = "fires";
+    info.resourceId = 93;
+    info.entityId = 0x3930;
+    info.dynamicEntityId = 0x3931;
+    info.noClientCacheScripts = 1;
+    info.startCounter = 1;
+    Script::ActiveVmOnResourceStart(info);
+    const std::vector<uint8_t> body = NoCacheScriptBody(93, R"LUA(
+        local fire = createFire(1, 2, 3, {
+            duration = 1000, strength = 2, damage = false, spread = true, maxGenerations = 3,
+            damageTargets = {players = false}
+        })
+        assert(isElement(fire) and getElementType(fire) == "fire", "fire element")
+        assert(getFireDuration(fire) == 1000 and getFireRemainingTime(fire) == 1000, "duration")
+        assert(getFireStrength(fire) == 2, "strength")
+        assert(isFireDamageEnabled(fire) == false and isFireSpreadEnabled(fire) == true, "flags")
+        assert(getFireMaxGenerations(fire) == 3, "generations")
+        local targets = getFireDamageTargets(fire)
+        assert(targets.players == false and targets.peds == true and targets.vehicles == true and targets.objects == true, "mask")
+        assert(setFireDuration(fire, 50) == true and getFireDuration(fire) == 50 and getFireRemainingTime(fire) == 50, "set duration")
+        assert(setFireDuration(fire, -1) == false and setFireStrength(fire, 0) == false, "rejected writes")
+        assert(setFireStrength(fire, 0.5) == true and getFireStrength(fire) == 0.5, "set strength")
+        assert(setFireRemainingTime(fire, 10) == true and getFireRemainingTime(fire) == 10, "remaining")
+        assert(setFireMaxGenerations(fire, 300) == false and setFireMaxGenerations(fire, 4) == true, "generation range")
+        assert(setFireDamageEnabled(fire, true) == true and isFireDamageEnabled(fire) == true, "damage")
+        assert(setFireSpreadEnabled(fire, false) == true and isFireSpreadEnabled(fire) == false, "spread")
+        assert(setFireDamageTargets(fire, {objects = false}) == true, "set mask")
+        targets = getFireDamageTargets(fire)
+        assert(targets.objects == false and targets.players == true, "mask read")
+        assert(getFireSource(fire) == false and setFireSource(fire, fire) == true, "source")
+        assert(getFireSource(fire).id == fire.id, "source id")
+        assert(setFireTarget(fire, nil) == true and getFireTarget(fire) == false, "clear target")
+        assert(extinguishFire(fire) == true and isElement(fire) == false and getFireDuration(fire) == false, "extinguish element")
+        assert(extinguishFire() == true and extinguishFire(10, 10, 10, 2) == true, "native extinguish")
+        local defaults = createFire(0, 0, 0, {})
+        assert(getFireDuration(defaults) == 5000 and getFireStrength(defaults) == 1, "defaults")
+        assert(isFireDamageEnabled(defaults) == true and isFireSpreadEnabled(defaults) == false, "default flags")
+        _G.fireOk = true
+        _G.fire = defaults
+    )LUA");
+    CHECK(Script::ActiveVmFeedScripts(body.data(), body.size(), body.size() * 8));
+    Script::ActiveVmPulseResources();
+    RunLua(vm, "fire-created", "assert(_G.fireOk == true and getElementType(_G.fire) == 'fire', 'fire script')");
+    Net::BitStreamWriter stop;
+    stop.Write(static_cast<uint16_t>(93));
+    Script::ActiveVmOnResourceStop(stop.GetData(), stop.GetByteLength(), stop.GetBitLength());
+    RunLua(vm, "fire-resource-stop", "assert(isElement(_G.fire) == false, 'fire left with the resource')");
+}
+
+void CheckFx(WorldRPG::Script::LuaVMStub& vm) {
+    RunLua(vm, "fx-particles", R"LUA(
+        assert(fxAddBlood(0, 0, 0, 0, 0, 1) == true and fxAddBlood(0, 0, 0, 0, 0, 1, 4, 0.5) == true, "blood")
+        assert(fxAddBlood() == false and fxAddWood("no") == false, "fx arguments")
+        assert(fxAddWood(0, 0, 0, 1, 0, 0) == true, "wood")
+        assert(fxAddSparks(0, 0, 0, 0, 0, 1) == true, "sparks")
+        assert(fxAddSparks(0, 0, 0, 0, 0, 1, 2, 3, 0, 1, 0, false, 0.2, 0.4) == true, "sparks full")
+        assert(fxAddTyreBurst(0, 0, 0, 0, 0, 1) == true and fxAddPunchImpact(0, 0, 0, 1, 0, 0) == true, "burst and punch")
+        assert(fxAddBulletImpact(0, 0, 0, 0, 1, 0, 2, 3, 0.5) == true, "bullet")
+        assert(fxAddDebris(0, 0, 0) == true and fxAddGlass(0, 0, 0, 1, 2, 3, 4, 0.5, 2) == true, "debris and glass")
+        assert(fxAddWaterHydrant(0, 0, 0) == true and fxAddWaterSplash(1, 2, 3) == true, "water fx")
+        assert(fxAddBulletSplash(0, 0, 0) == true and fxAddFootSplash(0, 0, 0) == true, "splashes")
+        assert(fxAddGunshot(0, 0, 0, 0, 0, 1, false) == true and fxAddTankFire(0, 0, 0, 1, 0, 0) == true, "gunshot and tank")
+        assert(fxAddFootSplash() == false, "splash arguments")
+        assert(fxCreateParticle("blood", 0, 0, 0, 0, 0, 1, 255, 0, 0, 255) == true, "particle")
+        assert(fxCreateParticle("glass", 0, 0, 0, 1, 0, 0, 1, 1, 1, 1, true, 2, 0.5, 0.2, false, 3) == true, "particle options")
+        local ok = pcall(fxCreateParticle, "nope", 0, 0, 0, 0, 0, 1, 1, 1, 1, 1)
+        assert(ok == false, "unknown particle")
+    )LUA");
+}
+
+void CheckWorldQueries(WorldRPG::Script::LuaVMStub& vm) {
+    using namespace WorldRPG;
+    RunLua(vm, "world-query-outside", R"LUA(
+        assert(getZoneName(-2100, -2400, 10) == "Angel Pine", "zone")
+        assert(getZoneName(-2100, -2400, 10, true) == "Whetstone", "city")
+        assert(getZoneName(1500, -1700, 15) == "Pershing Square", "square")
+        assert(getZoneName(1500, -1700, 15, true) == "Los Santos", "los santos")
+        assert(getZoneName(0, 0, 10) == "Blueberry Acres" and getZoneName(0, 0, 10, true) == "Red County", "county")
+        assert(getZoneName(4000, 0, 0) == "Unknown", "outside map")
+        assert(getZoneName() == false and createExplosion() == false, "missing arguments")
+        assert(createExplosion(0, 0, 0, 4) == true and createSWATRope(0, 0, 5) == true, "explosion and rope")
+        assert(createBuilding(1337, 0, 0, 3) == false, "building needs a resource")
+        assert(getGaragePosition(0) == false and getGarageSize(1) == false and getGarageBoundingBox(2) == false, "no garage pool")
+        assert(removeWorldModel(1337, 10, 0, 0, 0) == false, "removal needs a resource")
+        assert(removeGameWorld() == true and restoreGameWorld() == true, "world flag")
+        local badModel, badPos = pcall(createBuilding, 400, 0, 0, 0), false
+        assert(badModel == false, "vehicle is not a building")
+    )LUA");
+    Net::ResourceStartInfo info;
+    info.name = "worldq";
+    info.resourceId = 94;
+    info.entityId = 0x3940;
+    info.dynamicEntityId = 0x3941;
+    info.noClientCacheScripts = 1;
+    info.startCounter = 1;
+    Script::ActiveVmOnResourceStart(info);
+    const std::vector<uint8_t> body = NoCacheScriptBody(94, R"LUA(
+        local building = createBuilding(1337, 0, 0, 3)
+        assert(isElement(building) and getElementType(building) == "building", "building")
+        local ok = pcall(createBuilding, 1337, 10000, 0, 0)
+        assert(ok == false, "outside the world")
+        local removed, count = removeWorldModel(1337, 10, 0, 0, 0)
+        assert(removed == true and count == 0, "no building list")
+        removed, count = restoreWorldModel(1337, 10, 0, 0, 0)
+        assert(removed == true and count == 0, "restore one")
+        removed, count = restoreAllWorldModels()
+        assert(removed == true and count == 0, "restore all")
+        assert(removeAllGameBuildings() == true and restoreAllGameBuildings() == true, "deprecated world")
+        assert(acquireGarageControl(0) == false and releaseGarageControl(0) == false, "garage lease")
+        _G.building = building
+        _G.worldQueryOk = true
+    )LUA");
+    CHECK(Script::ActiveVmFeedScripts(body.data(), body.size(), body.size() * 8));
+    Script::ActiveVmPulseResources();
+    RunLua(vm, "world-query-created", "assert(_G.worldQueryOk == true and getElementType(_G.building) == 'building', 'query script')");
+    Net::BitStreamWriter stop;
+    stop.Write(static_cast<uint16_t>(94));
+    Script::ActiveVmOnResourceStop(stop.GetData(), stop.GetByteLength(), stop.GetBitLength());
+    RunLua(vm, "world-query-stop", "assert(isElement(_G.building) == false, 'building left with the resource')");
+}
+
+void CheckSight(WorldRPG::Script::LuaVMStub& vm) {
+    RunLua(vm, "sight-and-paths", R"LUA(
+        assert(pcall(getRoofPosition) == false, "roof arguments")
+        assert(getRoofPosition(0, 0, 10) == false, "no roof")
+        assert(processLineOfSight(0, 0, 0, 1, 1, 1) == false, "no line hit")
+        assert(processLineOfSight() == false, "line arguments")
+        assert(isLineOfSightClear(0, 0, 0, 1, 0, 0) == false, "sight query did not run")
+        assert(getScreenFromWorldPosition(0, 0, 0) == false, "no screen projection")
+        assert(getWorldFromScreenPosition(0, 0, 1) == false, "no world projection")
+        local me = {id = localPlayer.id, element = true}
+        assert(processLineAgainstMesh(me, 0, 0, 0, 1, 0, 0) == false, "no mesh")
+        assert(pcall(processLineAgainstMesh) == false, "mesh arguments")
+        local hit = testSphereAgainstWorld(0, 0, 0, 2)
+        assert(hit == false, "sphere miss")
+        local graph, graphError = engineGetPedPathGraphRevision()
+        assert(graph == false and graphError == "no-patches", "graph revision")
+        local patch, patchError = engineGetPedPathPatchRevision()
+        assert(patch == false and patchError == "no-patch", "patch revision")
+        assert(engineUnloadPedPathPatch() == false, "unload")
+        local ok, err = pcall(updateAmbientPedPopulationModels)
+        assert(not ok and err:find("Expected vector3 at argument 1, got none", 1, true), "update arguments: " .. tostring(err))
+        ok, err = pcall(updateAmbientPedPopulationModels, "no")
+        assert(not ok and err:find('Expected vector3 at argument 1, got string ("no")', 1, true), "update string: " .. tostring(err))
+        ok, err = pcall(updateAmbientPedPopulationModels, 1, 2)
+        assert(not ok and err:find("Expected vector3 at argument 1, got number (1)", 1, true), "update short: " .. tostring(err))
+        ok, err = pcall(updateAmbientPedPopulationModels, 0, 0, 0/0)
+        assert(not ok and err:find("Expected number at argument 3, got NaN", 1, true), "update nan: " .. tostring(err))
+        ok, err = pcall(updateAmbientPedPopulationModels, 0, math.huge, 0)
+        assert(not ok and err:find("Expected number at argument 2, got inf", 1, true), "update inf: " .. tostring(err))
+        assert(updateAmbientPedPopulationModels(1, 2, 3) == false, "no navigation zone")
+        assert(updateAmbientPedPopulationModels("4", "5", "6") == false, "numeric strings")
+        assert(resetAmbientPedPopulationModels() == true, "reset")
+        assert(resetAmbientPedPopulationModels("extra") == true, "reset ignores extra")
+        assert(isWorldRPGMobilePopulation() == true, "phone population flag")
+        local isMobileClient = (type(isWorldRPGMobilePopulation) == "function" and isWorldRPGMobilePopulation() == true) or
+            type(resetAmbientPedPopulationZonesToBootstrap) ~= "function" or
+            type(setAmbientPedPopulationZoneState) ~= "function"
+        assert(isMobileClient == true, "phone detector stays on the mobile path")
+        assert(type(resetAmbientPedPopulationZonesToBootstrap) == "function", "bootstrap is bound")
+        assert(resetAmbientPedPopulationZonesToBootstrap() == false, "bootstrap has no zone array")
+        local profile, profileReason = getAmbientPedPopulationProfile()
+        assert(profile == false and profileReason == "inactive", "profile inactive")
+        local spawned, spawnReason = getAmbientPedSpawnCandidate(0, 0, 0, "civilian", -1)
+        assert(spawned == false and spawnReason == "invalid-origin", "spawn multipliers")
+        assert(getAmbientPedSpawnCandidate(0, 0, 0, "nope", -1) == false, "spawn selection")
+        assert(getAmbientPedSpawnCandidate(0, 0, 0, "civilian", 1) == false, "spawn gang id")
+        local grouped, groupReason = getAmbientPedGangGroupCandidate(0, 0, 0, 1, 3)
+        assert(grouped == false and groupReason == "invalid-origin", "gang group")
+        assert(getAmbientPedGangGroupCandidate(0, 0, 0, 9, 3) == false, "gang range")
+        local couple, coupleReason = getAmbientPedCivilianCoupleCandidate(0, 0, 0)
+        assert(couple == false and coupleReason == "invalid-origin", "couple version")
+        local vehicleModel, vehicleModelReason = getAmbientVehicleModelCandidate()
+        assert(vehicleModel == false and vehicleModelReason == "population-unavailable", "vehicle model")
+        assert(getAmbientVehicleOccupantModelCandidate(410, 4) == false, "occupant model info")
+        assert(getAmbientVehicleOccupantModelCandidate(410, 0) == false, "occupant count")
+        local vehicleSpawn, vehicleSpawnReason = getAmbientVehicleSpawnCandidate(0, 0, 0, 410)
+        assert(vehicleSpawn == false and vehicleSpawnReason == "unsupported-model", "vehicle spawn")
+        assert(isAmbientPedSphereVisible(0, 0, 0, 5) == false, "sphere camera")
+        assert(isAmbientPedSphereVisible(0, 0, 0, 101) == false, "sphere radius")
+        assert(pcall(isAmbientPedSphereVisible) == false, "sphere arguments")
+        assert(setAmbientPedPopulationZoneState() == false, "zone arguments")
+        assert(setAmbientPedPopulationZoneState("MARKST") == false, "zone table")
+        assert(setAmbientPedPopulationZoneState("MARKST", {populationType = 20}) == false, "population type")
+        assert(setAmbientPedPopulationZoneState("MARKST", {populationType = 1.5}) == false, "fraction")
+        assert(setAmbientPedPopulationZoneState("MARKST", {noCops = 1}) == false, "noCops type")
+        assert(setAmbientPedPopulationZoneState("MARKST", {gangStrengths = "x"}) == false, "gang table")
+        assert(setAmbientPedPopulationZoneState("MARKST", {gangStrengths = {256}}) == false, "gang range")
+        assert(setAmbientPedPopulationZoneState("nope", {}) == false, "label case")
+        assert(setAmbientPedPopulationZoneState("", {}) == false, "empty label")
+        assert(setAmbientPedPopulationZoneState("TOOLONG1", {}) == false, "long label")
+        assert(setAmbientPedPopulationZoneState("ZZZZ", {}) == false, "unknown label")
+        assert(setAmbientPedPopulationZoneState("MARKST", {}) == false, "known label, no zone array")
+        assert(setAmbientPedPopulationZoneState("MARKST", {
+            populationType = 14, races = 15, dealerStrength = 0, noCops = false,
+            gangStrengths = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+        }) == false, "full state")
+        local loaded, loadError = engineLoadPedPathPatch("paths/none.nped")
+        assert(loaded == false and type(loadError) == "string", "load")
+        loaded, loadError = engineLoadPedPathPatch()
+        assert(loaded == false and loadError == "invalid-resource-path", "load arguments")
+    )LUA");
+}
+
 int main(int argc, char** argv) {
     CheckPacketLayouts();
     CheckPedEntityBody();
@@ -3709,6 +4061,12 @@ int main(int argc, char** argv) {
     CheckSvg(vm);
     CheckStopLifecycle(vm);
     CheckCustomWeapons(vm);
+    CheckObjects(vm);
+    CheckWater(vm);
+    CheckFires(vm);
+    CheckFx(vm);
+    CheckWorldQueries(vm);
+    CheckSight(vm);
     CheckCrypto(vm);
     CheckDxImage(vm);
     CheckGuiFonts(vm);

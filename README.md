@@ -118,7 +118,7 @@ A complete line-by-line conversion catalog comparing all 1,581 desktop MTA clien
 |---|---|---|---|---|---|---|
 | **Vehicles (CLuaVehicleDefs)** | [VEHICLES.md](docs/lua-functions/VEHICLES.md) | 165 | 165 | 0 | 0 | 100.0% |
 | **Peds & Players (CLuaPedDefs, CLuaPlayerDefs)** | [PEDS_AND_PLAYERS.md](docs/lua-functions/PEDS_AND_PLAYERS.md) | 206 | 51 | 60 | 95 | 24.8% |
-| **World, Objects & Environment** | [WORLD_AND_OBJECTS.md](docs/lua-functions/WORLD_AND_OBJECTS.md) | 227 | 124 | 11 | 92 | 54.6% |
+| **World, Objects & Environment** | [WORLD_AND_OBJECTS.md](docs/lua-functions/WORLD_AND_OBJECTS.md) | 227 | 227 | 0 | 0 | 100.0% |
 | **Element Tree & Data (CLuaElementDefs)** | [ELEMENTS.md](docs/lua-functions/ELEMENTS.md) | 81 | 62 | 5 | 14 | 76.5% |
 | **GUI & 2D/3D Drawing (DX & CEGUI)** | [GUI_AND_DX.md](docs/lua-functions/GUI_AND_DX.md) | 199 | 199 | 0 | 0 | 100.0% |
 | **Engine & Model Replacement (DFF, TXD, COL)** | [ENGINE_AND_MODELS.md](docs/lua-functions/ENGINE_AND_MODELS.md) | 125 | 125 | 0 | 0 | 100.0% |
@@ -128,7 +128,7 @@ A complete line-by-line conversion catalog comparing all 1,581 desktop MTA clien
 | **Core System, Networking & Utilities** | [CORE_AND_UTILITY.md](docs/lua-functions/CORE_AND_UTILITY.md) | 195 | 171 | 0 | 24 | 87.7% |
 | **Markers, Blips, ColShapes & Spatial** | [MARKERS_AND_SPATIAL.md](docs/lua-functions/MARKERS_AND_SPATIAL.md) | 145 | 2 | 2 | 141 | 1.4% |
 | **Web Browser & Compatibility (CEF / Discord)** | [BROWSER_AND_COMPATIBILITY.md](docs/lua-functions/BROWSER_AND_COMPATIBILITY.md) | 103 | 103 | 0 | 0 | 100.0% |
-| **TOTAL** | **All Categories** | **1581** | **1101** | **79** | **401** | **69.6%** |
+| **TOTAL** | **All Categories** | **1581** | **1204** | **68** | **309** | **76.2%** |
 
 *Full machine-generated parity matrix: [`docs/PARITY_MATRIX.md`](docs/PARITY_MATRIX.md)*
 

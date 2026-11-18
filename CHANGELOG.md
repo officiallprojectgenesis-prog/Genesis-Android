@@ -8,6 +8,42 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added — Ambient population failure results (2026-11-18)
+
+- The nine remaining ambient calls follow the desktop argument checks and return the failure `CGameSA` produces while zone lookup, popcycle, model info, the US 1.0 couple selector, and `CCamera::IsSphereVisible` are not hooked. `isWorldRPGMobilePopulation` stays true until those hooks exist. The phone traffic scripts use that flag, so a false native result still falls through to the polyfill and the puppet stays on. Host-tested. Not yet run on a device.
+
+### Added — Ambient zone state (2026-11-18)
+
+- `setAmbientPedPopulationZoneState` follows the table checks in `CLuaWorldDefs.cpp` 764-848 and the label checks in `CGameSA.cpp` 1865-1880, including the 336 main.scm zone labels. A known label returns false because `FindZoneByLabel` and the zone info array are not hooked. `resetAmbientPedPopulationZonesToBootstrap` stays unbound: `mobile_puppet_client.lua` 17 turns the puppet off when that name exists, and `client.lua` 400-401 would then leave the mobile path. Host-tested. Not yet run on a device.
+
+### Added — Ambient ped model lease calls (2026-11-18)
+
+- `updateAmbientPedPopulationModels` follows the vector checks in `CLuaFunctionParser.h` and returns false for a finite origin, the `CGameSA.cpp` 1574-1587 result when the navigation zone array is missing. `resetAmbientPedPopulationModels` returns true, as `CLuaWorldDefs.cpp` 752-755 does after the inactive restore at `CGameSA.cpp` 1661-1667. Streaming slots are not touched. Nine names stay unbound so the phone traffic scripts keep their polyfills. Host-tested. Not yet run on a device.
+
+### Added — Sight, screen, and ped-path queries (2026-11-18)
+
+- Roof, line-of-sight, screen, and sphere queries follow the argument rules in `CLuaWorldDefs.cpp` 895-1190 and 3092-3115. A valid call returns the desktop failure result because `CWorld` collision and `CGraphics` projection are not hooked. `isLineOfSightClear` false means the query did not run. `testSphereAgainstWorld` returns the no-hit tuple. Ped-path revision calls report `no-patches` and `no-patch` because no patch is loaded. `engineUnloadPedPathPatch` returns false because no lease is stored (`CPedPathPatchesSA.cpp` 1038-1045). Host-tested. Not yet run on a device.
+
+### Added — Zones, buildings, and world-query calls (2026-11-18)
+
+- `getZoneName` follows `CZoneNames.cpp`, including the city-only search and `Unknown` outside the -3000..3000 cube. `createBuilding` follows `CLuaBuildingDefs.cpp` 36-68 for the model and world-limit checks. `createExplosion` and `createSWATRope` accept the desktop arguments and do not spawn. `removeWorldModel` returns a removed count of 0 because `CBuildingRemoval` is not loaded. Garage position, size, bounds, and control return false because `CGarages` is not readable. Host-tested. Not yet run on a device.
+
+### Added — Particle argument checks (2026-11-18)
+
+- `fxAdd*` and `fxCreateParticle` follow `CLuaEffectDefs.cpp` 78-653. A parsed call returns true, which is what `CFxManager::Add*` does after the spawn. `CFx` is not called, so nothing is drawn. `fxCreateParticle` accepts the 17 desktop system names and raises on an unknown name. Host-tested. Not yet run on a device.
+
+### Added — Managed fire elements (2026-11-18)
+
+- The options-table form of `createFire` and the fire getters and setters follow `CLuaFireDefs.cpp` 175-541. Duration, remaining time, strength, damage, spread, generations, the damage-target mask, and source and target are stored on a local `fire` element. The numeric form still returns a boolean and does not call `CFireManager::StartFire`. Remaining time does not tick, and no `FxSystem` is created. Host-tested. Not yet run on a device.
+
+### Added — Scripted water polygons (2026-11-18)
+
+- `createWater`, `getWaterLevel`, vertex position, and `testLineAgainstWater` follow `CLuaWaterDefs.cpp` 70-431, `WaterFlags.h`, and `CWaterManagerSA::TestLineAgainstWater`. A resource creates a water element. A line hits those polygons first, then the ocean plane only outside the -3000..3000 square. `getWaterLevel` on a point does not query the GTA sea. `setWaterLevel(level)` still stores the world level without a resource. Host-tested. Not yet run on a device.
+
+### Added — Client object Lua (2026-11-18)
+
+- `createObject` and the object get/set calls follow `CLuaObjectDefs.cpp` 100-898 and `CStaticFunctionDefinitions.cpp` 4128-4443. A resource and a stock object model are required. Peds, vehicles, clothes, and cutscene models are rejected. Scale, mass, properties, frozen, respawn, movement, and materials are stored on the element, and a scale or move also reaches element children while call propagation is on. `CObject` is not created, so `breakObject` and `setObjectGangTagAlpha` return false and a texture replace cannot resolve. The host has no model table. Not yet run on a device.
+
 ### Added — Vehicle sirens, handling, and model data queries (2026-11-18)
 
 - Siren add, remove, params, and point writes follow `CLuaVehicleDefs.cpp:3310-3462` and `4647-4664`. A siren type outside 1..6 or a count above 8 returns false. Rotor state starts on and can be changed for a plane or helicopter. Handling, audio settings, dummies, exhaust position, entry points, compatible upgrades, and the autopilot diagnostic fail closed because those model tables are not loaded. Wheel size raises `Invalid model ID` for the same reason. A flying component index outside 1..24 raises, and a valid index returns false without a game vehicle. Smoke trails raise `Invalid model ID` except on models 512 and 513. Not yet run on a device.

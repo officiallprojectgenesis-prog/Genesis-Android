@@ -37,7 +37,7 @@ CATEGORIES = OrderedDict([
         "file": "WORLD_AND_OBJECTS.md",
         "description": "3D objects, world weather, game time, water levels, gravity, minute duration, heat haze, explosions, fires, garage doors, searchlights, and foliage.",
         "groups": ["CLuaWorldDefs", "CLuaObjectDefs", "CLuaBuildingDefs", "CLuaWaterDefs", "CLuaFoliageDefs", "CLuaFireDefs", "CLuaEffectDefs"],
-        "subsystem_notes": "Hooks libGTASA.so `CObject`, `CWeather`, `CClock`, `CWaterLevel`, `CWorld`, and particle engine `FxSystem_c`."
+        "subsystem_notes": "Weather, clock, and clip distances are stored. Objects, water, fire, effects, zones, buildings, and sight queries follow the desktop argument checks. Ambient population calls return the desktop failure while zone lookup, popcycle, model info, and the camera are not hooked. isWorldRPGMobilePopulation keeps the phone polyfills until those hooks succeed."
     }),
     ("ELEMENTS", {
         "title": "Element Tree & Data (CLuaElementDefs)",
@@ -278,6 +278,15 @@ def guess_conversion_notes(name, group, status, detail):
         return "Stock models only (0..312 excluding 74, 149, 208); custom allocation is not ported. Host-tested; not device-verified. (GetValidPedModels)"
     if status == "implemented" and name == "getBoundKeys":
         return "Queries command bindings across resources; no physical GTA-control keyboard mappings on mobile yet. Host-tested; not device-verified. (GetBoundKeys)"
+    if status == "implemented" and name in {
+        "createObject", "isObjectStatic", "setObjectStatic", "getObjectScale", "setObjectScale",
+        "isObjectBreakable", "setObjectBreakable", "getObjectMass", "setObjectMass", "getObjectProperty",
+        "setObjectProperty", "isObjectMoving", "isObjectRespawnable", "moveObject", "stopObject",
+        "breakObject", "respawnObject", "toggleObjectRespawn", "setObjectMaterial", "removeObjectMaterial",
+        "setObjectGangTagAlpha", "acquireObjectGangTag", "setObjectGangTagProgress", "getObjectGangTagProgress",
+        "releaseObjectGangTag",
+    }:
+        return "Follows CLuaObjectDefs.cpp and the object writes in CStaticFunctionDefinitions.cpp. createObject needs a resource and a stock object model; peds, vehicles, clothes, and the cutscene range are rejected. The element stores scale, mass, properties, frozen, respawn, movement, and materials. CObject is not created, so breakObject and setObjectGangTagAlpha return false and a texture replace cannot resolve. The host has no model table. Not device-verified."
     if status == "implemented":
         return f"Operational on Android. ({detail})"
     if status == "stub":

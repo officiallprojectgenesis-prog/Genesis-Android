@@ -17,6 +17,13 @@
 #include "LuaKeyBindApi.h"
 #include "LuaDxApi.h"
 #include "LuaSpatialApi.h"
+#include "LuaWorldObjectApi.h"
+#include "LuaWaterApi.h"
+#include "LuaFireApi.h"
+#include "LuaFxApi.h"
+#include "LuaWorldQueryApi.h"
+#include "LuaSightApi.h"
+#include "LuaAmbientApi.h"
 #include "DxShader.h"
 #include "LuaSvgApi.h"
 #include "LuaApiExtra.h"
@@ -2200,16 +2207,10 @@ static void installDxBindings(lua_State* L) {
         {"setPedWeaponShootingRate", l_true},
         // setCameraMatrix is installed by installWardrobeBindings, which runs after this
         // table. A stub here would be the binding the parity scan keeps.
-        {"resetAmbientPedPopulationModels", l_true},
-        // Not bound on purpose: resetAmbientPedPopulationZonesToBootstrap, setAmbientPedPopulationZoneState,
-        // getAmbientPedPopulationProfile and isAmbientPedSphereVisible. The server's native-ped-traffic client
-        // script detects a phone by their absence (client.lua 406-407, mobile_puppet_client.lua 17) and then uses
-        // its own fallback: polyfilled profile and spawn candidates, capabilities.mobilePolyfill = true, and a
-        // visibility probe answered as "native-visibility-unavailable". With constant-result stubs bound here the
-        // script took the desktop path: the profile came back false, the server rejected it
-        // (population-profile-rejected), and no traffic ped was ever created for a phone player. Bind them again
-        // only with real engine hooks (desktop CGameSA ambient population functions).
-        {"updateAmbientPedPopulationModels", l_true},
+        // InstallAmbientLua binds the ambient population calls. isWorldRPGMobilePopulation
+        // stays true until FindZoneByLabel, popcycle, and CCamera::IsSphereVisible exist.
+        // The traffic scripts use that flag, not the absence of these names, to keep the
+        // phone puppet and the polyfills.
         {"processLineOfSight", l_false},
         {"getPlayerMoney", l_getPlayerMoney},
         {"triggerServerEvent", l_triggerServerEvent},
@@ -2261,6 +2262,13 @@ static void installDxBindings(lua_State* L) {
     InstallDxLua(L);
     InstallSvgLua(L);
     InstallSpatialLua(L);
+    InstallWorldObjectLua(L);
+    InstallWaterLua(L);
+    InstallFireLua(L);
+    InstallFxLua(L);
+    InstallWorldQueryLua(L);
+    InstallSightLua(L);
+    InstallAmbientLua(L);
     // These two stay on this file even if extra bindings register the same names.
     lua_pushcfunction(L, l_getNetworkStats);
     lua_setglobal(L, "getNetworkStats");
