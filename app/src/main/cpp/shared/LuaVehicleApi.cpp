@@ -798,6 +798,13 @@ void UpdateFlags(uint32_t id, const VehicleFlags& flags) {
     g_vehicleFlags[id] = flags;
 }
 
+bool VehicleFrozenOf(uint32_t id) {
+    if (std::strcmp(ServerWorld::ElementKindName(id), "vehicle") != 0) return false;
+    std::lock_guard<std::mutex> lock(g_vehicleFlagsLock);
+    const auto found = g_vehicleFlags.find(id);
+    return found != g_vehicleFlags.end() && found->second.frozen;
+}
+
 bool HasModel(int model, std::initializer_list<int> ids) {
     for (int id : ids) if (model == id) return true;
     return false;
@@ -3211,6 +3218,8 @@ void Register(lua_State* L) {
 }  // namespace
 
 void BindVehicleLua(lua_State* L) { Register(L); }
+
+bool VehicleBodyFrozen(uint32_t id) { return VehicleFrozenOf(id); }
 
 }  // namespace WorldRPG::Script
 

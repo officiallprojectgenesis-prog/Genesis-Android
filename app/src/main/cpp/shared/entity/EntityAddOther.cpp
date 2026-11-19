@@ -118,6 +118,7 @@ bool ReadRadarArea(Net::BitStreamReader& reader, const EntityCommon& common, Vis
     visual.a = color[3];
     bool flashing = false;
     if (!ReadFlag(reader, flashing)) ENTITY_BODY_FAIL();
+    visual.radarFlashing = flashing;
     (void)common;
     return true;
 }
@@ -149,13 +150,19 @@ bool ReadTeam(Net::BitStreamReader& reader, const EntityCommon& common, Visual& 
     if (!ReadFlag(reader, friendlyFire)) ENTITY_BODY_FAIL();
     uint32_t playerCount = 0;
     if (!reader.Read(playerCount)) ENTITY_BODY_FAIL();
+    auto team = std::make_shared<TeamSpawn>();
+    team->name = std::move(teamName);
+    team->friendlyFire = friendlyFire;
+    team->players.reserve(playerCount);
     for (uint32_t i = 0; i < playerCount; ++i) {
         uint32_t playerId = 0;
         if (!ReadElementId(reader, playerId)) ENTITY_BODY_FAIL();
+        team->players.push_back(playerId);
     }
     visual.r = red;
     visual.g = green;
     visual.b = blue;
+    visual.team = std::move(team);
     (void)common;
     return true;
 }

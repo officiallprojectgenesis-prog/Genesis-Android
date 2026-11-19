@@ -38,6 +38,7 @@ std::atomic<uint16_t> g_localDimension{0};
 std::atomic<uint8_t> g_localInterior{0};
 uint32_t g_resourceRoot = 0;
 std::unordered_map<uint32_t, Visual> g_visuals;
+std::vector<uint32_t> g_teamOrder;
 std::unordered_map<uint32_t, Attachment> g_attachments;
 std::vector<uint32_t> g_attachmentOrder;
 std::unordered_map<uint32_t, std::unordered_map<std::string, Datum>> g_data;
@@ -241,6 +242,8 @@ void Remember(uint32_t id, const Visual& visual) {
     stored.blipHandle = oldBlip;
     stored.blipLive = live;
     if (visual.model >= 0) stored.model = visual.model;
+    if (visual.kind == 13 && std::find(g_teamOrder.begin(), g_teamOrder.end(), id) == g_teamOrder.end())
+        g_teamOrder.push_back(id);
 }
 
 // CClientWeapon.cpp:22-23 registers references; CClientEntity.cpp:94-98 detaches on deletion.
@@ -270,6 +273,7 @@ void ResetSession() {
             if (visual.kind == 14) peds.push_back(id);
         }
         g_visuals.clear();
+        g_teamOrder.clear();
         PedQueries::Reset();
         g_localGeneration = ++g_generation;
         g_attachments.clear();
@@ -476,6 +480,18 @@ bool CopyAttachment(uint32_t id, Attachment& out) {
     return true;
 }
 
+void NoteAttachedOffsets(uint32_t id, float x, float y, float z, float rx, float ry, float rz) {
+    if (id == 0 || id == 0xFFFFFFFFu) return;
+    std::lock_guard lock(g_lock);
+    Attachment& attachment = g_attachments[id];
+    attachment.position[0] = x;
+    attachment.position[1] = y;
+    attachment.position[2] = z;
+    attachment.rotation[0] = rx;
+    attachment.rotation[1] = ry;
+    attachment.rotation[2] = rz;
+}
+
 std::vector<uint32_t> CopyAttachedElements(uint32_t parent) {
     std::lock_guard lock(g_lock);
     std::vector<uint32_t> result;
@@ -484,6 +500,95 @@ std::vector<uint32_t> CopyAttachedElements(uint32_t parent) {
         if (found != g_attachments.end() && found->second.parent == parent) result.push_back(child);
     }
     return result;
+}
+
+bool CopyMarkerFields(uint32_t id, MarkerFields& out) {
+    std::lock_guard<std::mutex> lock(g_lock);
+    auto found = g_visuals.find(id);
+    if (found == g_visuals.end() || found->second.kind != 4) return false;
+    const auto& visual = found->second;
+    out = {};
+    out.type = visual.markerType;
+    out.x = visual.x;
+    out.y = visual.y;
+    out.z = visual.z;
+    out.size = visual.size;
+    out.r = visual.r;
+    out.g = visual.g;
+    out.b = visual.b;
+    out.a = visual.a;
+    out.ignoreAlpha = visual.markerIgnoreAlpha;
+    out.hasTarget = visual.markerHasTarget;
+    out.targetX = visual.markerTargetX;
+    out.targetY = visual.markerTargetY;
+    out.targetZ = visual.markerTargetZ;
+    out.arrowR = visual.markerArrowR;
+    out.arrowG = visual.markerArrowG;
+    out.arrowB = visual.markerArrowB;
+    out.arrowA = visual.markerArrowA;
+    out.arrowSize = visual.markerArrowSize;
+    return true;
+}
+
+void CopyTeams(std::vector<TeamFields>& out) {
+    std::lock_guard<std::mutex> lock(g_lock);
+    out.clear();
+    for (uint32_t id : g_teamOrder) {
+        auto found = g_visuals.find(id);
+        if (found == g_visuals.end() || found->second.kind != 13 || !found->second.team) continue;
+        TeamFields team;
+        team.id = id;
+        team.name = found->second.team->name;
+        team.r = found->second.r;
+        team.g = found->second.g;
+        team.b = found->second.b;
+        team.friendlyFire = found->second.team->friendlyFire;
+        team.players = found->second.team->players;
+        out.push_back(std::move(team));
+    }
+}
+
+bool CopyTeam(uint32_t id, TeamFields& out) {
+    std::lock_guard<std::mutex> lock(g_lock);
+    auto found = g_visuals.find(id);
+    if (found == g_visuals.end() || found->second.kind != 13 || !found->second.team) return false;
+    out = {};
+    out.id = id;
+    out.name = found->second.team->name;
+    out.r = found->second.r;
+    out.g = found->second.g;
+    out.b = found->second.b;
+    out.friendlyFire = found->second.team->friendlyFire;
+    out.players = found->second.team->players;
+    return true;
+}
+
+bool CopyRadarFields(uint32_t id, RadarFields& out) {
+    std::lock_guard<std::mutex> lock(g_lock);
+    auto found = g_visuals.find(id);
+    if (found == g_visuals.end() || found->second.kind != 7) return false;
+    const auto& visual = found->second;
+    out = {};
+    out.x = visual.x;
+    out.y = visual.y;
+    out.w = visual.w;
+    out.h = visual.h;
+    out.r = visual.r;
+    out.g = visual.g;
+    out.b = visual.b;
+    out.a = visual.a;
+    out.flashing = visual.radarFlashing;
+    return true;
+}
+
+int CountKind(int kind) {
+    std::lock_guard<std::mutex> lock(g_lock);
+    int count = 0;
+    for (const auto& [id, visual] : g_visuals) {
+        (void)id;
+        if (visual.kind == kind) ++count;
+    }
+    return count;
 }
 
 const char* ElementKindName(uint32_t id) {
@@ -502,6 +607,7 @@ const char* ElementKindName(uint32_t id) {
         case 14: return "ped";
         case 18: return "weapon";
         case 4: return "marker";
+        case 13: return "team";
         default: return "element";
     }
 }
@@ -680,6 +786,7 @@ void OnEntityRemove(const uint8_t* body, size_t length, size_t bits) {
                 return;
             }
             g_visuals.erase(id);
+            g_teamOrder.erase(std::remove(g_teamOrder.begin(), g_teamOrder.end(), id), g_teamOrder.end());
             PedQueries::Forget(id);
             g_data.erase(id);
             g_nicks.erase(id);
@@ -783,6 +890,7 @@ void OnPlayerQuit(uint32_t id) {
     {
         std::lock_guard<std::mutex> lock(g_lock);
         g_visuals.erase(id);
+        g_teamOrder.erase(std::remove(g_teamOrder.begin(), g_teamOrder.end(), id), g_teamOrder.end());
         PedQueries::Forget(id);
         g_data.erase(id);
         g_nicks.erase(id);

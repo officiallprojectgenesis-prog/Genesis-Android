@@ -56,6 +56,12 @@ enum ElementType : uint8_t {
     kTypeColshape = 15,
 };
 
+struct TeamSpawn {
+    std::string name;
+    bool friendlyFire = false;
+    std::vector<uint32_t> players;
+};
+
 struct Visual {
     uint64_t generation = 0, shapeRevision = 0;
     std::shared_ptr<const Spatial::Geometry> colshape;
@@ -65,6 +71,12 @@ struct Visual {
     int icon = 0;
     int r = 255, g = 255, b = 255, a = 255;
     int markerType = 2;
+    bool markerIgnoreAlpha = false;
+    bool radarFlashing = false;
+    bool markerHasTarget = false;
+    float markerTargetX = 0, markerTargetY = 0, markerTargetZ = 0;
+    int markerArrowR = 255, markerArrowG = 64, markerArrowB = 64, markerArrowA = 255;
+    float markerArrowSize = 0.625f;
     float heading = 0;
     // Vehicles (kind 2) only, from the ENTITY_ADD body: roll and pitch in degrees and SVehicleHealthSync.
     // health < 0 means the body did not carry one.
@@ -83,6 +95,7 @@ struct Visual {
     // Peds (kind 14) only: the rest of the ENTITY_ADD ped body. Shared so copies of Visual stay cheap.
     std::shared_ptr<const PedSpawn> ped;
     std::shared_ptr<const WeaponSpawn> weapon;
+    std::shared_ptr<const TeamSpawn> team;
 };
 
 struct Datum {

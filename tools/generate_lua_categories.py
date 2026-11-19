@@ -44,7 +44,7 @@ CATEGORIES = OrderedDict([
         "file": "ELEMENTS.md",
         "description": "Core element hierarchy (parent/child), element data (synced/local), collisions, dimensions, alpha, positions, velocities, matrix, and spatial streaming.",
         "groups": ["CLuaElementDefs"],
-        "subsystem_notes": "Implemented via `LuaElementApi.cpp` and `ServerWorld.cpp`. Attachment queries read ENTITY_ADD metadata, resolve references after the batch and clear references on removal. Physical attachment, attachment RPCs, spatial octree lookup and complete element matrix math remain pending."
+        "subsystem_notes": "Implemented via `LuaElementApi.cpp`, `LuaElementTree.cpp` and `ServerWorld.cpp`. Attachment queries read ENTITY_ADD metadata. Marker collisions are created with the marker. Velocity, angular velocity, matrix, attachment offsets, low-LOD links and streaming-lease tokens are stored. Model bounding boxes, on-screen tests, ground-wait flags, native fire and the streamer force-in are not read from the game. Physical attachment and attachment RPCs remain pending."
     }),
     ("GUI_AND_DX", {
         "title": "GUI & 2D/3D Drawing (DX & CEGUI)",

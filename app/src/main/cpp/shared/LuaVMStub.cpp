@@ -1,5 +1,6 @@
 #include "DebugFlags.h"
 #include "LuaVMStub.h"
+#include "LuaElementTree.h"
 #include "LuaCameraApi.h"
 #include "LuaFieldApi.h"
 #include "LuaUtilApi.h"
@@ -17,6 +18,15 @@
 #include "LuaKeyBindApi.h"
 #include "LuaDxApi.h"
 #include "LuaSpatialApi.h"
+#include "LuaMarkerApi.h"
+#include "LuaBlipApi.h"
+#include "LuaRadarApi.h"
+#include "LuaPickupApi.h"
+#include "LuaLightApi.h"
+#include "LuaBirdApi.h"
+#include "LuaTeamApi.h"
+#include "LuaRopeApi.h"
+#include "LuaNativeUiApi.h"
 #include "LuaWorldObjectApi.h"
 #include "LuaWaterApi.h"
 #include "LuaFireApi.h"
@@ -1169,6 +1179,13 @@ static bool IsLocalStatElement(lua_State* L, int index) {
 // Remote velocity is not exposed to Lua yet.
 static int l_getElementVelocity(lua_State* L) {
     float x = 0, y = 0, z = 0, heading = 0, vx = 0, vy = 0, vz = 0, health = 0;
+    const uint32_t id = ElementIdOf(L, 1);
+    if (WorldRPG::Script::CopyScriptMoveSpeed(id == 0 ? ServerWorld::LocalPlayer() : id, vx, vy, vz)) {
+        lua_pushnumber(L, vx);
+        lua_pushnumber(L, vy);
+        lua_pushnumber(L, vz);
+        return 3;
+    }
     if (IsLocalStatElement(L, 1)) Game::CopyBody(x, y, z, heading, vx, vy, vz, health);
     lua_pushnumber(L, vx);
     lua_pushnumber(L, vy);
@@ -2263,6 +2280,15 @@ static void installDxBindings(lua_State* L) {
     InstallSvgLua(L);
     InstallSpatialLua(L);
     InstallWorldObjectLua(L);
+    InstallMarkerLua(L);
+    InstallBlipLua(L);
+    InstallRadarLua(L);
+    InstallPickupLua(L);
+    InstallLightLua(L);
+    InstallBirdLua(L);
+    InstallTeamLua(L);
+    InstallRopeLua(L);
+    InstallNativeUiLua(L);
     InstallWaterLua(L);
     InstallFireLua(L);
     InstallFxLua(L);
@@ -2919,6 +2945,23 @@ void ActiveVmFireSpatialEvent(const char* name,uint32_t source,uint32_t other,bo
     PushElement(L,other); lua_pushboolean(L,matching);
     fireHandlers(name,2,source);
     lua_setglobal(L,"source");
+}
+
+bool ActiveVmFireBirdShot(uint32_t bird, uint32_t attacker, int weapon, float x, float y, float z) {
+    if (!g_dx.L) return true;
+    lua_State* L = g_dx.L;
+    lua_getglobal(L, "source");
+    PushElement(L, bird);
+    lua_setglobal(L, "source");
+    if (attacker) PushElement(L, attacker);
+    else lua_pushnil(L);
+    lua_pushnumber(L, weapon);
+    lua_pushnumber(L, x);
+    lua_pushnumber(L, y);
+    lua_pushnumber(L, z);
+    const bool allowed = fireHandlers("onClientBirdShot", 5, bird);
+    lua_setglobal(L, "source");
+    return allowed;
 }
 
 bool ActiveVmOnServerEvent(const uint8_t* body, size_t length, size_t bits) {
