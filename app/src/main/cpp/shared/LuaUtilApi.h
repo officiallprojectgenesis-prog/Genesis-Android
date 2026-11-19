@@ -7,6 +7,8 @@
 struct lua_State;
 namespace WorldRPG::Script {
 void InstallUtilLua(lua_State* L);
+// CClientGame::GetDevelopmentMode. showCol refuses to change while this is false.
+bool DevelopmentMode();
 
 // One client command handler to call (desktop CRegisteredCommands::ProcessCommand).
 struct CommandCall {

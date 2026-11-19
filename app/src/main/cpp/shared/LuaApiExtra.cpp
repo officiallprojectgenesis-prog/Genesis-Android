@@ -280,7 +280,8 @@ int TrueResult(lua_State* L) {
     return 1;
 }
 
-// createVehicle / createMarker / createObject: no client-side creation on the phone.
+// createVehicle / createMarker: no client-side creation on the phone.
+// createObject is replaced later by InstallWorldObjectLua.
 // Returns false, as the desktop does when the element cannot be created.
 int FalseResult(lua_State* L) {
     lua_pushboolean(L, 0);

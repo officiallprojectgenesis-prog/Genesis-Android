@@ -17,6 +17,15 @@
 #include "LuaKeyBindApi.h"
 #include "LuaDxApi.h"
 #include "LuaSpatialApi.h"
+#include "LuaMarkerApi.h"
+#include "LuaBlipApi.h"
+#include "LuaRadarApi.h"
+#include "LuaPickupApi.h"
+#include "LuaLightApi.h"
+#include "LuaBirdApi.h"
+#include "LuaTeamApi.h"
+#include "LuaRopeApi.h"
+#include "LuaNativeUiApi.h"
 #include "LuaWorldObjectApi.h"
 #include "LuaWaterApi.h"
 #include "LuaFireApi.h"
@@ -2263,6 +2272,15 @@ static void installDxBindings(lua_State* L) {
     InstallSvgLua(L);
     InstallSpatialLua(L);
     InstallWorldObjectLua(L);
+    InstallMarkerLua(L);
+    InstallBlipLua(L);
+    InstallRadarLua(L);
+    InstallPickupLua(L);
+    InstallLightLua(L);
+    InstallBirdLua(L);
+    InstallTeamLua(L);
+    InstallRopeLua(L);
+    InstallNativeUiLua(L);
     InstallWaterLua(L);
     InstallFireLua(L);
     InstallFxLua(L);
@@ -2919,6 +2937,23 @@ void ActiveVmFireSpatialEvent(const char* name,uint32_t source,uint32_t other,bo
     PushElement(L,other); lua_pushboolean(L,matching);
     fireHandlers(name,2,source);
     lua_setglobal(L,"source");
+}
+
+bool ActiveVmFireBirdShot(uint32_t bird, uint32_t attacker, int weapon, float x, float y, float z) {
+    if (!g_dx.L) return true;
+    lua_State* L = g_dx.L;
+    lua_getglobal(L, "source");
+    PushElement(L, bird);
+    lua_setglobal(L, "source");
+    if (attacker) PushElement(L, attacker);
+    else lua_pushnil(L);
+    lua_pushnumber(L, weapon);
+    lua_pushnumber(L, x);
+    lua_pushnumber(L, y);
+    lua_pushnumber(L, z);
+    const bool allowed = fireHandlers("onClientBirdShot", 5, bird);
+    lua_setglobal(L, "source");
+    return allowed;
 }
 
 bool ActiveVmOnServerEvent(const uint8_t* body, size_t length, size_t bits) {

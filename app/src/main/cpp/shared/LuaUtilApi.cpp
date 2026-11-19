@@ -1161,6 +1161,8 @@ int l_isWeaponRenderEnabled(lua_State* L) {
 
 }  // namespace
 
+bool DevelopmentMode() { return g_devMode; }
+
 void CommandHandlersCollect(const char* name, std::vector<CommandCall>& out) {
     if (!name) return;
     for (const Command& command : g_commands) {

@@ -19,6 +19,13 @@
 #include "LuaStoredElementApi.h"
 #include "LuaDxApi.h"
 #include "LuaSpatialApi.h"
+#include "LuaMarkerApi.h"
+#include "LuaBlipApi.h"
+#include "LuaRadarApi.h"
+#include "LuaPickupApi.h"
+#include "LuaLightApi.h"
+#include "LuaBirdApi.h"
+#include "LuaRopeApi.h"
 #include "ResourceLoader.h"
 #include "ServerWorld.h"
 #include "PedQueries.h"
@@ -136,6 +143,13 @@ bool DestroyNode(uint32_t id) {
     node->beingDeleted = true;
     Link(id, 0);
     SpatialRelease(id);
+    MarkerRelease(id);
+    BlipRelease(id);
+    RadarRelease(id);
+    PickupRelease(id);
+    LightRelease(id);
+    BirdRelease(id);
+    RopeRelease(id);
     g_nodes.erase(id);
     g_localNames.erase(id);
     g_callProp.erase(id);
@@ -921,6 +935,18 @@ uint32_t CreateResourceElement(const char* type) {
     Node node; node.id=id; node.type=type; node.ownsType=true;
     g_nodes.emplace(id,std::move(node)); Link(id,map); return id;
 }
+
+void CopyClientChildren(uint32_t id, std::vector<uint32_t>& out) {
+    out.clear();
+    Node* node = Find(id);
+    if (!node) return;
+    for (uint32_t child : node->children) {
+        Node* kid = Find(child);
+        if (kid && !kid->beingDeleted) out.push_back(child);
+    }
+}
+
+bool ClientCallPropagationEnabled(uint32_t id) { return CallPropOf(id); }
 
 
 void EnsureResourceNode(uint32_t resourceRoot, const std::string& name) {

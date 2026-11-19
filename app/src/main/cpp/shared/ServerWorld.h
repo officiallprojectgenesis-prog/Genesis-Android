@@ -90,6 +90,34 @@ uint64_t ElementGeneration(uint32_t id);
 bool CopyColshape(uint32_t id,Spatial::Element& out);
 bool UpdateColshape(uint32_t id, const std::function<bool(Spatial::Geometry&)>& update);
 const char* ElementKindName(uint32_t id);
+int CountKind(int kind);
+// ENTITY_ADD marker body fields that Packet_EntityAdd stores on the client marker.
+struct MarkerFields {
+    int type = 2;
+    float x = 0, y = 0, z = 0, size = 1;
+    int r = 255, g = 255, b = 255, a = 255;
+    bool ignoreAlpha = false;
+    bool hasTarget = false;
+    float targetX = 0, targetY = 0, targetZ = 0;
+    int arrowR = 255, arrowG = 64, arrowB = 64, arrowA = 255;
+    float arrowSize = 0.625f;
+};
+bool CopyMarkerFields(uint32_t id, MarkerFields& out);
+struct RadarFields {
+    float x = 0, y = 0, w = 0, h = 0;
+    int r = 255, g = 0, b = 0, a = 255;
+    bool flashing = false;
+};
+bool CopyRadarFields(uint32_t id, RadarFields& out);
+struct TeamFields {
+    uint32_t id = 0;
+    std::string name;
+    int r = 0, g = 0, b = 0;
+    bool friendlyFire = false;
+    std::vector<uint32_t> players;
+};
+void CopyTeams(std::vector<TeamFields>& out);
+bool CopyTeam(uint32_t id, TeamFields& out);
 // Sync time context from ENTITY_ADD (0 when this id has none). Desktop CClientEntity::GetSyncTimeContext.
 uint8_t SyncTimeContext(uint32_t id);
 // The ENTITY_ADD ped body beyond pose and model (PedSpawn.h). False when the id is not a ped from ENTITY_ADD.

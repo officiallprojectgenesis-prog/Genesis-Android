@@ -145,7 +145,13 @@ bool KnownClientElement(uint32_t id);
 bool ClientDescendantOf(uint32_t id,uint32_t ancestor);
 uint32_t CreateResourceElement(const char* type);
 bool DestroyClientElement(uint32_t id);
+// Direct children that are not mid-delete, and the call-propagation flag
+// (CStaticFunctionDefinitions.cpp RUN_CHILDREN).
+void CopyClientChildren(uint32_t id, std::vector<uint32_t>& out);
+bool ClientCallPropagationEnabled(uint32_t id);
 void ActiveVmFireSpatialEvent(const char* name,uint32_t source,uint32_t other,bool matching);
+// onClientBirdShot. True when the event was not cancelled.
+bool ActiveVmFireBirdShot(uint32_t bird, uint32_t attacker, int weapon, float x, float y, float z);
 // The element an event is triggered on, then each parent while call propagation
 // is enabled. An element that is not in the tree still reaches the root.
 // CClientEntity::CallParentEvent (CClientEntity.cpp 811-823).
