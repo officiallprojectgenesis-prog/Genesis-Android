@@ -5,6 +5,7 @@
 #include "LuaMarkerApi.h"
 
 #include "LuaApiExtra.h"
+#include "LuaSpatialApi.h"
 #include "LuaVMStub.h"
 #include "ServerWorld.h"
 
@@ -225,16 +226,19 @@ void ApplyKind(Marker& marker, Kind kind) {
     const bool keepCheckpoint = CheckpointFamily(marker.kind) && CheckpointFamily(kind);
     const bool keepSolid = SolidFamily(marker.kind) && SolidFamily(kind);
     marker.kind = kind;
-    if (keepCheckpoint || keepSolid) return;
-    marker.ignoreAlpha = false;
-    marker.icon = 0;
-    marker.hasTarget = false;
-    marker.reflection = false;
-    marker.arrowR = 255;
-    marker.arrowG = 64;
-    marker.arrowB = 64;
-    marker.arrowA = 255;
-    marker.arrowSize = marker.size * 0.625f;
+    if (!(keepCheckpoint || keepSolid)) {
+        marker.ignoreAlpha = false;
+        marker.icon = 0;
+        marker.hasTarget = false;
+        marker.reflection = false;
+        marker.arrowR = 255;
+        marker.arrowG = 64;
+        marker.arrowB = 64;
+        marker.arrowA = 255;
+        marker.arrowSize = marker.size * 0.625f;
+    }
+    // CreateOfType replaces the collision when the marker type changes, including checkpoint/ring.
+    RetainMarkerColShape(marker.id, static_cast<int>(marker.kind), marker.x, marker.y, marker.z, marker.size);
 }
 
 void Each(uint32_t id, const std::function<void(uint32_t)>& visit) {
@@ -310,6 +314,7 @@ int CreateMarker(lua_State* L) {
     if (marker.kind == Kind::Checkpoint || marker.kind == Kind::Arrow) marker.ignoreAlpha = ignore;
     g_markers[id] = marker;
     NoteDraw();
+    RetainMarkerColShape(id, kind, x, y, z, size);
     PushElement(L, id);
     return 1;
 }
@@ -449,6 +454,7 @@ int SetMarkerSize(lua_State* L) {
         if (!marker) return;
         if (marker->size != size && CheckpointFamily(marker->kind)) marker->arrowSize = size * 0.625f;
         marker->size = size;
+        RetainMarkerColShape(marker->id, static_cast<int>(marker->kind), marker->x, marker->y, marker->z, marker->size);
         changed = true;
     });
     lua_pushboolean(L, changed ? 1 : 0);
@@ -700,6 +706,7 @@ int SetElementPositionMarker(lua_State* L) {
     marker->x = x;
     marker->y = y;
     marker->z = z;
+    RetainMarkerColShape(marker->id, static_cast<int>(marker->kind), marker->x, marker->y, marker->z, marker->size);
     if (marker->server) ServerWorld::NoteElementPosition(id, x, y, z);
     lua_pushboolean(L, 1);
     return 1;
@@ -741,7 +748,16 @@ void Register(lua_State* L) {
 
 }  // namespace
 
-void MarkerRelease(uint32_t id) { g_markers.erase(id); }
+void MarkerRelease(uint32_t id) {
+    g_markers.erase(id);
+    ReleaseMarkerColShape(id);
+}
+
+uint32_t MarkerColShape(uint32_t id) {
+    Marker marker;
+    if (!Resolve(id, marker)) return 0;
+    return RetainMarkerColShape(marker.id, static_cast<int>(marker.kind), marker.x, marker.y, marker.z, marker.size);
+}
 
 void InstallMarkerLua(lua_State* L) { Register(L); }
 

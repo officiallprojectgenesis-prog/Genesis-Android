@@ -13,6 +13,7 @@
 // CModelInfo::SetModel and onClientElementModelChange are not run.
 
 #include "LuaApiExtra.h"
+#include "LuaElementTree.h"
 #include "LuaGuiApi.h"
 #include "LuaVMStub.h"
 #include "LuaCameraApi.h"
@@ -79,6 +80,7 @@ std::unordered_map<uint32_t, bool> g_callProp;           // call propagation for
 std::set<std::pair<uint32_t, uint32_t>> g_disabled;      // pairs that cannot collide, stored both ways via a sorted key
 uint32_t g_nextId = kMaxServerElements;
 uint32_t g_root = 0;
+bool g_forceDestroy = false;
 
 Node* Find(uint32_t id) {
     auto found = g_nodes.find(id);
@@ -125,7 +127,7 @@ bool DestroyNode(uint32_t id) {
     // The joined player is a server element. Never delete that id, even if a node used it.
     if (id != 0 && id == ServerWorld::LocalPlayer()) return false;
     Node* node = Find(id);
-    if (!node || !node->canDestroy || node->beingDeleted) return false;
+    if (!node || node->beingDeleted || (!node->canDestroy && !g_forceDestroy)) return false;
     std::vector<uint32_t> kids = node->children;
     for (size_t i = 0; i < kids.size();) {
         if (DestroyNode(kids[i])) {
@@ -154,6 +156,7 @@ bool DestroyNode(uint32_t id) {
     g_localNames.erase(id);
     g_callProp.erase(id);
     ForgetPairs(id);
+    NoteClientElementDestroyed(id);
     return true;
 }
 
@@ -217,6 +220,8 @@ void ResetCatalog() {
     g_disabled.clear();
     g_nextId = kMaxServerElements;
     g_root = 0;
+    g_forceDestroy = false;
+    ResetElementTreeExtras();
 }
 
 bool KnownElement(uint32_t id) {
@@ -816,38 +821,22 @@ int IsElement(lua_State* L) {
     return 1;
 }
 
+std::string ElementTypeName(uint32_t id) {
+    if (id == 0) return "userdata";
+    if (Node* node = Find(id); node && node->ownsType) return node->type;
+    if (const char* gui = GuiElementType(id)) return gui;
+    if (CameraElementAlive(id)) return "camera";
+    if (SoundElementAlive(id)) return "sound";
+    if (const char* stored = StoredElementType(id)) return stored;
+    if (Game::ScriptPedAlive(id)) return "ped";
+    const char* kind = ServerWorld::ElementKindName(id);
+    return kind ? kind : "element";
+}
+
 // Existing l_getElementType, plus types this file owns (root, resource, map, createElement).
 int GetElementType(lua_State* L) {
-    const uint32_t id = ElementIdOf(L, 1);
-    if (id == 0) {
-        lua_pushstring(L, "userdata");
-        return 1;
-    }
-    if (Node* node = Find(id); node && node->ownsType) {
-        lua_pushlstring(L, node->type.data(), node->type.size());
-        return 1;
-    }
-    if (const char* gui = GuiElementType(id)) {
-        lua_pushstring(L, gui);
-        return 1;
-    }
-    if (CameraElementAlive(id)) {
-        lua_pushstring(L, "camera");
-        return 1;
-    }
-    if (SoundElementAlive(id)) {
-        lua_pushstring(L, "sound");
-        return 1;
-    }
-    if (const char* stored = StoredElementType(id)) {
-        lua_pushstring(L, stored);
-        return 1;
-    }
-    if (Game::ScriptPedAlive(id)) {
-        lua_pushstring(L, "ped");
-        return 1;
-    }
-    lua_pushstring(L, ServerWorld::ElementKindName(id));
+    const std::string type = ElementTypeName(ElementIdOf(L, 1));
+    lua_pushlstring(L, type.data(), type.size());
     return 1;
 }
 
@@ -926,6 +915,17 @@ bool ClientDescendantOf(uint32_t id,uint32_t ancestor) {
     return false;
 }
 bool DestroyClientElement(uint32_t id) { return DestroyNode(id); }
+void SetClientElementDestroyable(uint32_t id, bool can) {
+    if (Node* node = Find(id)) node->canDestroy = can;
+}
+bool DestroyClientElementForced(uint32_t id) {
+    const bool saved = g_forceDestroy;
+    g_forceDestroy = true;
+    const bool ok = DestroyNode(id);
+    g_forceDestroy = saved;
+    return ok;
+}
+std::string ClientElementTypeName(uint32_t id) { return ElementTypeName(id); }
 uint32_t CreateResourceElement(const char* type) {
     const std::string owner=ActiveVmOwner(); ResourceLoader::ResourceView caller;
     if(owner.empty()||!ResourceLoader::CopyCallerResource(ActiveVmOwnerNet(),ActiveVmOwnerGeneration(),owner,caller)||!caller.root) return 0;
@@ -989,6 +989,7 @@ void DestroyClientChildren(uint32_t id) {
 }
 
 void ReleaseResourceElements(uint32_t resourceRoot, uint32_t dynamicRoot) {
+    ReleaseElementStreamingLeases(resourceRoot);
     if (dynamicRoot) DestroyClientChildren(dynamicRoot);
     if (resourceRoot) DestroyClientChildren(resourceRoot);
     auto drop = [](uint32_t id, const char* type) {
@@ -1258,6 +1259,7 @@ void InstallElementBindings(lua_State* L) {
     Bind(L, "detachElements", DetachElements);
     // CLuaCompatibilityDefs.cpp:61.
     Bind(L, "detachElementFromElement", DetachElements);
+    InstallElementTreeLua(L);
 }
 
 }  // namespace WorldRPG::Script

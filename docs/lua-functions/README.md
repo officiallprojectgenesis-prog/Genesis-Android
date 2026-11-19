@@ -11,7 +11,7 @@ Each document lists every single function, its current Android implementation st
 | **Vehicles (CLuaVehicleDefs)** | [VEHICLES.md](VEHICLES.md) | 165 | 165 | 0 | 0 | 100.0% |
 | **Peds & Players (CLuaPedDefs, CLuaPlayerDefs)** | [PEDS_AND_PLAYERS.md](PEDS_AND_PLAYERS.md) | 206 | 206 | 0 | 0 | 100.0% |
 | **World, Objects & Environment** | [WORLD_AND_OBJECTS.md](WORLD_AND_OBJECTS.md) | 227 | 227 | 0 | 0 | 100.0% |
-| **Element Tree & Data (CLuaElementDefs)** | [ELEMENTS.md](ELEMENTS.md) | 81 | 62 | 5 | 14 | 76.5% |
+| **Element Tree & Data (CLuaElementDefs)** | [ELEMENTS.md](ELEMENTS.md) | 81 | 81 | 0 | 0 | 100.0% |
 | **GUI & 2D/3D Drawing (DX & CEGUI)** | [GUI_AND_DX.md](GUI_AND_DX.md) | 199 | 199 | 0 | 0 | 100.0% |
 | **Engine & Model Replacement (DFF, TXD, COL)** | [ENGINE_AND_MODELS.md](ENGINE_AND_MODELS.md) | 125 | 125 | 0 | 0 | 100.0% |
 | **Audio & Voice System (CLuaAudioDefs)** | [AUDIO_AND_VOICE.md](AUDIO_AND_VOICE.md) | 57 | 21 | 1 | 35 | 36.8% |
@@ -20,7 +20,7 @@ Each document lists every single function, its current Android implementation st
 | **Core System, Networking & Utilities** | [CORE_AND_UTILITY.md](CORE_AND_UTILITY.md) | 195 | 176 | 0 | 19 | 90.3% |
 | **Markers, Blips, ColShapes & Spatial** | [MARKERS_AND_SPATIAL.md](MARKERS_AND_SPATIAL.md) | 145 | 145 | 0 | 0 | 100.0% |
 | **Web Browser & Compatibility (CEF / Discord)** | [BROWSER_AND_COMPATIBILITY.md](BROWSER_AND_COMPATIBILITY.md) | 103 | 103 | 0 | 0 | 100.0% |
-| **TOTAL** | **All Categories** | **1581** | **1507** | **6** | **68** | **95.3%** |
+| **TOTAL** | **All Categories** | **1581** | **1526** | **1** | **54** | **96.5%** |
 
 ## Implementation Priority Tiers
 

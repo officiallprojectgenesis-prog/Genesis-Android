@@ -9,6 +9,7 @@
 // Engine writes that are not hooked stay as DIAG. The value is still stored.
 
 #include "LuaFieldApi.h"
+#include "LuaElementTree.h"
 #include "LuaSpatialApi.h"
 #include "LuaApiExtra.h"
 #include "LuaVMStub.h"
@@ -242,6 +243,30 @@ int l_getElementRotation(lua_State* L) {
 
 int l_getElementMatrix(lua_State* L) {
     const uint32_t id = ElementIdOf(L, 1);
+    float stored[4][3];
+    if (CopyScriptMatrix(id, stored)) {
+        // Same table shape as the heading path below. Desktop writes 1 in the
+        // first three rows' W when the legacy flag is left at its default
+        // (CLuaElementDefs.cpp 360-374). This getter already writes 0 there.
+        const float rows[4][4] = {
+            {stored[0][0], stored[0][1], stored[0][2], 0.f},
+            {stored[1][0], stored[1][1], stored[1][2], 0.f},
+            {stored[2][0], stored[2][1], stored[2][2], 0.f},
+            {stored[3][0], stored[3][1], stored[3][2], 1.f},
+        };
+        lua_newtable(L);
+        for (int row = 0; row < 4; ++row) {
+            lua_pushinteger(L, row + 1);
+            lua_newtable(L);
+            for (int col = 0; col < 4; ++col) {
+                lua_pushinteger(L, col + 1);
+                lua_pushnumber(L, rows[row][col]);
+                lua_settable(L, -3);
+            }
+            lua_settable(L, -3);
+        }
+        return 1;
+    }
     float degrees = 0.f;
     if (!HeadingOf(id, degrees)) {
         lua_pushboolean(L, 0);

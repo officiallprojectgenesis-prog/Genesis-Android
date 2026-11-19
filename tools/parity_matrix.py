@@ -346,6 +346,7 @@ FOLLOW_INSTALLS = {
     "InstallDiscordLua",
     "InstallElementLua",
     "InstallElementBindings",
+    "InstallElementTreeLua",
     "InstallPedLua",
     "BindPedLua",
     "InstallVehicleLua",

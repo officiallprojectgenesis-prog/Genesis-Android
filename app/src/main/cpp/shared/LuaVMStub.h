@@ -145,6 +145,11 @@ bool KnownClientElement(uint32_t id);
 bool ClientDescendantOf(uint32_t id,uint32_t ancestor);
 uint32_t CreateResourceElement(const char* type);
 bool DestroyClientElement(uint32_t id);
+// Marker and pickup collision elements cannot be destroyed by script (CClientColShape::CanBeDestroyed).
+void SetClientElementDestroyable(uint32_t id, bool can);
+bool DestroyClientElementForced(uint32_t id);
+// Same string getElementType pushes, including createElement and script-ped types.
+std::string ClientElementTypeName(uint32_t id);
 // Direct children that are not mid-delete, and the call-propagation flag
 // (CStaticFunctionDefinitions.cpp RUN_CHILDREN).
 void CopyClientChildren(uint32_t id, std::vector<uint32_t>& out);

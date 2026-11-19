@@ -8,6 +8,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added — Element tree remainder (2026-11-18)
+
+- The last 19 `CLuaElementDefs` calls follow `CLuaElementDefs.cpp` 604-629, 899-920, 1083-1256, 1369-1374, 1426-1447, 1847-1882, 1983-2037, 2241-2267 and 2479-2703, with `CStaticFunctionDefinitions.cpp` 510-682, 1063-1250, 1437-1443, 4001-4125 and 7781-7795, and `CResource.cpp` 304-333. Velocity, turn speed, matrix, attachment offsets, low-LOD links and streaming-lease tokens are stored. A marker owns a collision. Model bounds, on-screen tests, the ground-wait flag, native fire and streamer force-in stay unread. Host-tested. Not yet run on a device.
+
 ### Added — Colshapes and markers (2026-11-18)
 
 - The remaining colshape calls follow `CLuaColShapeDefs.cpp` and `CStaticFunctionDefinitions.cpp` 7590-7803. Circle, rectangle and polygon positions use Z 0. Negative create sizes become 0.1, and setters clamp at 0. Polygon points are world coordinates and move with `setElementPosition`. `showCol` writes only while development mode is on. Wireframe drawing is not hooked. Host-tested. Not yet run on a device.

@@ -66,6 +66,7 @@ struct Object {
     uint32_t id = 0;
     uint16_t model = 0;
     bool lowLod = false;
+    uint32_t lowLodId = 0;
     Vec3 pos{};
     Vec3 rot{};
     Vec3 scale{1.f, 1.f, 1.f};
@@ -345,13 +346,18 @@ bool PropertyFromName(const std::string& name, Property& out) {
     return true;
 }
 
-void Forget(uint32_t id) { g_objects.erase(id); }
+void Forget(uint32_t id) {
+    for (auto& entry : g_objects) {
+        if (entry.second.lowLodId == id) entry.second.lowLodId = 0;
+    }
+    g_objects.erase(id);
+}
 
 Object* Find(uint32_t id) {
     auto found = g_objects.find(id);
     if (found == g_objects.end()) return nullptr;
     if (!KnownClientElement(id)) {
-        g_objects.erase(found);
+        Forget(id);
         return nullptr;
     }
     return &found->second;
@@ -1052,6 +1058,37 @@ bool CopyPoseImpl(uint32_t id, float& x, float& y, float& z) {
 }  // namespace
 
 bool CopyObjectPose(uint32_t id, float& x, float& y, float& z) { return CopyPoseImpl(id, x, y, z); }
+
+bool CopyObjectLod(uint32_t id, bool& createdLow, uint32_t& linkedLow) {
+    Object* object = Find(id);
+    if (!object) return false;
+    createdLow = object->lowLod;
+    linkedLow = object->lowLodId;
+    if (linkedLow && !Find(linkedLow)) {
+        object = Find(id);
+        if (!object) return false;
+        object->lowLodId = 0;
+        linkedLow = 0;
+    }
+    return true;
+}
+
+bool SetObjectLod(uint32_t id, uint32_t lowId, bool clear) {
+    // CClientObject::SetLowLodObject (CClientObject.cpp 532-566).
+    Object* self = Find(id);
+    if (!self || self->lowLod) return false;
+    if (clear || lowId == 0) {
+        if (!self->lowLodId) return false;
+        self->lowLodId = 0;
+        return true;
+    }
+    Object* low = Find(lowId);
+    if (!low || !low->lowLod) return false;
+    self = Find(id);
+    if (!self) return false;
+    self->lowLodId = lowId;
+    return true;
+}
 
 void InstallWorldObjectLua(lua_State* L) { Register(L); }
 

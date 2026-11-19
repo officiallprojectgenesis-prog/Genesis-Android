@@ -130,6 +130,9 @@ struct Attachment {
     float position[3] = {}, rotation[3] = {}; // Lua-facing rotation in degrees.
 };
 bool CopyAttachment(uint32_t id, Attachment& out);
+// setElementAttachedOffsets. Rotation stays in degrees, the same units CopyAttachment returns.
+// A missing record is created unattached. An existing parent is left in place.
+void NoteAttachedOffsets(uint32_t id, float x, float y, float z, float rx, float ry, float rz);
 std::vector<uint32_t> CopyAttachedElements(uint32_t parent);
 // PLAYER_QUIT (5): CPacketHandler::Packet_PlayerQuit -> CClientGame::QuitPlayer deletes the player element.
 void OnPlayerQuit(uint32_t id);

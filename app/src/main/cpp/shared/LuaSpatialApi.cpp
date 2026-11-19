@@ -20,6 +20,7 @@ namespace WorldRPG::Script {
 namespace {
 struct LocalShape { Spatial::Element element; std::string owner; uint16_t netId=0; uint32_t generation=0; };
 std::map<uint32_t,LocalShape> localShapes;
+std::map<uint32_t,uint32_t> markerCols;
 Spatial::World world;
 bool pulsing=false;
 int Fail(lua_State* L) { lua_pushboolean(L,0); return 1; }
@@ -785,12 +786,87 @@ bool SpatialSetArea(uint32_t id,unsigned value,bool dimension) {
     } else if(dimension) ServerWorld::NoteElementDimension(id,value); else ServerWorld::NoteElementInterior(id,value);
     Collect(false); return true;
 }
-void SpatialRelease(uint32_t id) { localShapes.erase(id); world.Remove(id); }
+void ForgetMarkerCol(uint32_t shape) {
+    for (auto it = markerCols.begin(); it != markerCols.end();) {
+        if (it->second == shape) it = markerCols.erase(it);
+        else ++it;
+    }
+}
+uint32_t RetainMarkerColShapeImpl(uint32_t marker, int kind, float x, float y, float z, float size) {
+    // CClientMarker::CreateOfType (CClientMarker.cpp 466-532).
+    Spatial::Geometry geometry;
+    if (kind == 0) {
+        geometry.type = Spatial::ShapeType::Circle;
+        geometry.radius = size;
+    } else if (kind == 2) {
+        geometry.type = Spatial::ShapeType::Tube;
+        geometry.radius = size;
+        geometry.height = size;
+    } else {
+        geometry.type = Spatial::ShapeType::Sphere;
+        geometry.radius = size;
+    }
+    uint32_t id = 0;
+    bool created = false;
+    if (const auto found = markerCols.find(marker); found != markerCols.end() && localShapes.contains(found->second))
+        id = found->second;
+    else {
+        id = CreateResourceElement("colshape");
+        if (!id) return 0;
+        SetClientElementDestroyable(id, false);
+        markerCols[marker] = id;
+        created = true;
+    }
+    LocalShape& shape = localShapes[id];
+    const bool moved = created || !shape.element.shape || shape.element.position.x != x || shape.element.position.y != y ||
+                       shape.element.position.z != z || shape.element.shape->type != geometry.type ||
+                       shape.element.shape->radius != geometry.radius || shape.element.shape->height != geometry.height;
+    if (shape.owner.empty()) {
+        shape.owner = ActiveVmOwner();
+        shape.netId = ActiveVmOwnerNet();
+        shape.generation = ActiveVmOwnerGeneration();
+    }
+    shape.element.id = id;
+    shape.element.type = "colshape";
+    shape.element.generation = shape.element.generation ? shape.element.generation : id;
+    if (moved) shape.element.shapeRevision++;
+    shape.element.position = {x, y, z};
+    shape.element.shape = geometry;
+    shape.element.bounds = Spatial::ShapeBounds(shape.element.position, geometry);
+    if (moved) {
+        Collect(false);
+        world.Refresh(id);
+        PulseSpatial();
+    }
+    return id;
+}
+bool ElementInsideShapeImpl(uint32_t entity, uint32_t shape) {
+    Collect(false);
+    return world.Within(entity, shape);
+}
+void SpatialRelease(uint32_t id) {
+    localShapes.erase(id);
+    world.Remove(id);
+    ForgetMarkerCol(id);
+}
 void SpatialDropResource(const std::string& owner,uint16_t net,uint32_t generation) {
     std::vector<uint32_t> ids;
     for(const auto& [id,s]:localShapes) if(s.owner==owner&&(!net||s.netId==net)&&(!generation||s.generation==generation)) ids.push_back(id);
-    for(uint32_t id:ids) DestroyClientElement(id);
+    for(uint32_t id:ids) {
+        if (!DestroyClientElement(id)) DestroyClientElementForced(id);
+    }
 }
+uint32_t RetainMarkerColShape(uint32_t marker, int kind, float x, float y, float z, float size) {
+    return RetainMarkerColShapeImpl(marker, kind, x, y, z, size);
+}
+void ReleaseMarkerColShape(uint32_t marker) {
+    const auto found = markerCols.find(marker);
+    if (found == markerCols.end()) return;
+    const uint32_t id = found->second;
+    markerCols.erase(found);
+    if (!DestroyClientElement(id)) DestroyClientElementForced(id);
+}
+bool ElementInsideShape(uint32_t entity, uint32_t shape) { return ElementInsideShapeImpl(entity, shape); }
 void PulseSpatial() {
     const bool nested=pulsing;
     if(localShapes.empty()) {
@@ -802,7 +878,7 @@ void PulseSpatial() {
     Collect(!nested);
     pulsing=true; world.Pulse(Dispatch); pulsing=nested;
 }
-void ResetSpatial() { localShapes.clear(); world.Clear(); pulsing=false; g_showCollision=false; }
+void ResetSpatial() { localShapes.clear(); markerCols.clear(); world.Clear(); pulsing=false; g_showCollision=false; }
 void InstallSpatialLua(lua_State* L) {
     ResetSpatial();
     const struct { const char* name; lua_CFunction fn; } binds[]={

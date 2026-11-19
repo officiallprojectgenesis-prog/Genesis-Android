@@ -1,5 +1,6 @@
 #include "DebugFlags.h"
 #include "LuaVMStub.h"
+#include "LuaElementTree.h"
 #include "LuaCameraApi.h"
 #include "LuaFieldApi.h"
 #include "LuaUtilApi.h"
@@ -1178,6 +1179,13 @@ static bool IsLocalStatElement(lua_State* L, int index) {
 // Remote velocity is not exposed to Lua yet.
 static int l_getElementVelocity(lua_State* L) {
     float x = 0, y = 0, z = 0, heading = 0, vx = 0, vy = 0, vz = 0, health = 0;
+    const uint32_t id = ElementIdOf(L, 1);
+    if (WorldRPG::Script::CopyScriptMoveSpeed(id == 0 ? ServerWorld::LocalPlayer() : id, vx, vy, vz)) {
+        lua_pushnumber(L, vx);
+        lua_pushnumber(L, vy);
+        lua_pushnumber(L, vz);
+        return 3;
+    }
     if (IsLocalStatElement(L, 1)) Game::CopyBody(x, y, z, heading, vx, vy, vz, health);
     lua_pushnumber(L, vx);
     lua_pushnumber(L, vy);

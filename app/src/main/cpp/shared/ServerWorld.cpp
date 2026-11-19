@@ -480,6 +480,18 @@ bool CopyAttachment(uint32_t id, Attachment& out) {
     return true;
 }
 
+void NoteAttachedOffsets(uint32_t id, float x, float y, float z, float rx, float ry, float rz) {
+    if (id == 0 || id == 0xFFFFFFFFu) return;
+    std::lock_guard lock(g_lock);
+    Attachment& attachment = g_attachments[id];
+    attachment.position[0] = x;
+    attachment.position[1] = y;
+    attachment.position[2] = z;
+    attachment.rotation[0] = rx;
+    attachment.rotation[1] = ry;
+    attachment.rotation[2] = rz;
+}
+
 std::vector<uint32_t> CopyAttachedElements(uint32_t parent) {
     std::lock_guard lock(g_lock);
     std::vector<uint32_t> result;

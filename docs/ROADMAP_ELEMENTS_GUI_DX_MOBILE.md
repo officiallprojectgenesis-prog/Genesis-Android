@@ -2,6 +2,23 @@
 
 Revisão em 2026-11-18 na branch `staging`.
 
+## Element tree (2026-11-18)
+
+Catalog: **81 of 81 implemented (100%).** None of these names are still missing or constant stubs. The Lua catalog in `README.md` is **1526 / 1,581 (96.5%)**. The binding scan in `docs/PARITY_MATRIX.md` counts `CLuaElementDefs` as **81 / 81** as well.
+
+What the new handlers store, and what they do not call:
+
+| Area | What runs | What does not |
+|---|---|---|
+| Velocity | `setElementVelocity` and `setElementAngularVelocity` store the vector and walk children while call propagation is on. A frozen vehicle keeps the stored vector; move speed reads as zero until it thaws. | `CPhysical::SetMoveSpeed` and `SetTurnSpeed` are not called. A projectile accepts the write and stores nothing. |
+| Bounds | Ped, player, vehicle, object, weapon and building take the desktop type check. Distance from centre of mass to the base of the model returns 0 for those types. | `CModelInfo::GetBoundingBox` is not loaded, so the box and the radius stay false. |
+| Marker collision | `createMarker` creates the circle, sphere or tube. `getElementColShape` returns it. `isElementWithinMarker` reads the cached collider list. Script `destroyElement` cannot remove that collision. | A pickup sphere is created only when `CPickup` streams in, so `getElementColShape` stays false. |
+| Matrix and offsets | A 4×4 table or 12 numbers are stored, and the position row is passed to `setElementPosition`. Attachment offsets are stored in degrees. | `CEntity::SetMatrix`, the Euler conversion and `CPhysical::SetAttachedOffsets` are not called. |
+| Low LOD | Object links follow `SetLowLodObject`. Building links follow `SetLowLodBuilding`, including a clear that stays true. | `CBuilding::SetLod` is not called. The ENTITY_ADD low-LOD id is not stored. |
+| Fire and leases | A local ped or the local player stores the fire flag. Streamable elements receive a lease token. | `CPed::SetOnFire`, `CVehicle::SetOnFire`, `CObject::SetOnFire` and streamer force-in / force-out are not called. |
+
+Host check: `neon_spatial_tests` 92 checks and `neon_resource_tests` 446 checks, 0 failures. Not run on a device.
+
 ## Web browser and compatibility (2026-11-18)
 
 Catalog: **103 of 103 implemented (100%).** None of these names are still missing or constant stubs. Overall Lua catalog **821 / 1,581 (51.9%)**. Elements **62 / 81**. Peds **51 / 206**.
