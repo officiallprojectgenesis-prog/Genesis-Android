@@ -64,14 +64,14 @@ namespace WorldRPG::JniBridge {
 void PostGameLine(int kind, const char* text) {
     if (!g_jvm || !g_gameActivityRef || !g_onGameLineMethod || !text) return;
     // NewStringUTF aborts the process on bytes that are not modified UTF-8.
-    // Keep only printable ASCII so a mis-parsed packet cannot close the game.
+    // Convert via ToUtf16 + NewString so UTF-8 and malformed packet bytes never abort CheckJNI.
     std::string safe;
     safe.reserve(std::strlen(text));
     for (const unsigned char ch : std::string(text)) {
         if (ch >= 0x20) safe.push_back(static_cast<char>(ch));
     }
     if (text[0] != '\0' && safe.empty()) return;
-    text = safe.c_str();
+    const auto wide = WorldRPG::Utf8::ToUtf16(safe);
     JNIEnv* env = nullptr;
     bool attached = false;
     jint result = g_jvm->GetEnv(reinterpret_cast<void**>(&env), JNI_VERSION_1_6);
@@ -81,11 +81,13 @@ void PostGameLine(int kind, const char* text) {
     } else if (result != JNI_OK) {
         return;
     }
-    jstring jtext = env->NewStringUTF(text);
+    jstring jtext = env->NewString(reinterpret_cast<const jchar*>(wide.data()), static_cast<jsize>(wide.size()));
     if (jtext) {
         env->CallVoidMethod(g_gameActivityRef, g_onGameLineMethod, kind, jtext);
         if (env->ExceptionCheck()) env->ExceptionClear();
         env->DeleteLocalRef(jtext);
+    } else if (env->ExceptionCheck()) {
+        env->ExceptionClear();
     }
     if (attached) g_jvm->DetachCurrentThread();
 }
