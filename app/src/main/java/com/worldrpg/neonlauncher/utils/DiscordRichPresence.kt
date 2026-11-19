@@ -15,9 +15,9 @@ object DiscordRichPresence {
 
     private const val TAG = "GenesisDiscordRPC"
 
-    const val APPLICATION_ID = "1308510000000000000"
+    const val APPLICATION_ID = "1381148146637213736"
     const val SERVER_NAME = "Project : Genesis"
-    const val LARGE_IMAGE_KEY = "genesis_logo"
+    const val LARGE_IMAGE_KEY = "genesis"
     const val LARGE_IMAGE_TEXT = "Project Genesis"
     const val SMALL_IMAGE_KEY = "android_client"
     const val SMALL_IMAGE_TEXT = "Android Mobile Client"

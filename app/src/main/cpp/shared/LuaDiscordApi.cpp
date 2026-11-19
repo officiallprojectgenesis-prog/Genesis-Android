@@ -17,10 +17,10 @@ extern "C" {
 namespace WorldRPG::Script {
 namespace {
 
-constexpr const char* kGenesisAppId = "1308510000000000000";
+constexpr const char* kGenesisAppId = "1381148146637213736";
 constexpr const char* kGenesisDefaultDetails = "Playing on Project : Genesis (projectgenesis.duckdns.org:30121)";
 constexpr const char* kGenesisDefaultState = "Project : Genesis";
-constexpr const char* kGenesisLargeAsset = "genesis_logo";
+constexpr const char* kGenesisLargeAsset = "genesis";
 constexpr const char* kGenesisLargeHover = "Project Genesis";
 constexpr const char* kGenesisSmallAsset = "android_client";
 constexpr const char* kGenesisSmallHover = "Android Mobile Client";
