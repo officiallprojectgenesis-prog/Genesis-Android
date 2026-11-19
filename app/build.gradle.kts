@@ -24,7 +24,7 @@ val gameAssetsDir = envProperties.getProperty("GAME_ASSETS_DIR", "./game_assets"
 val deviceAssetsPath = envProperties.getProperty("DEVICE_ASSETS_PATH", "/sdcard/Android/data/com.worldrpg.neonlauncher/files/game_assets")
 val cdnRootUrl = envProperties.getProperty(
     "CDN_ROOT_URL",
-    "https://huggingface.co/datasets/WorldRPG/worldrpg-game-files/resolve/main"
+    "https://huggingface.co/datasets/WorldRPG/worldrpg-game-files/resolve"
 )
 
 android {
