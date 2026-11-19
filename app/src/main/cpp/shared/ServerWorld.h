@@ -129,7 +129,4 @@ uint16_t LocalDimension();
 void Tick(float playerX, float playerY, float playerZ);
 std::string MapSnapshot(float playerX, float playerY, float playerHeading);
 
-// Clears all session-scoped world entities, element data, and radar blips.
-void ResetSession();
-
 } // namespace WorldRPG::ServerWorld
