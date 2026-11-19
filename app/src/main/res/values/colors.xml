@@ -1,9 +1,39 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <!-- Material 3 Cyber-Emerald Dark Scheme for Project Genesis -->
+    <color name="md_primary">#10B981</color>
+    <color name="md_on_primary">#042F2E</color>
+    <color name="md_primary_container">#064E3B</color>
+    <color name="md_on_primary_container">#6EE7B7</color>
+    <color name="md_secondary">#34D399</color>
+    <color name="md_on_secondary">#042F2E</color>
+    <color name="md_secondary_container">#065F46</color>
+    <color name="md_on_secondary_container">#A7F3D0</color>
+    <color name="md_tertiary">#2DD4BF</color>
+    <color name="md_on_tertiary">#042F2E</color>
+    <color name="md_tertiary_container">#115E59</color>
+    <color name="md_on_tertiary_container">#99F6E4</color>
+    <color name="md_error">#F87171</color>
+    <color name="md_on_error">#450A0A</color>
+    <color name="md_background">#070B0E</color>
+    <color name="md_on_background">#F1F5F9</color>
+    <color name="md_surface">#070B0E</color>
+    <color name="md_on_surface">#F1F5F9</color>
+    <color name="md_surface_variant">#1A2B35</color>
+    <color name="md_on_surface_variant">#94A3B8</color>
+    <color name="md_outline">#2A453D</color>
+    <color name="md_outline_variant">#1B312B</color>
+    <color name="md_surface_container_lowest">#05080A</color>
+    <color name="md_surface_container_low">#0B1115</color>
+    <color name="md_surface_container">#0E171D</color>
+    <color name="md_surface_container_high">#132028</color>
+    <color name="md_surface_container_highest">#1A2B35</color>
+
+    <!-- Project Genesis Custom Tokens -->
     <color name="genesis_bg_deep">#070B0E</color>
-    <color name="genesis_bg_surface">#0E171D</color>
+    <color name="genesis_bg_surface">#0B1115</color>
     <color name="genesis_bg_card">#D90E171D</color>
-    <color name="genesis_bg_card_solid">#121D24</color>
+    <color name="genesis_bg_card_solid">#0E171D</color>
     <color name="genesis_emerald">#10B981</color>
     <color name="genesis_emerald_bright">#34D399</color>
     <color name="genesis_emerald_neon">#00FF9D</color>
@@ -15,5 +45,12 @@
     <color name="genesis_text_muted">#64748B</color>
     <color name="genesis_status_online">#10B981</color>
     <color name="genesis_status_offline">#F59E0B</color>
-    <color name="colorPrimaryVariant">#05080A</color>
+
+    <!-- Ping quality dots -->
+    <color name="ping_good">#10B981</color>
+    <color name="ping_fair">#F59E0B</color>
+    <color name="ping_bad">#F87171</color>
+
+    <!-- Kept for existing references -->
+    <color name="colorPrimaryVariant">#10B981</color>
 </resources>

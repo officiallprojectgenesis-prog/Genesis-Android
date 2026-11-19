@@ -10,6 +10,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
 import com.worldrpg.neonlauncher.BuildConfig
+import com.worldrpg.neonlauncher.R
 import com.worldrpg.neonlauncher.databinding.FragmentSettingsBinding
 import com.worldrpg.neonlauncher.game.EngineHostActivity
 import com.worldrpg.neonlauncher.utils.NativeAssetBridge
@@ -47,27 +48,40 @@ class SettingsFragment : Fragment() {
         nativeAssetBridge = NativeAssetBridge(requireContext())
 
         loadCurrentSettings()
+        setupValueLabels()
         setupSaveButton()
         setupAssetSyncButton()
         setupEngineTestButton()
     }
 
     private fun loadCurrentSettings() {
-        // Username
-        binding.editUsername.setText(prefsManager.username)
+        // The nickname is edited on the server screen, next to the play button.
 
         // Graphics Quality
-        when (prefsManager.graphicsQuality) {
-            0 -> binding.radioLow.isChecked = true
-            1 -> binding.radioMedium.isChecked = true
-            2 -> binding.radioHigh.isChecked = true
-        }
+        binding.graphicsToggle.check(
+            when (prefsManager.graphicsQuality) {
+                0 -> R.id.btnGraphicsLow
+                2 -> R.id.btnGraphicsHigh
+                else -> R.id.btnGraphicsMedium
+            }
+        )
 
         // Audio Volume
         binding.sliderVolume.value = prefsManager.audioVolume.toFloat()
 
         // Touch Sensitivity
         binding.sliderTouchSensitivity.value = prefsManager.touchSensitivity.toFloat()
+    }
+
+    private fun setupValueLabels() {
+        binding.volumeValue.text = "${binding.sliderVolume.value.toInt()}%"
+        binding.touchValue.text = "${binding.sliderTouchSensitivity.value.toInt()}"
+        binding.sliderVolume.addOnChangeListener { _, value, _ ->
+            binding.volumeValue.text = "${value.toInt()}%"
+        }
+        binding.sliderTouchSensitivity.addOnChangeListener { _, value, _ ->
+            binding.touchValue.text = "${value.toInt()}"
+        }
     }
 
     private fun setupSaveButton() {
@@ -78,70 +92,62 @@ class SettingsFragment : Fragment() {
 
     private fun setupAssetSyncButton() {
         val button = binding.btnSyncAssets
-        val idleText = button.text
         button.setOnClickListener {
             button.isEnabled = false
             syncingAssets = true
             updateEngineTestButton()
-            binding.assetSyncProgressContainer.visibility = View.VISIBLE
-            binding.progressAssetSync.isIndeterminate = true
-            binding.progressAssetSync.progress = 0
-            binding.tvAssetSyncPercent.text = ""
-            binding.tvAssetSyncFile.text = "Fetching game asset list..."
+            showAssetProgress(getString(R.string.downloading_assets), null)
             viewLifecycleOwner.lifecycleScope.launch {
                 try {
                     nativeAssetBridge.syncAssets().collect { state ->
                         when (state) {
-                            NativeAssetBridge.DownloadState.FetchingManifest -> {
-                                button.text = "Fetching game asset list..."
-                                binding.progressAssetSync.isIndeterminate = true
-                                binding.tvAssetSyncFile.text = "Connecting to Hugging Face..."
-                                binding.tvAssetSyncPercent.text = ""
-                            }
-                            is NativeAssetBridge.DownloadState.Verifying -> {
-                                val pct = if (state.total > 0) (state.current * 100 / state.total) else 0
-                                button.text = "Verifying game assets ${state.current}/${state.total}"
-                                binding.progressAssetSync.isIndeterminate = false
-                                binding.progressAssetSync.progress = pct
-                                binding.tvAssetSyncFile.text = "Verifying file ${state.current} of ${state.total}"
-                                binding.tvAssetSyncPercent.text = "$pct%"
-                            }
-                            is NativeAssetBridge.DownloadState.Downloading -> {
-                                val countSuffix = if (state.totalFiles > 0) {
-                                    " (${state.currentFile}/${state.totalFiles})"
-                                } else ""
-                                button.text = "Downloading ${state.fileName}$countSuffix: ${state.percent}%"
-                                binding.progressAssetSync.isIndeterminate = false
-                                binding.progressAssetSync.progress = state.percent
-                                binding.tvAssetSyncFile.text = "${state.fileName}$countSuffix"
-                                binding.tvAssetSyncPercent.text = "${state.percent}%"
-                            }
-                            is NativeAssetBridge.DownloadState.Complete -> {
-                                binding.progressAssetSync.isIndeterminate = false
-                                binding.progressAssetSync.progress = 100
-                                binding.tvAssetSyncFile.text = "${state.fileCount} files verified and ready"
-                                binding.tvAssetSyncPercent.text = "100%"
+                            NativeAssetBridge.DownloadState.FetchingManifest ->
+                                showAssetProgress("Fetching game asset manifest...", null)
+                            is NativeAssetBridge.DownloadState.Verifying ->
+                                showAssetProgress(
+                                    "Verifying game assets ${state.current}/${state.total}",
+                                    if (state.total > 0) state.current * 100 / state.total else null
+                                )
+                            is NativeAssetBridge.DownloadState.Downloading ->
+                                showAssetProgress("Downloading ${state.fileName}", state.percent)
+                            is NativeAssetBridge.DownloadState.Complete ->
                                 Toast.makeText(
                                     context,
                                     "${state.fileCount} game files verified and ready",
                                     Toast.LENGTH_LONG
                                 ).show()
-                            }
-                            is NativeAssetBridge.DownloadState.Error -> {
-                                binding.progressAssetSync.isIndeterminate = false
-                                binding.tvAssetSyncFile.text = state.message
-                                binding.tvAssetSyncPercent.text = "Error"
+                            is NativeAssetBridge.DownloadState.Error ->
                                 Toast.makeText(context, state.message, Toast.LENGTH_LONG).show()
-                            }
                         }
                     }
                 } finally {
-                    button.text = idleText
-                    button.isEnabled = true
+                    _binding?.let { b ->
+                        b.assetStatus.visibility = View.GONE
+                        b.assetProgress.visibility = View.GONE
+                        b.btnSyncAssets.isEnabled = true
+                    }
                     syncingAssets = false
                     updateEngineTestButton()
                 }
             }
+        }
+    }
+
+    /** [percent] null shows an indeterminate bar. */
+    private fun showAssetProgress(status: String, percent: Int?) {
+        val b = _binding ?: return
+        b.assetStatus.visibility = View.VISIBLE
+        b.assetStatus.text = status
+        b.assetProgress.visibility = View.VISIBLE
+        if (percent == null) {
+            if (!b.assetProgress.isIndeterminate) {
+                b.assetProgress.visibility = View.INVISIBLE
+                b.assetProgress.isIndeterminate = true
+                b.assetProgress.visibility = View.VISIBLE
+            }
+        } else {
+            b.assetProgress.isIndeterminate = false
+            b.assetProgress.setProgressCompat(percent.coerceIn(0, 100), true)
         }
     }
 
@@ -175,16 +181,10 @@ class SettingsFragment : Fragment() {
     }
 
     private fun saveSettings() {
-        // Save username (ASCII-only validation)
-        val username = binding.editUsername.text.toString().trim()
-        if (username.isNotEmpty()) {
-            prefsManager.username = username
-        }
-
         // Save graphics quality
-        prefsManager.graphicsQuality = when {
-            binding.radioLow.isChecked -> 0
-            binding.radioHigh.isChecked -> 2
+        prefsManager.graphicsQuality = when (binding.graphicsToggle.checkedButtonId) {
+            R.id.btnGraphicsLow -> 0
+            R.id.btnGraphicsHigh -> 2
             else -> 1
         }
 
@@ -194,7 +194,7 @@ class SettingsFragment : Fragment() {
         // Save touch sensitivity
         prefsManager.touchSensitivity = binding.sliderTouchSensitivity.value.toInt()
 
-        Toast.makeText(context, "Settings saved", Toast.LENGTH_SHORT).show()
+        Toast.makeText(context, R.string.settings_saved, Toast.LENGTH_SHORT).show()
     }
 
     override fun onDestroyView() {

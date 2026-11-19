@@ -4,12 +4,15 @@ import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import android.widget.Toast
 import androidx.fragment.app.Fragment
+import androidx.lifecycle.lifecycleScope
 import com.worldrpg.neonlauncher.BuildConfig
+import com.worldrpg.neonlauncher.R
 import com.worldrpg.neonlauncher.databinding.FragmentGenesisHomeBinding
+import com.worldrpg.neonlauncher.network.ServerQuery
 import com.worldrpg.neonlauncher.utils.NativeAssetBridge
 import com.worldrpg.neonlauncher.utils.PreferencesManager
+import kotlinx.coroutines.launch
 
 class GenesisHomeFragment : Fragment() {
 
@@ -36,18 +39,40 @@ class GenesisHomeFragment : Fragment() {
 
         binding.tvBrandTitle.text = BuildConfig.LAUNCHER_TITLE
         binding.tvServerEndpoint.text = "${BuildConfig.DEFAULT_SERVER_IP}:${BuildConfig.DEFAULT_SERVER_PORT}"
-        binding.tvVersionInfo.text = "Project Genesis Client • v${BuildConfig.VERSION_NAME}"
+        binding.tvVersionInfo.text = "Project : Genesis Mobile • v${BuildConfig.VERSION_NAME}"
         binding.btnPlayGenesis.text = BuildConfig.LAUNCHER_PLAY_BUTTON_TEXT
 
         binding.btnPlayGenesis.setOnClickListener {
             val enteredNick = binding.editQuickNickname.text?.toString()?.trim().orEmpty()
-            val nick = if (enteredNick.isNotEmpty()) enteredNick else BuildConfig.DEFAULT_PLAYER_NICK
-            if (nick.any { it.code > 127 }) {
-                Toast.makeText(requireContext(), "Use ASCII characters only in nickname", Toast.LENGTH_SHORT).show()
+            val nick = enteredNick.ifEmpty { BuildConfig.DEFAULT_PLAYER_NICK }
+            when (NicknameRules.check(nick)) {
+                NicknameRules.Result.EMPTY -> {
+                    binding.nicknameInputLayout.error = getString(R.string.nickname_empty)
+                    return@setOnClickListener
+                }
+                NicknameRules.Result.INVALID -> {
+                    binding.nicknameInputLayout.error = getString(R.string.nickname_invalid)
+                    return@setOnClickListener
+                }
+                NicknameRules.Result.RESERVED -> {
+                    binding.nicknameInputLayout.error = getString(R.string.nickname_reserved)
+                    return@setOnClickListener
+                }
+                NicknameRules.Result.OK -> {
+                    binding.nicknameInputLayout.error = null
+                }
+            }
+            if (nativeAssetBridge.getReadyStoragePath() == null) {
+                binding.tvAssetsStatus.text = "Please sync game assets in Settings first"
+                (activity as? MainActivity)?.openSettingsTab()
                 return@setOnClickListener
             }
             prefsManager.username = nick
             (activity as? MainActivity)?.launchGenesisServer()
+        }
+
+        binding.statusPill.setOnClickListener {
+            refreshServerStatus()
         }
     }
 
@@ -61,7 +86,21 @@ class GenesisHomeFragment : Fragment() {
         binding.tvAssetsStatus.text = if (assetsReady) {
             "Game assets verified and ready"
         } else {
-            "Tip: Sync game assets in Settings before joining"
+            "Sync game assets in Settings before joining"
+        }
+        refreshServerStatus()
+    }
+
+    private fun refreshServerStatus() {
+        binding.tvServerStatus.text = getString(R.string.genesis_status_checking)
+        viewLifecycleOwner.lifecycleScope.launch {
+            val result = ServerQuery.query(BuildConfig.DEFAULT_SERVER_IP, BuildConfig.DEFAULT_SERVER_PORT)
+            val b = _binding ?: return@launch
+            b.tvServerStatus.text = if (result != null) {
+                getString(R.string.genesis_status_online, result.players, result.maxPlayers, result.pingMs)
+            } else {
+                getString(R.string.genesis_status_ready)
+            }
         }
     }
 

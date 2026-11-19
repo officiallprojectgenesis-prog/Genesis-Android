@@ -1,52 +1,67 @@
 package com.worldrpg.neonlauncher.network
 
+import com.worldrpg.neonlauncher.BuildConfig
+
 /**
- * Data class representing an MTA:SA server entry.
- * All strings are ASCII-only per project rules.
+ * One MTA:SA server entry. The live fields (players, ping, game mode...) come
+ * from the ASE query (see [ServerQuery]); until it answers they are unknown and
+ * [status] says why, so the UI never shows made-up numbers.
  */
 data class ServerInfo(
     val name: String,
     val ip: String,
     val port: Int,
-    val players: Int,
-    val maxPlayers: Int,
-    val ping: Int,
-    val isFavorite: Boolean = false
+    val isFavorite: Boolean = false,
+    /** http(s) URL of the server logo; empty shows the name's initials. */
+    val logoUrl: String = "",
+    val status: Status = Status.QUERYING,
+    val players: Int = 0,
+    val maxPlayers: Int = 0,
+    val ping: Int = 0,
+    val gameMode: String = "",
+    val mapName: String = "",
+    val version: String = "",
+    val passworded: Boolean = false,
+    val playerNames: List<String> = emptyList()
 ) {
-    /**
-     * Returns a unique key for favorite persistence (ip:port).
-     */
+    enum class Status { QUERYING, ONLINE, OFFLINE }
+
+    /** Unique key for favorite persistence (ip:port). */
     fun getKey(): String = "$ip:$port"
 
-    /**
-     * Returns formatted player count string.
-     */
-    fun getPlayerCountText(): String = "$players/$maxPlayers"
-
-    /**
-     * Returns formatted ping string.
-     */
-    fun getPingText(): String = "${ping}ms"
+    fun withQuery(result: ServerQuery.Result?): ServerInfo =
+        if (result == null) copy(status = Status.OFFLINE)
+        else copy(
+            // Desktop CServerListItem::ParseQuery takes the queried name when no master list restricts it.
+            name = result.serverName.ifBlank { name },
+            status = Status.ONLINE,
+            players = result.players,
+            maxPlayers = result.maxPlayers,
+            ping = result.pingMs,
+            gameMode = result.gameType,
+            mapName = result.mapName,
+            version = result.version,
+            passworded = result.passworded,
+            playerNames = result.playerNames
+        )
 
     companion object {
-        /**
-         * Creates a ServerInfo from a persisted favorite key.
-         */
-        fun fromFavoriteKey(key: String, name: String = "Unknown Server"): ServerInfo {
-            val parts = key.split(":")
-            return if (parts.size == 2) {
-                ServerInfo(
-                    name = name,
-                    ip = parts[0],
-                    port = parts[1].toIntOrNull() ?: 22003,
-                    players = 0,
-                    maxPlayers = 0,
-                    ping = 0,
-                    isFavorite = true
-                )
-            } else {
-                ServerInfo(name = name, ip = key, port = 22003, players = 0, maxPlayers = 0, ping = 0, isFavorite = true)
-            }
+        /** The server configured in .env. */
+        fun configured(): ServerInfo = ServerInfo(
+            name = BuildConfig.DEFAULT_SERVER_NAME,
+            ip = BuildConfig.DEFAULT_SERVER_IP,
+            port = BuildConfig.DEFAULT_SERVER_PORT,
+            logoUrl = BuildConfig.DEFAULT_SERVER_LOGO_URL
+        )
+
+        /** Creates a ServerInfo from a persisted favorite key (ip:port). */
+        fun fromFavoriteKey(key: String): ServerInfo {
+            val def = configured()
+            if (key == def.getKey()) return def.copy(isFavorite = true)
+            val split = key.lastIndexOf(':')
+            val ip = if (split > 0) key.substring(0, split) else key
+            val port = if (split > 0) key.substring(split + 1).toIntOrNull() ?: 22003 else 22003
+            return ServerInfo(name = key, ip = ip, port = port, isFavorite = true)
         }
     }
 }

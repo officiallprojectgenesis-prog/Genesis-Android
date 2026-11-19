@@ -101,6 +101,7 @@ bool ReadLuaValue(Net::BitStreamReader& reader, Datum& out) {
         bool value = false;
         if (!ReadFlag(reader, value)) LUA_FAIL();
         out.number = true;
+        out.boolean = true;
         out.value = value ? 1 : 0;
         return true;
     }
@@ -214,8 +215,7 @@ bool ReadEntityCommon(Net::BitStreamReader& reader, EntityCommon& out) {
     // 8 bits early and the MARKER fields misalign. The reference gates it on ExtendedWorldPositions,
     // so this is a deliberate deviation based on the bytes on the wire.
     {
-        uint8_t syncTimeContext = 0;
-        if (!reader.Read(syncTimeContext)) {
+        if (!reader.Read(out.syncTimeContext)) {
             DIAG("ENTITY_ADD fail line=%d stage=synctime id=%u type=%u bit=%zu", __LINE__, id, static_cast<unsigned>(type), reader.GetReadOffsetBits());
             return false;
         }
@@ -224,7 +224,8 @@ bool ReadEntityCommon(Net::BitStreamReader& reader, EntityCommon& out) {
     return true;
 }
 
-bool ReadEntityBody(Net::BitStreamReader& reader, const EntityCommon& common, Visual& visual) {
+bool ReadEntityBody(Net::BitStreamReader& reader, const EntityCommon& common, Visual& visual,
+                    ElementKindResolver resolveKind) {
     switch (common.type) {
         case kTypeDummy:
             return ReadEntityBodyDummy(reader, common, visual);
@@ -237,7 +238,7 @@ bool ReadEntityBody(Net::BitStreamReader& reader, const EntityCommon& common, Vi
             return ReadEntityBodyVehicle(reader, common, visual);
         case kTypeObject:
         case 18:  // WEAPON: the reference routes it through the object case
-            return ReadEntityBodyObject(reader, common, visual);
+            return ReadEntityBodyObject(reader, common, visual, resolveKind);
         case kTypeMarker:
             return ReadEntityBodyMarker(reader, common, visual);
         case kTypeBlip:

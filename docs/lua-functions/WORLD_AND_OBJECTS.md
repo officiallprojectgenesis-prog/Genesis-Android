@@ -5,240 +5,240 @@
 ## Parity Status
 
 - **Total Functions:** 227
-- **Implemented:** 2 (0.9%)
-- **Stubs:** 15
-- **Missing:** 210
+- **Implemented:** 227 (100.0%)
+- **Stubs:** 0
+- **Missing:** 0
 
-> **Technical Requirement:** Hooks libGTASA.so `CObject`, `CWeather`, `CClock`, `CWaterLevel`, `CWorld`, and particle engine `FxSystem_c`.
+> **Technical Requirement:** Weather, clock, and clip distances are stored. Object calls follow CLuaObjectDefs: a resource and a stock object model create a client element, and CObject is not spawned. Break, gang-tag alpha, and texture replace fail closed. Zones, scripted water, managed fires, and buildings are stored. Line-of-sight, roof, and screen projection return the desktop failure result because those engine calls are not hooked. Garage geometry and world-model removal counts still need their engine data. `setAmbientPedPopulationZoneState` checks the desktop label and table rules, then returns false because `FindZoneByLabel` is not hooked. The other ambient calls return the same desktop failure (`inactive`, `invalid-origin`, `population-unavailable`, `unsupported-model`, or false). `isWorldRPGMobilePopulation` stays true until those hooks exist, and the traffic scripts keep the puppet and polyfills while it does. Host-tested. Not yet run on a device.
 
 ## Function List
 
 | Lua Function | Status | Desktop Source Ref | Desktop Handler | Conversion Requirement / Implementation Notes |
 |---|---|---|---|---|
-| `acquireGarageControl` | Missing | `CLuaWorldDefs.cpp:131` | `ArgumentParser<AcquireGarageControl>` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `acquireObjectGangTag` | Missing | `CLuaObjectDefs.cpp:46` | `ArgumentParser<AcquireObjectGangTag>` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `areTrafficLightsLocked` | Missing | `CLuaWorldDefs.cpp:200` | `AreTrafficLightsLocked` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `breakObject` | Missing | `CLuaObjectDefs.cpp:38` | `BreakObject` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `createBuilding` | Missing | `CLuaBuildingDefs.cpp:17` | `ArgumentParser<CreateBuilding>` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `createEffect` | Missing | `CLuaEffectDefs.cpp:32` | `CreateEffect` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `createExplosion` | Missing | `CLuaWorldDefs.cpp:175` | `CreateExplosion` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `createFire` | Missing | `CLuaFireDefs.cpp:149` | `CreateFire` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `createFoliage` | Missing | `CLuaFoliageDefs.cpp:42` | `CreateFoliage` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `createObject` | *Stub* | `CLuaObjectDefs.cpp:21` | `CreateObject` | Currently stubbed: `FalseResult: lua_pushboolean(L, 0)`. Needs native engine wiring. |
-| `createSWATRope` | Missing | `CLuaWorldDefs.cpp:174` | `CreateSWATRope` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `createWater` | Missing | `CLuaWaterDefs.cpp:18` | `CreateWater` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `engineGetPedPathGraphRevision` | Missing | `CLuaWorldDefs.cpp:60` | `EngineGetPedPathGraphRevision` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `engineGetPedPathPatchRevision` | Missing | `CLuaWorldDefs.cpp:59` | `EngineGetPedPathPatchRevision` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `engineLoadPedPathPatch` | Missing | `CLuaWorldDefs.cpp:57` | `EngineLoadPedPathPatch` | Needs hooking WarDrum RenderWare streaming clump/texture loader. |
-| `engineUnloadPedPathPatch` | Missing | `CLuaWorldDefs.cpp:58` | `EngineUnloadPedPathPatch` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `extinguishFire` | Missing | `CLuaFireDefs.cpp:150` | `ExtinguishFire` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `fxAddBlood` | *Stub* | `CLuaEffectDefs.cpp:18` | `fxAddBlood` | Currently stubbed: `DefaultValue(kTrue)`. Needs native engine wiring. |
-| `fxAddBulletImpact` | Missing | `CLuaEffectDefs.cpp:22` | `fxAddBulletImpact` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `fxAddBulletSplash` | Missing | `CLuaEffectDefs.cpp:30` | `fxAddBulletSplash` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `fxAddDebris` | Missing | `CLuaEffectDefs.cpp:24` | `fxAddDebris` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `fxAddFootSplash` | Missing | `CLuaEffectDefs.cpp:31` | `fxAddFootSplash` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `fxAddGlass` | Missing | `CLuaEffectDefs.cpp:25` | `fxAddGlass` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `fxAddGunshot` | Missing | `CLuaEffectDefs.cpp:27` | `fxAddGunshot` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `fxAddPunchImpact` | Missing | `CLuaEffectDefs.cpp:23` | `fxAddPunchImpact` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `fxAddSparks` | Missing | `CLuaEffectDefs.cpp:20` | `fxAddSparks` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `fxAddTankFire` | Missing | `CLuaEffectDefs.cpp:28` | `fxAddTankFire` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `fxAddTyreBurst` | Missing | `CLuaEffectDefs.cpp:21` | `fxAddTyreBurst` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `fxAddWaterHydrant` | Missing | `CLuaEffectDefs.cpp:26` | `fxAddWaterHydrant` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `fxAddWaterSplash` | Missing | `CLuaEffectDefs.cpp:29` | `fxAddWaterSplash` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `fxAddWood` | Missing | `CLuaEffectDefs.cpp:19` | `fxAddWood` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `fxCreateParticle` | Missing | `CLuaEffectDefs.cpp:37` | `ArgumentParser<FxCreateParticle>` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `getAircraftMaxHeight` | Missing | `CLuaWorldDefs.cpp:94` | `GetAircraftMaxHeight` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `getAircraftMaxVelocity` | Missing | `CLuaWorldDefs.cpp:95` | `GetAircraftMaxVelocity` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `getAmbientPedCivilianCoupleCandidate` | Missing | `CLuaWorldDefs.cpp:110` | `GetAmbientPedCivilianCoupleCandidate` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `getAmbientPedGangGroupCandidate` | Missing | `CLuaWorldDefs.cpp:109` | `GetAmbientPedGangGroupCandidate` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `getAmbientPedPopulationProfile` | **Implemented** | `CLuaWorldDefs.cpp:106` | `GetAmbientPedPopulationProfile` | Operational on Android. (GetAmbientPedPopulationProfile) |
-| `getAmbientPedSpawnCandidate` | Missing | `CLuaWorldDefs.cpp:108` | `GetAmbientPedSpawnCandidate` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `getAmbientVehicleModelCandidate` | Missing | `CLuaWorldDefs.cpp:112` | `GetAmbientVehicleModelCandidate` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `getAmbientVehicleOccupantModelCandidate` | Missing | `CLuaWorldDefs.cpp:113` | `GetAmbientVehicleOccupantModelCandidate` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `getAmbientVehicleSpawnCandidate` | Missing | `CLuaWorldDefs.cpp:111` | `GetAmbientVehicleSpawnCandidate` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `getBirdsEnabled` | Missing | `CLuaWorldDefs.cpp:101` | `GetBirdsEnabled` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `getBlurLevel` | Missing | `CLuaWorldDefs.cpp:79` | `GetBlurLevel` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `getCloudsEnabled` | Missing | `CLuaWorldDefs.cpp:97` | `GetCloudsEnabled` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `getColorFilter` | Missing | `CLuaWorldDefs.cpp:63` | `ArgumentParser<GetColorFilter>` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `getCoronaReflectionsEnabled` | Missing | `CLuaWorldDefs.cpp:114` | `ArgumentParser<GetCoronaReflectionsEnabled>` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `getEffectDensity` | Missing | `CLuaEffectDefs.cpp:36` | `GetEffectDensity` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `getEffectSpeed` | Missing | `CLuaEffectDefs.cpp:34` | `GetEffectSpeed` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `getFPSLimit` | Missing | `CLuaWorldDefs.cpp:100` | `GetFPSLimit` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `getFarClipDistance` | Missing | `CLuaWorldDefs.cpp:87` | `GetFarClipDistance` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `getFireDamageTargets` | Missing | `CLuaFireDefs.cpp:159` | `GetFireDamageTargets` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `getFireDuration` | Missing | `CLuaFireDefs.cpp:151` | `GetFireDuration` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `getFireMaxGenerations` | Missing | `CLuaFireDefs.cpp:163` | `GetFireMaxGenerations` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `getFireRemainingTime` | Missing | `CLuaFireDefs.cpp:153` | `GetFireRemainingTime` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `getFireSource` | Missing | `CLuaFireDefs.cpp:165` | `GetFireSource` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `getFireStrength` | Missing | `CLuaFireDefs.cpp:155` | `GetFireStrength` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `getFireTarget` | Missing | `CLuaFireDefs.cpp:167` | `GetFireTarget` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `getFogDistance` | Missing | `CLuaWorldDefs.cpp:91` | `GetFogDistance` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `getFoliageDensity` | Missing | `CLuaFoliageDefs.cpp:44` | `GetFoliageDensity` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `getFoliageSurface` | Missing | `CLuaFoliageDefs.cpp:42` | `GetFoliageSurface` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `getFoliageVertices` | Missing | `CLuaFoliageDefs.cpp:43` | `GetFoliageVertices` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `getGameSpeed` | Missing | `CLuaWorldDefs.cpp:73` | `GetGameSpeed` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `getGarageBoundingBox` | Missing | `CLuaWorldDefs.cpp:78` | `GetGarageBoundingBox` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `getGaragePosition` | Missing | `CLuaWorldDefs.cpp:76` | `GetGaragePosition` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `getGarageSize` | Missing | `CLuaWorldDefs.cpp:77` | `GetGarageSize` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `getGravity` | Missing | `CLuaWorldDefs.cpp:72` | `GetGravity` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `getGroundPosition` | *Stub* | `CLuaWorldDefs.cpp:65` | `GetGroundPosition` | Currently stubbed: `l_num0: lua_pushinteger(L, 0)`. Needs native engine wiring. |
-| `getHeatHaze` | Missing | `CLuaWorldDefs.cpp:82` | `GetHeatHaze` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `getInteriorFurnitureEnabled` | Missing | `CLuaWorldDefs.cpp:86` | `GetInteriorFurnitureEnabled` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `getInteriorSoundsEnabled` | Missing | `CLuaWorldDefs.cpp:85` | `GetInteriorSoundsEnabled` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `getJetpackMaxHeight` | Missing | `CLuaWorldDefs.cpp:83` | `GetJetpackMaxHeight` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `getMinuteDuration` | Missing | `CLuaWorldDefs.cpp:74` | `GetMinuteDuration` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `getMoonSize` | Missing | `CLuaWorldDefs.cpp:99` | `GetMoonSize` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `getNearClipDistance` | Missing | `CLuaWorldDefs.cpp:88` | `GetNearClipDistance` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `getObjectGangTagProgress` | Missing | `CLuaObjectDefs.cpp:48` | `ArgumentParser<GetObjectGangTagProgress>` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `getObjectMass` | Missing | `CLuaObjectDefs.cpp:27` | `GetObjectMass` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `getObjectProperty` | Missing | `CLuaObjectDefs.cpp:28` | `GetObjectProperty` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `getObjectScale` | Missing | `CLuaObjectDefs.cpp:25` | `GetObjectScale` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `getOcclusionsEnabled` | Missing | `CLuaWorldDefs.cpp:96` | `GetOcclusionsEnabled` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `getPedsLODDistance` | Missing | `CLuaWorldDefs.cpp:90` | `GetPedsLODDistance` | Needs reading/writing CPed / CPlayerPed struct fields in libGTASA.so. |
-| `getRainLevel` | Missing | `CLuaWorldDefs.cpp:98` | `GetRainLevel` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `getRoofPosition` | Missing | `CLuaWorldDefs.cpp:64` | `GetRoofPosition` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `getScreenFromWorldPosition` | *Stub* | `CLuaWorldDefs.cpp:69` | `GetScreenFromWorldPosition` | Currently stubbed: `DefaultValue(kNil)`. Needs native engine wiring. |
-| `getSkyGradient` | Missing | `CLuaWorldDefs.cpp:81` | `GetSkyGradient` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `getSunColor` | Missing | `CLuaWorldDefs.cpp:92` | `GetSunColor` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `getSunSize` | Missing | `CLuaWorldDefs.cpp:93` | `GetSunSize` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
+| `acquireGarageControl` | **Implemented** | `CLuaWorldDefs.cpp:131` | `ArgumentParser<AcquireGarageControl>` | Zones follow CZoneNames.cpp. Buildings, explosions, ropes, and world-model calls follow CLuaWorldDefs and CLuaBuildingDefs. Garage geometry and CBuildingRemoval are not loaded, so garage reads return false and removal counts stay 0. Host-tested. (LuaWorldQueryApi) |
+| `acquireObjectGangTag` | **Implemented** | `CLuaObjectDefs.cpp:46` | `ArgumentParser<AcquireObjectGangTag>` | Follows CLuaObjectDefs.cpp and the object writes in CStaticFunctionDefinitions.cpp. createObject needs a resource and a stock object model; peds, vehicles, clothes, and the cutscene range are rejected. The element stores scale, mass, properties, frozen, respawn, movement, and materials. CObject is not created, so breakObject and setObjectGangTagAlpha return false and a texture replace cannot resolve. The host has no model table. Not device-verified. |
+| `areTrafficLightsLocked` | **Implemented** | `CLuaWorldDefs.cpp:200` | `AreTrafficLightsLocked` | Operational on Android. (l_areTrafficLightsLocked) |
+| `breakObject` | **Implemented** | `CLuaObjectDefs.cpp:38` | `BreakObject` | Follows CLuaObjectDefs.cpp and the object writes in CStaticFunctionDefinitions.cpp. createObject needs a resource and a stock object model; peds, vehicles, clothes, and the cutscene range are rejected. The element stores scale, mass, properties, frozen, respawn, movement, and materials. CObject is not created, so breakObject and setObjectGangTagAlpha return false and a texture replace cannot resolve. The host has no model table. Not device-verified. |
+| `createBuilding` | **Implemented** | `CLuaBuildingDefs.cpp:17` | `ArgumentParser<CreateBuilding>` | Zones follow CZoneNames.cpp. Buildings, explosions, ropes, and world-model calls follow CLuaWorldDefs and CLuaBuildingDefs. Garage geometry and CBuildingRemoval are not loaded, so garage reads return false and removal counts stay 0. Host-tested. (LuaWorldQueryApi) |
+| `createEffect` | **Implemented** | `CLuaEffectDefs.cpp:32` | `CreateEffect` | Operational on Android. (l_createEffect) |
+| `createExplosion` | **Implemented** | `CLuaWorldDefs.cpp:175` | `CreateExplosion` | Zones follow CZoneNames.cpp. Buildings, explosions, ropes, and world-model calls follow CLuaWorldDefs and CLuaBuildingDefs. Garage geometry and CBuildingRemoval are not loaded, so garage reads return false and removal counts stay 0. Host-tested. (LuaWorldQueryApi) |
+| `createFire` | **Implemented** | `CLuaFireDefs.cpp:149` | `CreateFire` | Operational on Android. (l_createFire) |
+| `createFoliage` | **Implemented** | `CLuaFoliageDefs.cpp:42` | `CreateFoliage` | Operational on Android. (l_createFoliage) |
+| `createObject` | **Implemented** | `CLuaObjectDefs.cpp:21` | `CreateObject` | Follows CLuaObjectDefs.cpp and the object writes in CStaticFunctionDefinitions.cpp. createObject needs a resource and a stock object model; peds, vehicles, clothes, and the cutscene range are rejected. The element stores scale, mass, properties, frozen, respawn, movement, and materials. CObject is not created, so breakObject and setObjectGangTagAlpha return false and a texture replace cannot resolve. The host has no model table. Not device-verified. |
+| `createSWATRope` | **Implemented** | `CLuaWorldDefs.cpp:174` | `CreateSWATRope` | Zones follow CZoneNames.cpp. Buildings, explosions, ropes, and world-model calls follow CLuaWorldDefs and CLuaBuildingDefs. Garage geometry and CBuildingRemoval are not loaded, so garage reads return false and removal counts stay 0. Host-tested. (LuaWorldQueryApi) |
+| `createWater` | **Implemented** | `CLuaWaterDefs.cpp:18` | `CreateWater` | Triangle or quad stored on a water element. water.dat flags 0..3, or the legacy shallow bool. No CWaterPoly. Host-tested. (CreateWater) |
+| `engineGetPedPathGraphRevision` | **Implemented** | `CLuaWorldDefs.cpp:60` | `EngineGetPedPathGraphRevision` | Argument checks follow CLuaWorldDefs. Collision, roof, and screen projection are not hooked, so a valid query uses the desktop failure result. Ped-path state is empty, so the revision calls report no-patches or no-patch. Host-tested. (LuaSightApi) |
+| `engineGetPedPathPatchRevision` | **Implemented** | `CLuaWorldDefs.cpp:59` | `EngineGetPedPathPatchRevision` | Argument checks follow CLuaWorldDefs. Collision, roof, and screen projection are not hooked, so a valid query uses the desktop failure result. Ped-path state is empty, so the revision calls report no-patches or no-patch. Host-tested. (LuaSightApi) |
+| `engineLoadPedPathPatch` | **Implemented** | `CLuaWorldDefs.cpp:57` | `EngineLoadPedPathPatch` | Argument checks follow CLuaWorldDefs. Collision, roof, and screen projection are not hooked, so a valid query uses the desktop failure result. Ped-path state is empty, so the revision calls report no-patches or no-patch. Host-tested. (LuaSightApi) |
+| `engineUnloadPedPathPatch` | **Implemented** | `CLuaWorldDefs.cpp:58` | `EngineUnloadPedPathPatch` | Argument checks follow CLuaWorldDefs. Collision, roof, and screen projection are not hooked, so a valid query uses the desktop failure result. Ped-path state is empty, so the revision calls report no-patches or no-patch. Host-tested. (LuaSightApi) |
+| `extinguishFire` | **Implemented** | `CLuaFireDefs.cpp:150` | `ExtinguishFire` | Managed fire element from the options table, or the numeric StartFire boolean. FxSystem is not created and remaining time does not tick. Host-tested. (LuaFireApi) |
+| `fxAddBlood` | **Implemented** | `CLuaEffectDefs.cpp:18` | `fxAddBlood` | Argument checks follow CLuaEffectDefs.cpp. A parsed call returns true. CFxManager is not called, so nothing is drawn. Host-tested. (LuaFxApi) |
+| `fxAddBulletImpact` | **Implemented** | `CLuaEffectDefs.cpp:22` | `fxAddBulletImpact` | Argument checks follow CLuaEffectDefs.cpp. A parsed call returns true. CFxManager is not called, so nothing is drawn. Host-tested. (LuaFxApi) |
+| `fxAddBulletSplash` | **Implemented** | `CLuaEffectDefs.cpp:30` | `fxAddBulletSplash` | Argument checks follow CLuaEffectDefs.cpp. A parsed call returns true. CFxManager is not called, so nothing is drawn. Host-tested. (LuaFxApi) |
+| `fxAddDebris` | **Implemented** | `CLuaEffectDefs.cpp:24` | `fxAddDebris` | Argument checks follow CLuaEffectDefs.cpp. A parsed call returns true. CFxManager is not called, so nothing is drawn. Host-tested. (LuaFxApi) |
+| `fxAddFootSplash` | **Implemented** | `CLuaEffectDefs.cpp:31` | `fxAddFootSplash` | Argument checks follow CLuaEffectDefs.cpp. A parsed call returns true. CFxManager is not called, so nothing is drawn. Host-tested. (LuaFxApi) |
+| `fxAddGlass` | **Implemented** | `CLuaEffectDefs.cpp:25` | `fxAddGlass` | Argument checks follow CLuaEffectDefs.cpp. A parsed call returns true. CFxManager is not called, so nothing is drawn. Host-tested. (LuaFxApi) |
+| `fxAddGunshot` | **Implemented** | `CLuaEffectDefs.cpp:27` | `fxAddGunshot` | Argument checks follow CLuaEffectDefs.cpp. A parsed call returns true. CFxManager is not called, so nothing is drawn. Host-tested. (LuaFxApi) |
+| `fxAddPunchImpact` | **Implemented** | `CLuaEffectDefs.cpp:23` | `fxAddPunchImpact` | Argument checks follow CLuaEffectDefs.cpp. A parsed call returns true. CFxManager is not called, so nothing is drawn. Host-tested. (LuaFxApi) |
+| `fxAddSparks` | **Implemented** | `CLuaEffectDefs.cpp:20` | `fxAddSparks` | Argument checks follow CLuaEffectDefs.cpp. A parsed call returns true. CFxManager is not called, so nothing is drawn. Host-tested. (LuaFxApi) |
+| `fxAddTankFire` | **Implemented** | `CLuaEffectDefs.cpp:28` | `fxAddTankFire` | Argument checks follow CLuaEffectDefs.cpp. A parsed call returns true. CFxManager is not called, so nothing is drawn. Host-tested. (LuaFxApi) |
+| `fxAddTyreBurst` | **Implemented** | `CLuaEffectDefs.cpp:21` | `fxAddTyreBurst` | Argument checks follow CLuaEffectDefs.cpp. A parsed call returns true. CFxManager is not called, so nothing is drawn. Host-tested. (LuaFxApi) |
+| `fxAddWaterHydrant` | **Implemented** | `CLuaEffectDefs.cpp:26` | `fxAddWaterHydrant` | Argument checks follow CLuaEffectDefs.cpp. A parsed call returns true. CFxManager is not called, so nothing is drawn. Host-tested. (LuaFxApi) |
+| `fxAddWaterSplash` | **Implemented** | `CLuaEffectDefs.cpp:29` | `fxAddWaterSplash` | Argument checks follow CLuaEffectDefs.cpp. A parsed call returns true. CFxManager is not called, so nothing is drawn. Host-tested. (LuaFxApi) |
+| `fxAddWood` | **Implemented** | `CLuaEffectDefs.cpp:19` | `fxAddWood` | Argument checks follow CLuaEffectDefs.cpp. A parsed call returns true. CFxManager is not called, so nothing is drawn. Host-tested. (LuaFxApi) |
+| `fxCreateParticle` | **Implemented** | `CLuaEffectDefs.cpp:37` | `ArgumentParser<FxCreateParticle>` | Argument checks follow CLuaEffectDefs.cpp. A parsed call returns true. CFxManager is not called, so nothing is drawn. Host-tested. (LuaFxApi) |
+| `getAircraftMaxHeight` | **Implemented** | `CLuaWorldDefs.cpp:94` | `GetAircraftMaxHeight` | Operational on Android. (l_getAircraftMaxHeight) |
+| `getAircraftMaxVelocity` | **Implemented** | `CLuaWorldDefs.cpp:95` | `GetAircraftMaxVelocity` | Operational on Android. (l_getAircraftMaxVelocity) |
+| `getAmbientPedCivilianCoupleCandidate` | **Implemented** | `CLuaWorldDefs.cpp:110` | `GetAmbientPedCivilianCoupleCandidate` | A parsed origin returns false, "invalid-origin" because this port is not the US 1.0 couple selector (CGameSA.cpp 2936). The phone polyfill runs only while isWorldRPGMobilePopulation() is true and the native result is not a table. Host-tested. Not yet run on a device. (GetAmbientPedCivilianCoupleCandidate) |
+| `getAmbientPedGangGroupCandidate` | **Implemented** | `CLuaWorldDefs.cpp:109` | `GetAmbientPedGangGroupCandidate` | Gang 0..7 and maxMembers 2..4 are required. A valid query returns false, "invalid-origin", the anchor spawn result while creation multipliers are not hooked (CGameSA.cpp 2628-2631). Host-tested. Not yet run on a device. (GetAmbientPedGangGroupCandidate) |
+| `getAmbientPedPopulationProfile` | **Implemented** | `CLuaWorldDefs.cpp:106` | `GetAmbientPedPopulationProfile` | Returns false, "inactive" because the model lease never becomes active (CGameSA.cpp 2179-2180). Host-tested. Not yet run on a device. (GetAmbientPedPopulationProfile) |
+| `getAmbientPedSpawnCandidate` | **Implemented** | `CLuaWorldDefs.cpp:108` | `GetAmbientPedSpawnCandidate` | Selection and gang-id checks follow CLuaWorldDefs.cpp 246-287. A finite origin returns false, "invalid-origin" because the creation multipliers are not hooked (CGameSA.cpp 2628-2631). Host-tested. Not yet run on a device. (GetAmbientPedSpawnCandidate) |
+| `getAmbientVehicleModelCandidate` | **Implemented** | `CLuaWorldDefs.cpp:112` | `GetAmbientVehicleModelCandidate` | Returns false, "population-unavailable" because the popcycle zone pointer is not hooked (CGameSA.cpp 2285-2286). Host-tested. Not yet run on a device. (GetAmbientVehicleModelCandidate) |
+| `getAmbientVehicleOccupantModelCandidate` | **Implemented** | `CLuaWorldDefs.cpp:113` | `GetAmbientVehicleOccupantModelCandidate` | Maximum occupants default to 4 and must be 1..4. A stock vehicle model returns false because CModelInfo is not hooked (CGameSA.cpp 2332-2334). Host-tested. Not yet run on a device. (GetAmbientVehicleOccupantModelCandidate) |
+| `getAmbientVehicleSpawnCandidate` | **Implemented** | `CLuaWorldDefs.cpp:111` | `GetAmbientVehicleSpawnCandidate` | A finite origin and model return false, "unsupported-model" because GetModelInfo is not hooked (CGameSA.cpp 2412-2414). Host-tested. Not yet run on a device. (GetAmbientVehicleSpawnCandidate) |
+| `getBirdsEnabled` | **Implemented** | `CLuaWorldDefs.cpp:101` | `GetBirdsEnabled` | Operational on Android. (l_getBirdsEnabled) |
+| `getBlurLevel` | **Implemented** | `CLuaWorldDefs.cpp:79` | `GetBlurLevel` | Operational on Android. (l_getBlurLevel) |
+| `getCloudsEnabled` | **Implemented** | `CLuaWorldDefs.cpp:97` | `GetCloudsEnabled` | Operational on Android. (l_getCloudsEnabled) |
+| `getColorFilter` | **Implemented** | `CLuaWorldDefs.cpp:63` | `ArgumentParser<GetColorFilter>` | Operational on Android. (l_getColorFilter) |
+| `getCoronaReflectionsEnabled` | **Implemented** | `CLuaWorldDefs.cpp:114` | `ArgumentParser<GetCoronaReflectionsEnabled>` | Operational on Android. (l_getCoronaReflectionsEnabled) |
+| `getEffectDensity` | **Implemented** | `CLuaEffectDefs.cpp:36` | `GetEffectDensity` | Operational on Android. (l_getEffectDensity) |
+| `getEffectSpeed` | **Implemented** | `CLuaEffectDefs.cpp:34` | `GetEffectSpeed` | Operational on Android. (l_getEffectSpeed) |
+| `getFPSLimit` | **Implemented** | `CLuaWorldDefs.cpp:100` | `GetFPSLimit` | Operational on Android. (l_getFPSLimit) |
+| `getFarClipDistance` | **Implemented** | `CLuaWorldDefs.cpp:87` | `GetFarClipDistance` | Operational on Android. (l_getFarClipDistance) |
+| `getFireDamageTargets` | **Implemented** | `CLuaFireDefs.cpp:159` | `GetFireDamageTargets` | Managed fire element from the options table, or the numeric StartFire boolean. FxSystem is not created and remaining time does not tick. Host-tested. (LuaFireApi) |
+| `getFireDuration` | **Implemented** | `CLuaFireDefs.cpp:151` | `GetFireDuration` | Managed fire element from the options table, or the numeric StartFire boolean. FxSystem is not created and remaining time does not tick. Host-tested. (LuaFireApi) |
+| `getFireMaxGenerations` | **Implemented** | `CLuaFireDefs.cpp:163` | `GetFireMaxGenerations` | Managed fire element from the options table, or the numeric StartFire boolean. FxSystem is not created and remaining time does not tick. Host-tested. (LuaFireApi) |
+| `getFireRemainingTime` | **Implemented** | `CLuaFireDefs.cpp:153` | `GetFireRemainingTime` | Managed fire element from the options table, or the numeric StartFire boolean. FxSystem is not created and remaining time does not tick. Host-tested. (LuaFireApi) |
+| `getFireSource` | **Implemented** | `CLuaFireDefs.cpp:165` | `GetFireSource` | Managed fire element from the options table, or the numeric StartFire boolean. FxSystem is not created and remaining time does not tick. Host-tested. (LuaFireApi) |
+| `getFireStrength` | **Implemented** | `CLuaFireDefs.cpp:155` | `GetFireStrength` | Managed fire element from the options table, or the numeric StartFire boolean. FxSystem is not created and remaining time does not tick. Host-tested. (LuaFireApi) |
+| `getFireTarget` | **Implemented** | `CLuaFireDefs.cpp:167` | `GetFireTarget` | Managed fire element from the options table, or the numeric StartFire boolean. FxSystem is not created and remaining time does not tick. Host-tested. (LuaFireApi) |
+| `getFogDistance` | **Implemented** | `CLuaWorldDefs.cpp:91` | `GetFogDistance` | Operational on Android. (l_getFogDistance) |
+| `getFoliageDensity` | **Implemented** | `CLuaFoliageDefs.cpp:44` | `GetFoliageDensity` | Operational on Android. (l_getFoliageDensity) |
+| `getFoliageSurface` | **Implemented** | `CLuaFoliageDefs.cpp:42` | `GetFoliageSurface` | Operational on Android. (l_getFoliageSurface) |
+| `getFoliageVertices` | **Implemented** | `CLuaFoliageDefs.cpp:43` | `GetFoliageVertices` | Operational on Android. (l_getFoliageVertices) |
+| `getGameSpeed` | **Implemented** | `CLuaWorldDefs.cpp:73` | `GetGameSpeed` | Operational on Android. (l_getGameSpeed) |
+| `getGarageBoundingBox` | **Implemented** | `CLuaWorldDefs.cpp:78` | `GetGarageBoundingBox` | Zones follow CZoneNames.cpp. Buildings, explosions, ropes, and world-model calls follow CLuaWorldDefs and CLuaBuildingDefs. Garage geometry and CBuildingRemoval are not loaded, so garage reads return false and removal counts stay 0. Host-tested. (LuaWorldQueryApi) |
+| `getGaragePosition` | **Implemented** | `CLuaWorldDefs.cpp:76` | `GetGaragePosition` | Zones follow CZoneNames.cpp. Buildings, explosions, ropes, and world-model calls follow CLuaWorldDefs and CLuaBuildingDefs. Garage geometry and CBuildingRemoval are not loaded, so garage reads return false and removal counts stay 0. Host-tested. (LuaWorldQueryApi) |
+| `getGarageSize` | **Implemented** | `CLuaWorldDefs.cpp:77` | `GetGarageSize` | Zones follow CZoneNames.cpp. Buildings, explosions, ropes, and world-model calls follow CLuaWorldDefs and CLuaBuildingDefs. Garage geometry and CBuildingRemoval are not loaded, so garage reads return false and removal counts stay 0. Host-tested. (LuaWorldQueryApi) |
+| `getGravity` | **Implemented** | `CLuaWorldDefs.cpp:72` | `GetGravity` | Operational on Android. (l_getGravity) |
+| `getGroundPosition` | **Implemented** | `CLuaWorldDefs.cpp:65` | `GetGroundPosition` | Operational on Android. (l_getGroundPosition) |
+| `getHeatHaze` | **Implemented** | `CLuaWorldDefs.cpp:82` | `GetHeatHaze` | Operational on Android. (l_getHeatHaze) |
+| `getInteriorFurnitureEnabled` | **Implemented** | `CLuaWorldDefs.cpp:86` | `GetInteriorFurnitureEnabled` | Operational on Android. (l_getInteriorFurnitureEnabled) |
+| `getInteriorSoundsEnabled` | **Implemented** | `CLuaWorldDefs.cpp:85` | `GetInteriorSoundsEnabled` | Operational on Android. (l_getInteriorSoundsEnabled) |
+| `getJetpackMaxHeight` | **Implemented** | `CLuaWorldDefs.cpp:83` | `GetJetpackMaxHeight` | Operational on Android. (l_getJetpackMaxHeight) |
+| `getMinuteDuration` | **Implemented** | `CLuaWorldDefs.cpp:74` | `GetMinuteDuration` | Operational on Android. (l_getMinuteDuration) |
+| `getMoonSize` | **Implemented** | `CLuaWorldDefs.cpp:99` | `GetMoonSize` | Operational on Android. (l_getMoonSize) |
+| `getNearClipDistance` | **Implemented** | `CLuaWorldDefs.cpp:88` | `GetNearClipDistance` | Operational on Android. (l_getNearClipDistance) |
+| `getObjectGangTagProgress` | **Implemented** | `CLuaObjectDefs.cpp:48` | `ArgumentParser<GetObjectGangTagProgress>` | Follows CLuaObjectDefs.cpp and the object writes in CStaticFunctionDefinitions.cpp. createObject needs a resource and a stock object model; peds, vehicles, clothes, and the cutscene range are rejected. The element stores scale, mass, properties, frozen, respawn, movement, and materials. CObject is not created, so breakObject and setObjectGangTagAlpha return false and a texture replace cannot resolve. The host has no model table. Not device-verified. |
+| `getObjectMass` | **Implemented** | `CLuaObjectDefs.cpp:27` | `GetObjectMass` | Follows CLuaObjectDefs.cpp and the object writes in CStaticFunctionDefinitions.cpp. createObject needs a resource and a stock object model; peds, vehicles, clothes, and the cutscene range are rejected. The element stores scale, mass, properties, frozen, respawn, movement, and materials. CObject is not created, so breakObject and setObjectGangTagAlpha return false and a texture replace cannot resolve. The host has no model table. Not device-verified. |
+| `getObjectProperty` | **Implemented** | `CLuaObjectDefs.cpp:28` | `GetObjectProperty` | Follows CLuaObjectDefs.cpp and the object writes in CStaticFunctionDefinitions.cpp. createObject needs a resource and a stock object model; peds, vehicles, clothes, and the cutscene range are rejected. The element stores scale, mass, properties, frozen, respawn, movement, and materials. CObject is not created, so breakObject and setObjectGangTagAlpha return false and a texture replace cannot resolve. The host has no model table. Not device-verified. |
+| `getObjectScale` | **Implemented** | `CLuaObjectDefs.cpp:25` | `GetObjectScale` | Follows CLuaObjectDefs.cpp and the object writes in CStaticFunctionDefinitions.cpp. createObject needs a resource and a stock object model; peds, vehicles, clothes, and the cutscene range are rejected. The element stores scale, mass, properties, frozen, respawn, movement, and materials. CObject is not created, so breakObject and setObjectGangTagAlpha return false and a texture replace cannot resolve. The host has no model table. Not device-verified. |
+| `getOcclusionsEnabled` | **Implemented** | `CLuaWorldDefs.cpp:96` | `GetOcclusionsEnabled` | Operational on Android. (l_getOcclusionsEnabled) |
+| `getPedsLODDistance` | **Implemented** | `CLuaWorldDefs.cpp:90` | `GetPedsLODDistance` | Operational on Android. (l_getPedsLODDistance) |
+| `getRainLevel` | **Implemented** | `CLuaWorldDefs.cpp:98` | `GetRainLevel` | Operational on Android. (l_getRainLevel) |
+| `getRoofPosition` | **Implemented** | `CLuaWorldDefs.cpp:64` | `GetRoofPosition` | Argument checks follow CLuaWorldDefs. Collision, roof, and screen projection are not hooked, so a valid query uses the desktop failure result. Ped-path state is empty, so the revision calls report no-patches or no-patch. Host-tested. (LuaSightApi) |
+| `getScreenFromWorldPosition` | **Implemented** | `CLuaWorldDefs.cpp:69` | `GetScreenFromWorldPosition` | Argument checks follow CLuaWorldDefs. Collision, roof, and screen projection are not hooked, so a valid query uses the desktop failure result. Ped-path state is empty, so the revision calls report no-patches or no-patch. Host-tested. (LuaSightApi) |
+| `getSkyGradient` | **Implemented** | `CLuaWorldDefs.cpp:81` | `GetSkyGradient` | Operational on Android. (l_getSkyGradient) |
+| `getSunColor` | **Implemented** | `CLuaWorldDefs.cpp:92` | `GetSunColor` | Operational on Android. (l_getSunColor) |
+| `getSunSize` | **Implemented** | `CLuaWorldDefs.cpp:93` | `GetSunSize` | Operational on Android. (l_getSunSize) |
 | `getTime` | **Implemented** | `CLuaWorldDefs.cpp:62` | `GetTime` | Operational on Android. (l_getTime) |
-| `getTrafficLightState` | Missing | `CLuaWorldDefs.cpp:80` | `GetTrafficLightState` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `getVehiclesLODDistance` | Missing | `CLuaWorldDefs.cpp:89` | `GetVehiclesLODDistance` | Needs reading/writing CVehicle struct fields in libGTASA.so. |
-| `getWaterColor` | Missing | `CLuaWaterDefs.cpp:28` | `GetWaterColor` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `getWaterLevel` | *Stub* | `CLuaWaterDefs.cpp:29` | `GetWaterLevel` | Currently stubbed: `DefaultValue(kNil)`. Needs native engine wiring. |
-| `getWaterVertexPosition` | Missing | `CLuaWaterDefs.cpp:30` | `GetWaterVertexPosition` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `getWaveHeight` | Missing | `CLuaWorldDefs.cpp:75` | `GetWaveHeight` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `getWeather` | Missing | `CLuaWorldDefs.cpp:70` | `GetWeather` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `getWindVelocity` | Missing | `CLuaWorldDefs.cpp:84` | `GetWindVelocity` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `getWorldFromScreenPosition` | Missing | `CLuaWorldDefs.cpp:68` | `GetWorldFromScreenPosition` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `getWorldProperty` | Missing | `CLuaWorldDefs.cpp:115` | `ArgumentParser<GetWorldProperty>` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `getZoneName` | Missing | `CLuaWorldDefs.cpp:71` | `GetZoneName` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `isAmbientPedSphereVisible` | *Stub* | `CLuaWorldDefs.cpp:107` | `ArgumentParser<IsAmbientPedSphereVisible>` | Currently stubbed: `l_false: lua_pushboolean(L, 0)`. Needs native engine wiring. |
-| `isDynamicPedShadowsEnabled` | Missing | `CLuaWorldDefs.cpp:207` | `ArgumentParser<IsDynamicPedShadowsEnabled>` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `isFireDamageEnabled` | Missing | `CLuaFireDefs.cpp:157` | `IsFireDamageEnabled` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `isFireSpreadEnabled` | Missing | `CLuaFireDefs.cpp:161` | `IsFireSpreadEnabled` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `isGarageOpen` | Missing | `CLuaWorldDefs.cpp:204` | `IsGarageOpen` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `isLineOfSightClear` | *Stub* | `CLuaWorldDefs.cpp:202` | `IsLineOfSightClear` | Currently stubbed: `DefaultValue(kFalse)`. Needs native engine wiring. |
-| `isObjectBreakable` | Missing | `CLuaObjectDefs.cpp:26` | `IsObjectBreakable` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `isObjectMoving` | Missing | `CLuaObjectDefs.cpp:29` | `ArgumentParser<IsObjectMoving>` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `isObjectRespawnable` | Missing | `CLuaObjectDefs.cpp:30` | `ArgumentParser<IsObjectRespawnable>` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `isObjectStatic` | Missing | `CLuaObjectDefs.cpp:24` | `IsObjectStatic` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `isPedTargetingMarkerEnabled` | Missing | `CLuaWorldDefs.cpp:201` | `IsPedTargetingMarkerEnabled` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `isTimeFrozen` | Missing | `CLuaWorldDefs.cpp:205` | `ArgumentParser<IsTimeFrozen>` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `isVolumetricShadowsEnabled` | Missing | `CLuaWorldDefs.cpp:206` | `ArgumentParser<IsVolumetricShadowsEnabled>` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `isWaterDrawnLast` | Missing | `CLuaWaterDefs.cpp:31` | `IsWaterDrawnLast` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `isWorldSpecialPropertyEnabled` | Missing | `CLuaWorldDefs.cpp:203` | `ArgumentParserWarn<false, IsWorldSpecialPropertyEnabled>` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `moveObject` | Missing | `CLuaObjectDefs.cpp:33` | `MoveObject` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `processLineAgainstMesh` | Missing | `CLuaWorldDefs.cpp:66` | `ArgumentParser<ProcessLineAgainstMesh>` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `processLineOfSight` | *Stub* | `CLuaWorldDefs.cpp:67` | `ProcessLineOfSight` | Currently stubbed: `l_false: lua_pushboolean(L, 0)`. Needs native engine wiring. |
-| `releaseGarageControl` | Missing | `CLuaWorldDefs.cpp:132` | `ArgumentParser<ReleaseGarageControl>` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `releaseObjectGangTag` | Missing | `CLuaObjectDefs.cpp:49` | `ArgumentParser<ReleaseObjectGangTag>` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `removeAllGameBuildings` | Missing | `CLuaBuildingDefs.cpp:18` | `ArgumentParser<RemoveAllGameBuildings>` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `removeGameWorld` | Missing | `CLuaWorldDefs.cpp:166` | `ArgumentParser<RemoveGameWorld>` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `removeObjectMaterial` | Missing | `CLuaObjectDefs.cpp:44` | `RemoveObjectMaterial` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `removeWorldModel` | *Stub* | `CLuaWorldDefs.cpp:163` | `RemoveWorldBuilding` | Currently stubbed: `DefaultValue(kTrue)`. Needs native engine wiring. |
-| `resetAmbientPedPopulationModels` | *Stub* | `CLuaWorldDefs.cpp:103` | `ArgumentParser<ResetAmbientPedPopulationModels>` | Currently stubbed: `l_true: lua_pushboolean(L, 1)`. Needs native engine wiring. |
-| `resetAmbientPedPopulationZonesToBootstrap` | *Stub* | `CLuaWorldDefs.cpp:104` | `ResetAmbientPedPopulationZonesToBootstrap` | Currently stubbed: `l_true: lua_pushboolean(L, 1)`. Needs native engine wiring. |
-| `resetBlurLevel` | Missing | `CLuaWorldDefs.cpp:192` | `ResetBlurLevel` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `resetColorFilter` | Missing | `CLuaWorldDefs.cpp:178` | `ArgumentParser<ResetColorFilter>` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `resetCoronaReflectionsEnabled` | Missing | `CLuaWorldDefs.cpp:179` | `ArgumentParser<ResetCoronaReflectionsEnabled>` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `resetDynamicPedShadows` | Missing | `CLuaWorldDefs.cpp:197` | `ArgumentParser<ResetDynamicPedShadows>` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `resetFarClipDistance` | Missing | `CLuaWorldDefs.cpp:184` | `ResetFarClipDistance` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `resetFogDistance` | Missing | `CLuaWorldDefs.cpp:188` | `ResetFogDistance` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `resetHeatHaze` | Missing | `CLuaWorldDefs.cpp:181` | `ResetHeatHaze` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `resetMoonSize` | Missing | `CLuaWorldDefs.cpp:191` | `ResetMoonSize` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `resetNearClipDistance` | Missing | `CLuaWorldDefs.cpp:185` | `ResetNearClipDistance` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `resetOcclusionRegion` | Missing | `CLuaWorldDefs.cpp:154` | `ResetOcclusionRegion` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `resetPedsLODDistance` | Missing | `CLuaWorldDefs.cpp:187` | `ResetPedsLODDistance` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `resetRainLevel` | Missing | `CLuaWorldDefs.cpp:183` | `ResetRainLevel` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `resetSkyGradient` | Missing | `CLuaWorldDefs.cpp:180` | `ResetSkyGradient` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `resetSunColor` | Missing | `CLuaWorldDefs.cpp:189` | `ResetSunColor` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `resetSunSize` | Missing | `CLuaWorldDefs.cpp:190` | `ResetSunSize` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `resetTimeFrozen` | Missing | `CLuaWorldDefs.cpp:194` | `ArgumentParser<ResetTimeFrozen>` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `resetVehiclesLODDistance` | Missing | `CLuaWorldDefs.cpp:186` | `ResetVehiclesLODDistance` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `resetVolumetricShadows` | Missing | `CLuaWorldDefs.cpp:195` | `ArgumentParser<ResetVolumetricShadows>` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `resetWaterColor` | Missing | `CLuaWaterDefs.cpp:20` | `ResetWaterColor` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `resetWaterLevel` | Missing | `CLuaWaterDefs.cpp:21` | `ResetWaterLevel` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `resetWindVelocity` | Missing | `CLuaWorldDefs.cpp:182` | `ResetWindVelocity` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `resetWorldProperties` | Missing | `CLuaWorldDefs.cpp:196` | `ArgumentParser<ResetWorldProperties>` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `resetWorldProperty` | Missing | `CLuaWorldDefs.cpp:193` | `ArgumentParserWarn<false, ResetWorldProperty>` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `respawnObject` | Missing | `CLuaObjectDefs.cpp:39` | `RespawnObject` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `restoreAllGameBuildings` | Missing | `CLuaBuildingDefs.cpp:19` | `ArgumentParser<RestoreGameBuildings>` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `restoreAllWorldModels` | Missing | `CLuaWorldDefs.cpp:164` | `RestoreWorldBuildings` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `restoreGameWorld` | Missing | `CLuaWorldDefs.cpp:167` | `ArgumentParser<RestoreGameWorld>` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `restoreWorldModel` | *Stub* | `CLuaWorldDefs.cpp:165` | `RestoreWorldBuilding` | Currently stubbed: `DefaultValue(kTrue)`. Needs native engine wiring. |
-| `setAircraftMaxHeight` | Missing | `CLuaWorldDefs.cpp:150` | `SetAircraftMaxHeight` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `setAircraftMaxVelocity` | Missing | `CLuaWorldDefs.cpp:151` | `SetAircraftMaxVelocity` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `setAmbientPedPopulationZoneState` | *Stub* | `CLuaWorldDefs.cpp:105` | `SetAmbientPedPopulationZoneState` | Currently stubbed: `l_true: lua_pushboolean(L, 1)`. Needs native engine wiring. |
-| `setBirdsEnabled` | Missing | `CLuaWorldDefs.cpp:155` | `SetBirdsEnabled` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `setBlurLevel` | Missing | `CLuaWorldDefs.cpp:134` | `SetBlurLevel` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `setCloudsEnabled` | Missing | `CLuaWorldDefs.cpp:136` | `SetCloudsEnabled` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `setColorFilter` | Missing | `CLuaWorldDefs.cpp:119` | `ArgumentParser<SetColorFilter>` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `setCoronaReflectionsEnabled` | Missing | `CLuaWorldDefs.cpp:159` | `ArgumentParser<SetCoronaReflectionsEnabled>` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `setDynamicPedShadowsEnabled` | Missing | `CLuaWorldDefs.cpp:171` | `ArgumentParser<SetDynamicPedShadowsEnabled>` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `setEffectDensity` | Missing | `CLuaEffectDefs.cpp:35` | `SetEffectDensity` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `setEffectSpeed` | Missing | `CLuaEffectDefs.cpp:33` | `SetEffectSpeed` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `setFPSLimit` | Missing | `CLuaWorldDefs.cpp:158` | `SetFPSLimit` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `setFarClipDistance` | Missing | `CLuaWorldDefs.cpp:143` | `SetFarClipDistance` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `setFireDamageEnabled` | Missing | `CLuaFireDefs.cpp:158` | `SetFireDamageEnabled` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `setFireDamageTargets` | Missing | `CLuaFireDefs.cpp:160` | `SetFireDamageTargets` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `setFireDuration` | Missing | `CLuaFireDefs.cpp:152` | `SetFireDuration` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `setFireMaxGenerations` | Missing | `CLuaFireDefs.cpp:164` | `SetFireMaxGenerations` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `setFireRemainingTime` | Missing | `CLuaFireDefs.cpp:154` | `SetFireRemainingTime` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `setFireSource` | Missing | `CLuaFireDefs.cpp:166` | `SetFireSource` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `setFireSpreadEnabled` | Missing | `CLuaFireDefs.cpp:162` | `SetFireSpreadEnabled` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `setFireStrength` | Missing | `CLuaFireDefs.cpp:156` | `SetFireStrength` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `setFireTarget` | Missing | `CLuaFireDefs.cpp:168` | `SetFireTarget` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `setFogDistance` | Missing | `CLuaWorldDefs.cpp:147` | `SetFogDistance` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `setFoliageDensity` | Missing | `CLuaFoliageDefs.cpp:45` | `SetFoliageDensity` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `setFoliageSurface` | Missing | `CLuaFoliageDefs.cpp:43` | `SetFoliageSurface` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `setFoliageVertices` | Missing | `CLuaFoliageDefs.cpp:44` | `SetFoliageVertices` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `setGameSpeed` | Missing | `CLuaWorldDefs.cpp:127` | `SetGameSpeed` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `setGarageOpen` | Missing | `CLuaWorldDefs.cpp:130` | `SetGarageOpen` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `setGrainLevel` | Missing | `CLuaWorldDefs.cpp:121` | `ArgumentParser<SetGrainLevel>` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `setGrainMultiplier` | Missing | `CLuaWorldDefs.cpp:120` | `ArgumentParser<SetGrainMultiplier>` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `setGravity` | Missing | `CLuaWorldDefs.cpp:126` | `SetGravity` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `setHeatHaze` | Missing | `CLuaWorldDefs.cpp:123` | `SetHeatHaze` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `setInteriorFurnitureEnabled` | Missing | `CLuaWorldDefs.cpp:141` | `SetInteriorFurnitureEnabled` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `setInteriorSoundsEnabled` | Missing | `CLuaWorldDefs.cpp:140` | `SetInteriorSoundsEnabled` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `setJetpackMaxHeight` | Missing | `CLuaWorldDefs.cpp:135` | `SetJetpackMaxHeight` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `setMinuteDuration` | Missing | `CLuaWorldDefs.cpp:129` | `SetMinuteDuration` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `setMoonSize` | Missing | `CLuaWorldDefs.cpp:157` | `SetMoonSize` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `setNearClipDistance` | Missing | `CLuaWorldDefs.cpp:144` | `SetNearClipDistance` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `setObjectBreakable` | Missing | `CLuaObjectDefs.cpp:37` | `SetObjectBreakable` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `setObjectGangTagAlpha` | Missing | `CLuaObjectDefs.cpp:45` | `ArgumentParser<SetObjectGangTagAlpha>` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `setObjectGangTagProgress` | Missing | `CLuaObjectDefs.cpp:47` | `ArgumentParser<SetObjectGangTagProgress>` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `setObjectMass` | Missing | `CLuaObjectDefs.cpp:41` | `SetObjectMass` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `setObjectMaterial` | *Stub* | `CLuaObjectDefs.cpp:43` | `SetObjectMaterial` | Currently stubbed: `DefaultValue(kTrue)`. Needs native engine wiring. |
-| `setObjectProperty` | Missing | `CLuaObjectDefs.cpp:42` | `SetObjectProperty` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `setObjectScale` | Missing | `CLuaObjectDefs.cpp:35` | `SetObjectScale` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `setObjectStatic` | Missing | `CLuaObjectDefs.cpp:36` | `SetObjectStatic` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `setOcclusionRegion` | Missing | `CLuaWorldDefs.cpp:153` | `SetOcclusionRegion` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `setOcclusionsEnabled` | Missing | `CLuaWorldDefs.cpp:152` | `SetOcclusionsEnabled` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `setPedTargetingMarkerEnabled` | Missing | `CLuaWorldDefs.cpp:156` | `SetPedTargetingMarkerEnabled` | Needs reading/writing CPed / CPlayerPed struct fields in libGTASA.so. |
-| `setPedsLODDistance` | Missing | `CLuaWorldDefs.cpp:146` | `SetPedsLODDistance` | Needs reading/writing CPed / CPlayerPed struct fields in libGTASA.so. |
-| `setRainLevel` | Missing | `CLuaWorldDefs.cpp:142` | `SetRainLevel` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `setSkyGradient` | Missing | `CLuaWorldDefs.cpp:122` | `SetSkyGradient` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `setSunColor` | Missing | `CLuaWorldDefs.cpp:148` | `SetSunColor` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `setSunSize` | Missing | `CLuaWorldDefs.cpp:149` | `SetSunSize` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `setTime` | Missing | `CLuaWorldDefs.cpp:118` | `SetTime` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `setTimeFrozen` | Missing | `CLuaWorldDefs.cpp:169` | `ArgumentParser<SetTimeFrozen>` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `setTrafficLightState` | Missing | `CLuaWorldDefs.cpp:137` | `SetTrafficLightState` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `setTrafficLightsLocked` | Missing | `CLuaWorldDefs.cpp:138` | `SetTrafficLightsLocked` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `setVehiclesLODDistance` | Missing | `CLuaWorldDefs.cpp:145` | `SetVehiclesLODDistance` | Needs reading/writing CVehicle struct fields in libGTASA.so. |
-| `setVolumetricShadowsEnabled` | Missing | `CLuaWorldDefs.cpp:170` | `ArgumentParser<SetVolumetricShadowsEnabled>` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `setWaterColor` | Missing | `CLuaWaterDefs.cpp:23` | `SetWaterColor` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `setWaterDrawnLast` | Missing | `CLuaWaterDefs.cpp:26` | `SetWaterDrawnLast` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `setWaterLevel` | Missing | `CLuaWaterDefs.cpp:24` | `SetWaterLevel` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `setWaterVertexPosition` | Missing | `CLuaWaterDefs.cpp:25` | `SetWaterVertexPosition` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `setWaveHeight` | Missing | `CLuaWorldDefs.cpp:128` | `SetWaveHeight` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `setWeather` | Missing | `CLuaWorldDefs.cpp:124` | `SetWeather` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `setWeatherBlended` | Missing | `CLuaWorldDefs.cpp:125` | `SetWeatherBlended` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `setWindVelocity` | Missing | `CLuaWorldDefs.cpp:139` | `SetWindVelocity` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `setWorldProperty` | Missing | `CLuaWorldDefs.cpp:160` | `ArgumentParser<SetWorldProperty>` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `setWorldSpecialPropertyEnabled` | Missing | `CLuaWorldDefs.cpp:133` | `ArgumentParser<SetWorldSpecialPropertyEnabled>` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `stopObject` | Missing | `CLuaObjectDefs.cpp:34` | `StopObject` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `testLineAgainstWater` | Missing | `CLuaWaterDefs.cpp:19` | `TestLineAgainstWater` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `testSphereAgainstWorld` | Missing | `CLuaWorldDefs.cpp:208` | `ArgumentParser<TestSphereAgainstWorld>` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `toggleObjectRespawn` | Missing | `CLuaObjectDefs.cpp:40` | `ToggleObjectRespawn` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `updateAmbientPedPopulationModels` | *Stub* | `CLuaWorldDefs.cpp:102` | `ArgumentParser<UpdateAmbientPedPopulationModels>` | Currently stubbed: `l_true: lua_pushboolean(L, 1)`. Needs native engine wiring. |
+| `getTrafficLightState` | **Implemented** | `CLuaWorldDefs.cpp:80` | `GetTrafficLightState` | Operational on Android. (l_getTrafficLightState) |
+| `getVehiclesLODDistance` | **Implemented** | `CLuaWorldDefs.cpp:89` | `GetVehiclesLODDistance` | Operational on Android. (l_getVehiclesLODDistance) |
+| `getWaterColor` | **Implemented** | `CLuaWaterDefs.cpp:28` | `GetWaterColor` | Operational on Android. (l_getWaterColor) |
+| `getWaterLevel` | **Implemented** | `CLuaWaterDefs.cpp:29` | `GetWaterLevel` | Water element returns the average vertex Z. A point returns the scripted surface. The GTA sea and the distance threshold are not applied. Host-tested. (GetWaterLevel) |
+| `getWaterVertexPosition` | **Implemented** | `CLuaWaterDefs.cpp:30` | `GetWaterVertexPosition` | 1-based vertex on a stored water element. Host-tested. (GetWaterVertexPosition) |
+| `getWaveHeight` | **Implemented** | `CLuaWorldDefs.cpp:75` | `GetWaveHeight` | Operational on Android. (l_getWaveHeight) |
+| `getWeather` | **Implemented** | `CLuaWorldDefs.cpp:70` | `GetWeather` | Operational on Android. (l_getWeather) |
+| `getWindVelocity` | **Implemented** | `CLuaWorldDefs.cpp:84` | `GetWindVelocity` | Operational on Android. (l_getWindVelocity) |
+| `getWorldFromScreenPosition` | **Implemented** | `CLuaWorldDefs.cpp:68` | `GetWorldFromScreenPosition` | Argument checks follow CLuaWorldDefs. Collision, roof, and screen projection are not hooked, so a valid query uses the desktop failure result. Ped-path state is empty, so the revision calls report no-patches or no-patch. Host-tested. (LuaSightApi) |
+| `getWorldProperty` | **Implemented** | `CLuaWorldDefs.cpp:115` | `ArgumentParser<GetWorldProperty>` | Operational on Android. (l_getWorldProperty) |
+| `getZoneName` | **Implemented** | `CLuaWorldDefs.cpp:71` | `GetZoneName` | Zones follow CZoneNames.cpp. Buildings, explosions, ropes, and world-model calls follow CLuaWorldDefs and CLuaBuildingDefs. Garage geometry and CBuildingRemoval are not loaded, so garage reads return false and removal counts stay 0. Host-tested. (LuaWorldQueryApi) |
+| `isAmbientPedSphereVisible` | **Implemented** | `CLuaWorldDefs.cpp:107` | `ArgumentParser<IsAmbientPedSphereVisible>` | A bad vector or radius raises. Radius outside 0..100 returns false. A valid query returns false because CCamera::IsSphereVisible is not hooked (CGameSA.cpp 2274-2279). The phone traffic scripts still report native-visibility-unavailable while isWorldRPGMobilePopulation() is true. Host-tested. Not yet run on a device. (IsAmbientPedSphereVisible) |
+| `isDynamicPedShadowsEnabled` | **Implemented** | `CLuaWorldDefs.cpp:207` | `ArgumentParser<IsDynamicPedShadowsEnabled>` | Operational on Android. (l_isDynamicPedShadowsEnabled) |
+| `isFireDamageEnabled` | **Implemented** | `CLuaFireDefs.cpp:157` | `IsFireDamageEnabled` | Managed fire element from the options table, or the numeric StartFire boolean. FxSystem is not created and remaining time does not tick. Host-tested. (LuaFireApi) |
+| `isFireSpreadEnabled` | **Implemented** | `CLuaFireDefs.cpp:161` | `IsFireSpreadEnabled` | Managed fire element from the options table, or the numeric StartFire boolean. FxSystem is not created and remaining time does not tick. Host-tested. (LuaFireApi) |
+| `isGarageOpen` | **Implemented** | `CLuaWorldDefs.cpp:204` | `IsGarageOpen` | Operational on Android. (l_isGarageOpen) |
+| `isLineOfSightClear` | **Implemented** | `CLuaWorldDefs.cpp:202` | `IsLineOfSightClear` | Argument checks follow CLuaWorldDefs. Collision, roof, and screen projection are not hooked, so a valid query uses the desktop failure result. Ped-path state is empty, so the revision calls report no-patches or no-patch. Host-tested. (LuaSightApi) |
+| `isObjectBreakable` | **Implemented** | `CLuaObjectDefs.cpp:26` | `IsObjectBreakable` | Follows CLuaObjectDefs.cpp and the object writes in CStaticFunctionDefinitions.cpp. createObject needs a resource and a stock object model; peds, vehicles, clothes, and the cutscene range are rejected. The element stores scale, mass, properties, frozen, respawn, movement, and materials. CObject is not created, so breakObject and setObjectGangTagAlpha return false and a texture replace cannot resolve. The host has no model table. Not device-verified. |
+| `isObjectMoving` | **Implemented** | `CLuaObjectDefs.cpp:29` | `ArgumentParser<IsObjectMoving>` | Follows CLuaObjectDefs.cpp and the object writes in CStaticFunctionDefinitions.cpp. createObject needs a resource and a stock object model; peds, vehicles, clothes, and the cutscene range are rejected. The element stores scale, mass, properties, frozen, respawn, movement, and materials. CObject is not created, so breakObject and setObjectGangTagAlpha return false and a texture replace cannot resolve. The host has no model table. Not device-verified. |
+| `isObjectRespawnable` | **Implemented** | `CLuaObjectDefs.cpp:30` | `ArgumentParser<IsObjectRespawnable>` | Follows CLuaObjectDefs.cpp and the object writes in CStaticFunctionDefinitions.cpp. createObject needs a resource and a stock object model; peds, vehicles, clothes, and the cutscene range are rejected. The element stores scale, mass, properties, frozen, respawn, movement, and materials. CObject is not created, so breakObject and setObjectGangTagAlpha return false and a texture replace cannot resolve. The host has no model table. Not device-verified. |
+| `isObjectStatic` | **Implemented** | `CLuaObjectDefs.cpp:24` | `IsObjectStatic` | Follows CLuaObjectDefs.cpp and the object writes in CStaticFunctionDefinitions.cpp. createObject needs a resource and a stock object model; peds, vehicles, clothes, and the cutscene range are rejected. The element stores scale, mass, properties, frozen, respawn, movement, and materials. CObject is not created, so breakObject and setObjectGangTagAlpha return false and a texture replace cannot resolve. The host has no model table. Not device-verified. |
+| `isPedTargetingMarkerEnabled` | **Implemented** | `CLuaWorldDefs.cpp:201` | `IsPedTargetingMarkerEnabled` | Operational on Android. (l_isPedTargetingMarkerEnabled) |
+| `isTimeFrozen` | **Implemented** | `CLuaWorldDefs.cpp:205` | `ArgumentParser<IsTimeFrozen>` | Operational on Android. (l_isTimeFrozen) |
+| `isVolumetricShadowsEnabled` | **Implemented** | `CLuaWorldDefs.cpp:206` | `ArgumentParser<IsVolumetricShadowsEnabled>` | Operational on Android. (l_isVolumetricShadowsEnabled) |
+| `isWaterDrawnLast` | **Implemented** | `CLuaWaterDefs.cpp:31` | `IsWaterDrawnLast` | Operational on Android. (l_isWaterDrawnLast) |
+| `isWorldSpecialPropertyEnabled` | **Implemented** | `CLuaWorldDefs.cpp:203` | `ArgumentParserWarn<false, IsWorldSpecialPropertyEnabled>` | Operational on Android. (l_isWorldSpecialPropertyEnabled) |
+| `moveObject` | **Implemented** | `CLuaObjectDefs.cpp:33` | `MoveObject` | Follows CLuaObjectDefs.cpp and the object writes in CStaticFunctionDefinitions.cpp. createObject needs a resource and a stock object model; peds, vehicles, clothes, and the cutscene range are rejected. The element stores scale, mass, properties, frozen, respawn, movement, and materials. CObject is not created, so breakObject and setObjectGangTagAlpha return false and a texture replace cannot resolve. The host has no model table. Not device-verified. |
+| `processLineAgainstMesh` | **Implemented** | `CLuaWorldDefs.cpp:66` | `ArgumentParser<ProcessLineAgainstMesh>` | Argument checks follow CLuaWorldDefs. Collision, roof, and screen projection are not hooked, so a valid query uses the desktop failure result. Ped-path state is empty, so the revision calls report no-patches or no-patch. Host-tested. (LuaSightApi) |
+| `processLineOfSight` | **Implemented** | `CLuaWorldDefs.cpp:67` | `ProcessLineOfSight` | Argument checks follow CLuaWorldDefs. Collision, roof, and screen projection are not hooked, so a valid query uses the desktop failure result. Ped-path state is empty, so the revision calls report no-patches or no-patch. Host-tested. (LuaSightApi) |
+| `releaseGarageControl` | **Implemented** | `CLuaWorldDefs.cpp:132` | `ArgumentParser<ReleaseGarageControl>` | Zones follow CZoneNames.cpp. Buildings, explosions, ropes, and world-model calls follow CLuaWorldDefs and CLuaBuildingDefs. Garage geometry and CBuildingRemoval are not loaded, so garage reads return false and removal counts stay 0. Host-tested. (LuaWorldQueryApi) |
+| `releaseObjectGangTag` | **Implemented** | `CLuaObjectDefs.cpp:49` | `ArgumentParser<ReleaseObjectGangTag>` | Follows CLuaObjectDefs.cpp and the object writes in CStaticFunctionDefinitions.cpp. createObject needs a resource and a stock object model; peds, vehicles, clothes, and the cutscene range are rejected. The element stores scale, mass, properties, frozen, respawn, movement, and materials. CObject is not created, so breakObject and setObjectGangTagAlpha return false and a texture replace cannot resolve. The host has no model table. Not device-verified. |
+| `removeAllGameBuildings` | **Implemented** | `CLuaBuildingDefs.cpp:18` | `ArgumentParser<RemoveAllGameBuildings>` | Zones follow CZoneNames.cpp. Buildings, explosions, ropes, and world-model calls follow CLuaWorldDefs and CLuaBuildingDefs. Garage geometry and CBuildingRemoval are not loaded, so garage reads return false and removal counts stay 0. Host-tested. (LuaWorldQueryApi) |
+| `removeGameWorld` | **Implemented** | `CLuaWorldDefs.cpp:166` | `ArgumentParser<RemoveGameWorld>` | Zones follow CZoneNames.cpp. Buildings, explosions, ropes, and world-model calls follow CLuaWorldDefs and CLuaBuildingDefs. Garage geometry and CBuildingRemoval are not loaded, so garage reads return false and removal counts stay 0. Host-tested. (LuaWorldQueryApi) |
+| `removeObjectMaterial` | **Implemented** | `CLuaObjectDefs.cpp:44` | `RemoveObjectMaterial` | Follows CLuaObjectDefs.cpp and the object writes in CStaticFunctionDefinitions.cpp. createObject needs a resource and a stock object model; peds, vehicles, clothes, and the cutscene range are rejected. The element stores scale, mass, properties, frozen, respawn, movement, and materials. CObject is not created, so breakObject and setObjectGangTagAlpha return false and a texture replace cannot resolve. The host has no model table. Not device-verified. |
+| `removeWorldModel` | **Implemented** | `CLuaWorldDefs.cpp:163` | `RemoveWorldBuilding` | Zones follow CZoneNames.cpp. Buildings, explosions, ropes, and world-model calls follow CLuaWorldDefs and CLuaBuildingDefs. Garage geometry and CBuildingRemoval are not loaded, so garage reads return false and removal counts stay 0. Host-tested. (LuaWorldQueryApi) |
+| `resetAmbientPedPopulationModels` | **Implemented** | `CLuaWorldDefs.cpp:103` | `ArgumentParser<ResetAmbientPedPopulationModels>` | Returns true, matching CLuaWorldDefs.cpp 752-755. The inactive path in CGameSA.cpp 1661-1667 restores zones; streaming slots are not touched. Extra arguments are ignored. Host-tested. Not yet run on a device. (ResetAmbientPedPopulationModels) |
+| `resetAmbientPedPopulationZonesToBootstrap` | **Implemented** | `CLuaWorldDefs.cpp:104` | `ResetAmbientPedPopulationZonesToBootstrap` | Returns false because FindZoneByLabel is not hooked (CGameSA.cpp 1831-1841). The phone puppet stays on while isWorldRPGMobilePopulation() is true, so this false result is not used as bootstrap-reset-failed. Host-tested. Not yet run on a device. (ResetAmbientPedPopulationZonesToBootstrap) |
+| `resetBlurLevel` | **Implemented** | `CLuaWorldDefs.cpp:192` | `ResetBlurLevel` | Operational on Android. (l_resetBlurLevel) |
+| `resetColorFilter` | **Implemented** | `CLuaWorldDefs.cpp:178` | `ArgumentParser<ResetColorFilter>` | Operational on Android. (l_resetColorFilter) |
+| `resetCoronaReflectionsEnabled` | **Implemented** | `CLuaWorldDefs.cpp:179` | `ArgumentParser<ResetCoronaReflectionsEnabled>` | Operational on Android. (l_resetCoronaReflectionsEnabled) |
+| `resetDynamicPedShadows` | **Implemented** | `CLuaWorldDefs.cpp:197` | `ArgumentParser<ResetDynamicPedShadows>` | Operational on Android. (l_resetDynamicPedShadows) |
+| `resetFarClipDistance` | **Implemented** | `CLuaWorldDefs.cpp:184` | `ResetFarClipDistance` | Operational on Android. (l_resetFarClipDistance) |
+| `resetFogDistance` | **Implemented** | `CLuaWorldDefs.cpp:188` | `ResetFogDistance` | Operational on Android. (l_resetFogDistance) |
+| `resetHeatHaze` | **Implemented** | `CLuaWorldDefs.cpp:181` | `ResetHeatHaze` | Operational on Android. (l_resetHeatHaze) |
+| `resetMoonSize` | **Implemented** | `CLuaWorldDefs.cpp:191` | `ResetMoonSize` | Operational on Android. (l_resetMoonSize) |
+| `resetNearClipDistance` | **Implemented** | `CLuaWorldDefs.cpp:185` | `ResetNearClipDistance` | Operational on Android. (l_resetNearClipDistance) |
+| `resetOcclusionRegion` | **Implemented** | `CLuaWorldDefs.cpp:154` | `ResetOcclusionRegion` | Operational on Android. (l_resetOcclusionRegion) |
+| `resetPedsLODDistance` | **Implemented** | `CLuaWorldDefs.cpp:187` | `ResetPedsLODDistance` | Operational on Android. (l_resetPedsLODDistance) |
+| `resetRainLevel` | **Implemented** | `CLuaWorldDefs.cpp:183` | `ResetRainLevel` | Operational on Android. (l_resetRainLevel) |
+| `resetSkyGradient` | **Implemented** | `CLuaWorldDefs.cpp:180` | `ResetSkyGradient` | Operational on Android. (l_resetSkyGradient) |
+| `resetSunColor` | **Implemented** | `CLuaWorldDefs.cpp:189` | `ResetSunColor` | Operational on Android. (l_resetSunColor) |
+| `resetSunSize` | **Implemented** | `CLuaWorldDefs.cpp:190` | `ResetSunSize` | Operational on Android. (l_resetSunSize) |
+| `resetTimeFrozen` | **Implemented** | `CLuaWorldDefs.cpp:194` | `ArgumentParser<ResetTimeFrozen>` | Operational on Android. (l_resetTimeFrozen) |
+| `resetVehiclesLODDistance` | **Implemented** | `CLuaWorldDefs.cpp:186` | `ResetVehiclesLODDistance` | Operational on Android. (l_resetVehiclesLODDistance) |
+| `resetVolumetricShadows` | **Implemented** | `CLuaWorldDefs.cpp:195` | `ArgumentParser<ResetVolumetricShadows>` | Operational on Android. (l_resetVolumetricShadows) |
+| `resetWaterColor` | **Implemented** | `CLuaWaterDefs.cpp:20` | `ResetWaterColor` | Operational on Android. (l_resetWaterColor) |
+| `resetWaterLevel` | **Implemented** | `CLuaWaterDefs.cpp:21` | `ResetWaterLevel` | Operational on Android. (l_resetWaterLevel) |
+| `resetWindVelocity` | **Implemented** | `CLuaWorldDefs.cpp:182` | `ResetWindVelocity` | Operational on Android. (l_resetWindVelocity) |
+| `resetWorldProperties` | **Implemented** | `CLuaWorldDefs.cpp:196` | `ArgumentParser<ResetWorldProperties>` | Operational on Android. (l_resetWorldProperties) |
+| `resetWorldProperty` | **Implemented** | `CLuaWorldDefs.cpp:193` | `ArgumentParserWarn<false, ResetWorldProperty>` | Operational on Android. (l_resetWorldProperty) |
+| `respawnObject` | **Implemented** | `CLuaObjectDefs.cpp:39` | `RespawnObject` | Follows CLuaObjectDefs.cpp and the object writes in CStaticFunctionDefinitions.cpp. createObject needs a resource and a stock object model; peds, vehicles, clothes, and the cutscene range are rejected. The element stores scale, mass, properties, frozen, respawn, movement, and materials. CObject is not created, so breakObject and setObjectGangTagAlpha return false and a texture replace cannot resolve. The host has no model table. Not device-verified. |
+| `restoreAllGameBuildings` | **Implemented** | `CLuaBuildingDefs.cpp:19` | `ArgumentParser<RestoreGameBuildings>` | Zones follow CZoneNames.cpp. Buildings, explosions, ropes, and world-model calls follow CLuaWorldDefs and CLuaBuildingDefs. Garage geometry and CBuildingRemoval are not loaded, so garage reads return false and removal counts stay 0. Host-tested. (LuaWorldQueryApi) |
+| `restoreAllWorldModels` | **Implemented** | `CLuaWorldDefs.cpp:164` | `RestoreWorldBuildings` | Zones follow CZoneNames.cpp. Buildings, explosions, ropes, and world-model calls follow CLuaWorldDefs and CLuaBuildingDefs. Garage geometry and CBuildingRemoval are not loaded, so garage reads return false and removal counts stay 0. Host-tested. (LuaWorldQueryApi) |
+| `restoreGameWorld` | **Implemented** | `CLuaWorldDefs.cpp:167` | `ArgumentParser<RestoreGameWorld>` | Zones follow CZoneNames.cpp. Buildings, explosions, ropes, and world-model calls follow CLuaWorldDefs and CLuaBuildingDefs. Garage geometry and CBuildingRemoval are not loaded, so garage reads return false and removal counts stay 0. Host-tested. (LuaWorldQueryApi) |
+| `restoreWorldModel` | **Implemented** | `CLuaWorldDefs.cpp:165` | `RestoreWorldBuilding` | Zones follow CZoneNames.cpp. Buildings, explosions, ropes, and world-model calls follow CLuaWorldDefs and CLuaBuildingDefs. Garage geometry and CBuildingRemoval are not loaded, so garage reads return false and removal counts stay 0. Host-tested. (LuaWorldQueryApi) |
+| `setAircraftMaxHeight` | **Implemented** | `CLuaWorldDefs.cpp:150` | `SetAircraftMaxHeight` | Operational on Android. (l_setAircraftMaxHeight) |
+| `setAircraftMaxVelocity` | **Implemented** | `CLuaWorldDefs.cpp:151` | `SetAircraftMaxVelocity` | Operational on Android. (l_setAircraftMaxVelocity) |
+| `setAmbientPedPopulationZoneState` | **Implemented** | `CLuaWorldDefs.cpp:105` | `SetAmbientPedPopulationZoneState` | Table checks follow CLuaWorldDefs.cpp 764-848. Label checks follow CGameSA.cpp 1865-1880, including the 336 main.scm labels. A known label returns false because FindZoneByLabel is not hooked. resetAmbientPedPopulationZonesToBootstrap stays unbound, so the phone detector remains on the mobile path. Host-tested. Not yet run on a device. (SetAmbientPedPopulationZoneState) |
+| `setBirdsEnabled` | **Implemented** | `CLuaWorldDefs.cpp:155` | `SetBirdsEnabled` | Operational on Android. (l_setBirdsEnabled) |
+| `setBlurLevel` | **Implemented** | `CLuaWorldDefs.cpp:134` | `SetBlurLevel` | Operational on Android. (l_setBlurLevel) |
+| `setCloudsEnabled` | **Implemented** | `CLuaWorldDefs.cpp:136` | `SetCloudsEnabled` | Operational on Android. (l_setCloudsEnabled) |
+| `setColorFilter` | **Implemented** | `CLuaWorldDefs.cpp:119` | `ArgumentParser<SetColorFilter>` | Operational on Android. (l_setColorFilter) |
+| `setCoronaReflectionsEnabled` | **Implemented** | `CLuaWorldDefs.cpp:159` | `ArgumentParser<SetCoronaReflectionsEnabled>` | Operational on Android. (l_setCoronaReflectionsEnabled) |
+| `setDynamicPedShadowsEnabled` | **Implemented** | `CLuaWorldDefs.cpp:171` | `ArgumentParser<SetDynamicPedShadowsEnabled>` | Operational on Android. (l_setDynamicPedShadowsEnabled) |
+| `setEffectDensity` | **Implemented** | `CLuaEffectDefs.cpp:35` | `SetEffectDensity` | Operational on Android. (l_setEffectDensity) |
+| `setEffectSpeed` | **Implemented** | `CLuaEffectDefs.cpp:33` | `SetEffectSpeed` | Operational on Android. (l_setEffectSpeed) |
+| `setFPSLimit` | **Implemented** | `CLuaWorldDefs.cpp:158` | `SetFPSLimit` | Operational on Android. (l_setFPSLimit) |
+| `setFarClipDistance` | **Implemented** | `CLuaWorldDefs.cpp:143` | `SetFarClipDistance` | Operational on Android. (l_setFarClipDistance) |
+| `setFireDamageEnabled` | **Implemented** | `CLuaFireDefs.cpp:158` | `SetFireDamageEnabled` | Managed fire element from the options table, or the numeric StartFire boolean. FxSystem is not created and remaining time does not tick. Host-tested. (LuaFireApi) |
+| `setFireDamageTargets` | **Implemented** | `CLuaFireDefs.cpp:160` | `SetFireDamageTargets` | Managed fire element from the options table, or the numeric StartFire boolean. FxSystem is not created and remaining time does not tick. Host-tested. (LuaFireApi) |
+| `setFireDuration` | **Implemented** | `CLuaFireDefs.cpp:152` | `SetFireDuration` | Managed fire element from the options table, or the numeric StartFire boolean. FxSystem is not created and remaining time does not tick. Host-tested. (LuaFireApi) |
+| `setFireMaxGenerations` | **Implemented** | `CLuaFireDefs.cpp:164` | `SetFireMaxGenerations` | Managed fire element from the options table, or the numeric StartFire boolean. FxSystem is not created and remaining time does not tick. Host-tested. (LuaFireApi) |
+| `setFireRemainingTime` | **Implemented** | `CLuaFireDefs.cpp:154` | `SetFireRemainingTime` | Managed fire element from the options table, or the numeric StartFire boolean. FxSystem is not created and remaining time does not tick. Host-tested. (LuaFireApi) |
+| `setFireSource` | **Implemented** | `CLuaFireDefs.cpp:166` | `SetFireSource` | Managed fire element from the options table, or the numeric StartFire boolean. FxSystem is not created and remaining time does not tick. Host-tested. (LuaFireApi) |
+| `setFireSpreadEnabled` | **Implemented** | `CLuaFireDefs.cpp:162` | `SetFireSpreadEnabled` | Managed fire element from the options table, or the numeric StartFire boolean. FxSystem is not created and remaining time does not tick. Host-tested. (LuaFireApi) |
+| `setFireStrength` | **Implemented** | `CLuaFireDefs.cpp:156` | `SetFireStrength` | Managed fire element from the options table, or the numeric StartFire boolean. FxSystem is not created and remaining time does not tick. Host-tested. (LuaFireApi) |
+| `setFireTarget` | **Implemented** | `CLuaFireDefs.cpp:168` | `SetFireTarget` | Managed fire element from the options table, or the numeric StartFire boolean. FxSystem is not created and remaining time does not tick. Host-tested. (LuaFireApi) |
+| `setFogDistance` | **Implemented** | `CLuaWorldDefs.cpp:147` | `SetFogDistance` | Operational on Android. (l_setFogDistance) |
+| `setFoliageDensity` | **Implemented** | `CLuaFoliageDefs.cpp:45` | `SetFoliageDensity` | Operational on Android. (l_setFoliageDensity) |
+| `setFoliageSurface` | **Implemented** | `CLuaFoliageDefs.cpp:43` | `SetFoliageSurface` | Operational on Android. (l_setFoliageSurface) |
+| `setFoliageVertices` | **Implemented** | `CLuaFoliageDefs.cpp:44` | `SetFoliageVertices` | Operational on Android. (l_setFoliageVertices) |
+| `setGameSpeed` | **Implemented** | `CLuaWorldDefs.cpp:127` | `SetGameSpeed` | Operational on Android. (l_setGameSpeed) |
+| `setGarageOpen` | **Implemented** | `CLuaWorldDefs.cpp:130` | `SetGarageOpen` | Operational on Android. (l_setGarageOpen) |
+| `setGrainLevel` | **Implemented** | `CLuaWorldDefs.cpp:121` | `ArgumentParser<SetGrainLevel>` | Operational on Android. (l_setGrainLevel) |
+| `setGrainMultiplier` | **Implemented** | `CLuaWorldDefs.cpp:120` | `ArgumentParser<SetGrainMultiplier>` | Operational on Android. (l_setGrainMultiplier) |
+| `setGravity` | **Implemented** | `CLuaWorldDefs.cpp:126` | `SetGravity` | Operational on Android. (l_setGravity) |
+| `setHeatHaze` | **Implemented** | `CLuaWorldDefs.cpp:123` | `SetHeatHaze` | Operational on Android. (l_setHeatHaze) |
+| `setInteriorFurnitureEnabled` | **Implemented** | `CLuaWorldDefs.cpp:141` | `SetInteriorFurnitureEnabled` | Operational on Android. (l_setInteriorFurnitureEnabled) |
+| `setInteriorSoundsEnabled` | **Implemented** | `CLuaWorldDefs.cpp:140` | `SetInteriorSoundsEnabled` | Operational on Android. (l_setInteriorSoundsEnabled) |
+| `setJetpackMaxHeight` | **Implemented** | `CLuaWorldDefs.cpp:135` | `SetJetpackMaxHeight` | Operational on Android. (l_setJetpackMaxHeight) |
+| `setMinuteDuration` | **Implemented** | `CLuaWorldDefs.cpp:129` | `SetMinuteDuration` | Operational on Android. (l_setMinuteDuration) |
+| `setMoonSize` | **Implemented** | `CLuaWorldDefs.cpp:157` | `SetMoonSize` | Operational on Android. (l_setMoonSize) |
+| `setNearClipDistance` | **Implemented** | `CLuaWorldDefs.cpp:144` | `SetNearClipDistance` | Operational on Android. (l_setNearClipDistance) |
+| `setObjectBreakable` | **Implemented** | `CLuaObjectDefs.cpp:37` | `SetObjectBreakable` | Follows CLuaObjectDefs.cpp and the object writes in CStaticFunctionDefinitions.cpp. createObject needs a resource and a stock object model; peds, vehicles, clothes, and the cutscene range are rejected. The element stores scale, mass, properties, frozen, respawn, movement, and materials. CObject is not created, so breakObject and setObjectGangTagAlpha return false and a texture replace cannot resolve. The host has no model table. Not device-verified. |
+| `setObjectGangTagAlpha` | **Implemented** | `CLuaObjectDefs.cpp:45` | `ArgumentParser<SetObjectGangTagAlpha>` | Follows CLuaObjectDefs.cpp and the object writes in CStaticFunctionDefinitions.cpp. createObject needs a resource and a stock object model; peds, vehicles, clothes, and the cutscene range are rejected. The element stores scale, mass, properties, frozen, respawn, movement, and materials. CObject is not created, so breakObject and setObjectGangTagAlpha return false and a texture replace cannot resolve. The host has no model table. Not device-verified. |
+| `setObjectGangTagProgress` | **Implemented** | `CLuaObjectDefs.cpp:47` | `ArgumentParser<SetObjectGangTagProgress>` | Follows CLuaObjectDefs.cpp and the object writes in CStaticFunctionDefinitions.cpp. createObject needs a resource and a stock object model; peds, vehicles, clothes, and the cutscene range are rejected. The element stores scale, mass, properties, frozen, respawn, movement, and materials. CObject is not created, so breakObject and setObjectGangTagAlpha return false and a texture replace cannot resolve. The host has no model table. Not device-verified. |
+| `setObjectMass` | **Implemented** | `CLuaObjectDefs.cpp:41` | `SetObjectMass` | Follows CLuaObjectDefs.cpp and the object writes in CStaticFunctionDefinitions.cpp. createObject needs a resource and a stock object model; peds, vehicles, clothes, and the cutscene range are rejected. The element stores scale, mass, properties, frozen, respawn, movement, and materials. CObject is not created, so breakObject and setObjectGangTagAlpha return false and a texture replace cannot resolve. The host has no model table. Not device-verified. |
+| `setObjectMaterial` | **Implemented** | `CLuaObjectDefs.cpp:43` | `SetObjectMaterial` | Follows CLuaObjectDefs.cpp and the object writes in CStaticFunctionDefinitions.cpp. createObject needs a resource and a stock object model; peds, vehicles, clothes, and the cutscene range are rejected. The element stores scale, mass, properties, frozen, respawn, movement, and materials. CObject is not created, so breakObject and setObjectGangTagAlpha return false and a texture replace cannot resolve. The host has no model table. Not device-verified. |
+| `setObjectProperty` | **Implemented** | `CLuaObjectDefs.cpp:42` | `SetObjectProperty` | Follows CLuaObjectDefs.cpp and the object writes in CStaticFunctionDefinitions.cpp. createObject needs a resource and a stock object model; peds, vehicles, clothes, and the cutscene range are rejected. The element stores scale, mass, properties, frozen, respawn, movement, and materials. CObject is not created, so breakObject and setObjectGangTagAlpha return false and a texture replace cannot resolve. The host has no model table. Not device-verified. |
+| `setObjectScale` | **Implemented** | `CLuaObjectDefs.cpp:35` | `SetObjectScale` | Follows CLuaObjectDefs.cpp and the object writes in CStaticFunctionDefinitions.cpp. createObject needs a resource and a stock object model; peds, vehicles, clothes, and the cutscene range are rejected. The element stores scale, mass, properties, frozen, respawn, movement, and materials. CObject is not created, so breakObject and setObjectGangTagAlpha return false and a texture replace cannot resolve. The host has no model table. Not device-verified. |
+| `setObjectStatic` | **Implemented** | `CLuaObjectDefs.cpp:36` | `SetObjectStatic` | Follows CLuaObjectDefs.cpp and the object writes in CStaticFunctionDefinitions.cpp. createObject needs a resource and a stock object model; peds, vehicles, clothes, and the cutscene range are rejected. The element stores scale, mass, properties, frozen, respawn, movement, and materials. CObject is not created, so breakObject and setObjectGangTagAlpha return false and a texture replace cannot resolve. The host has no model table. Not device-verified. |
+| `setOcclusionRegion` | **Implemented** | `CLuaWorldDefs.cpp:153` | `SetOcclusionRegion` | Operational on Android. (l_setOcclusionRegion) |
+| `setOcclusionsEnabled` | **Implemented** | `CLuaWorldDefs.cpp:152` | `SetOcclusionsEnabled` | Operational on Android. (l_setOcclusionsEnabled) |
+| `setPedTargetingMarkerEnabled` | **Implemented** | `CLuaWorldDefs.cpp:156` | `SetPedTargetingMarkerEnabled` | Operational on Android. (l_setPedTargetingMarkerEnabled) |
+| `setPedsLODDistance` | **Implemented** | `CLuaWorldDefs.cpp:146` | `SetPedsLODDistance` | Operational on Android. (l_setPedsLODDistance) |
+| `setRainLevel` | **Implemented** | `CLuaWorldDefs.cpp:142` | `SetRainLevel` | Operational on Android. (l_setRainLevel) |
+| `setSkyGradient` | **Implemented** | `CLuaWorldDefs.cpp:122` | `SetSkyGradient` | Operational on Android. (l_setSkyGradient) |
+| `setSunColor` | **Implemented** | `CLuaWorldDefs.cpp:148` | `SetSunColor` | Operational on Android. (l_setSunColor) |
+| `setSunSize` | **Implemented** | `CLuaWorldDefs.cpp:149` | `SetSunSize` | Operational on Android. (l_setSunSize) |
+| `setTime` | **Implemented** | `CLuaWorldDefs.cpp:118` | `SetTime` | Operational on Android. (l_setTime) |
+| `setTimeFrozen` | **Implemented** | `CLuaWorldDefs.cpp:169` | `ArgumentParser<SetTimeFrozen>` | Operational on Android. (l_setTimeFrozen) |
+| `setTrafficLightState` | **Implemented** | `CLuaWorldDefs.cpp:137` | `SetTrafficLightState` | Operational on Android. (l_setTrafficLightState) |
+| `setTrafficLightsLocked` | **Implemented** | `CLuaWorldDefs.cpp:138` | `SetTrafficLightsLocked` | Operational on Android. (l_setTrafficLightsLocked) |
+| `setVehiclesLODDistance` | **Implemented** | `CLuaWorldDefs.cpp:145` | `SetVehiclesLODDistance` | Operational on Android. (l_setVehiclesLODDistance) |
+| `setVolumetricShadowsEnabled` | **Implemented** | `CLuaWorldDefs.cpp:170` | `ArgumentParser<SetVolumetricShadowsEnabled>` | Operational on Android. (l_setVolumetricShadowsEnabled) |
+| `setWaterColor` | **Implemented** | `CLuaWaterDefs.cpp:23` | `SetWaterColor` | Operational on Android. (l_setWaterColor) |
+| `setWaterDrawnLast` | **Implemented** | `CLuaWaterDefs.cpp:26` | `SetWaterDrawnLast` | Operational on Android. (l_setWaterDrawnLast) |
+| `setWaterLevel` | **Implemented** | `CLuaWaterDefs.cpp:24` | `SetWaterLevel` | Operational on Android. (l_setWaterLevel) |
+| `setWaterVertexPosition` | **Implemented** | `CLuaWaterDefs.cpp:25` | `SetWaterVertexPosition` | 1-based vertex write. An index outside the triangle or quad returns false. Host-tested. (SetWaterVertexPosition) |
+| `setWaveHeight` | **Implemented** | `CLuaWorldDefs.cpp:128` | `SetWaveHeight` | Operational on Android. (l_setWaveHeight) |
+| `setWeather` | **Implemented** | `CLuaWorldDefs.cpp:124` | `SetWeather` | Operational on Android. (l_setWeather) |
+| `setWeatherBlended` | **Implemented** | `CLuaWorldDefs.cpp:125` | `SetWeatherBlended` | Operational on Android. (l_setWeatherBlended) |
+| `setWindVelocity` | **Implemented** | `CLuaWorldDefs.cpp:139` | `SetWindVelocity` | Operational on Android. (l_setWindVelocity) |
+| `setWorldProperty` | **Implemented** | `CLuaWorldDefs.cpp:160` | `ArgumentParser<SetWorldProperty>` | Operational on Android. (l_setWorldProperty) |
+| `setWorldSpecialPropertyEnabled` | **Implemented** | `CLuaWorldDefs.cpp:133` | `ArgumentParser<SetWorldSpecialPropertyEnabled>` | Operational on Android. (l_setWorldSpecialPropertyEnabled) |
+| `stopObject` | **Implemented** | `CLuaObjectDefs.cpp:34` | `StopObject` | Follows CLuaObjectDefs.cpp and the object writes in CStaticFunctionDefinitions.cpp. createObject needs a resource and a stock object model; peds, vehicles, clothes, and the cutscene range are rejected. The element stores scale, mass, properties, frozen, respawn, movement, and materials. CObject is not created, so breakObject and setObjectGangTagAlpha return false and a texture replace cannot resolve. The host has no model table. Not device-verified. |
+| `testLineAgainstWater` | **Implemented** | `CLuaWaterDefs.cpp:19` | `TestLineAgainstWater` | Segment against stored polygons, then the outside-world ocean plane. Host-tested. (TestLineAgainstWater) |
+| `testSphereAgainstWorld` | **Implemented** | `CLuaWorldDefs.cpp:208` | `ArgumentParser<TestSphereAgainstWorld>` | Argument checks follow CLuaWorldDefs. Collision, roof, and screen projection are not hooked, so a valid query uses the desktop failure result. Ped-path state is empty, so the revision calls report no-patches or no-patch. Host-tested. (LuaSightApi) |
+| `toggleObjectRespawn` | **Implemented** | `CLuaObjectDefs.cpp:40` | `ToggleObjectRespawn` | Follows CLuaObjectDefs.cpp and the object writes in CStaticFunctionDefinitions.cpp. createObject needs a resource and a stock object model; peds, vehicles, clothes, and the cutscene range are rejected. The element stores scale, mass, properties, frozen, respawn, movement, and materials. CObject is not created, so breakObject and setObjectGangTagAlpha return false and a texture replace cannot resolve. The host has no model table. Not device-verified. |
+| `updateAmbientPedPopulationModels` | **Implemented** | `CLuaWorldDefs.cpp:102` | `ArgumentParser<UpdateAmbientPedPopulationModels>` | Vector checks follow CLuaFunctionParser. A finite origin returns false because CGameSA.cpp 1574-1587 finds no navigation zone. NaN and inf raise. Host-tested. Not yet run on a device. (UpdateAmbientPedPopulationModels) |

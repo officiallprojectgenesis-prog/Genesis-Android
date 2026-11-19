@@ -5,9 +5,9 @@ Checkpoints, radar map blips, collision shapes (spheres, cubes, polygons), radar
 ## Parity Status
 
 - **Total Functions:** 145
-- **Implemented:** 0 (0.0%)
-- **Stubs:** 3
-- **Missing:** 142
+- **Implemented:** 2 (1.4%)
+- **Stubs:** 2
+- **Missing:** 141
 
 > **Technical Requirement:** Requires spatial overlap checks (AABB / SAT collision algorithms) and radar texture rendering hooks.
 
@@ -23,10 +23,10 @@ Checkpoints, radar map blips, collision shapes (spheres, cubes, polygons), radar
 | `createBlip` | *Stub* | `CLuaBlipDefs.cpp:141` | `ArgumentParserWarn<false, CreateBlip>` | Currently stubbed: `FalseResult: lua_pushboolean(L, 0)`. Needs native engine wiring. |
 | `createBlipAttachedTo` | Missing | `CLuaBlipDefs.cpp:142` | `ArgumentParserWarn<false, CreateBlipAttachedTo>` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
 | `createColCircle` | Missing | `CLuaColShapeDefs.cpp:17` | `CreateColCircle` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `createColCuboid` | Missing | `CLuaColShapeDefs.cpp:18` | `CreateColCuboid` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
+| `createColCuboid` | **Implemented** | `CLuaColShapeDefs.cpp:18` | `CreateColCuboid` | Operational on Android. (CreateColCuboid) |
 | `createColPolygon` | Missing | `CLuaColShapeDefs.cpp:21` | `CreateColPolygon` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
 | `createColRectangle` | Missing | `CLuaColShapeDefs.cpp:20` | `CreateColRectangle` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
-| `createColSphere` | *Stub* | `CLuaColShapeDefs.cpp:19` | `CreateColSphere` | Currently stubbed: `FalseResult: lua_pushboolean(L, 0)`. Needs native engine wiring. |
+| `createColSphere` | **Implemented** | `CLuaColShapeDefs.cpp:19` | `CreateColSphere` | Operational on Android. (CreateColSphere) |
 | `createColTube` | Missing | `CLuaColShapeDefs.cpp:22` | `CreateColTube` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
 | `createLight` | Missing | `CLuaPointLightDefs.cpp:19` | `CreateLight` | Needs desktop C++ logic ported to app/src/main/cpp/shared. |
 | `createMarker` | *Stub* | `CLuaMarkerDefs.cpp:20` | `CreateMarker` | Currently stubbed: `FalseResult: lua_pushboolean(L, 0)`. Needs native engine wiring. |

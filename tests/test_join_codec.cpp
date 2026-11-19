@@ -267,7 +267,7 @@ static void TestServerJoinedGameParse() {
 
     NeonJoinClient::Impl impl;  // unity include grants access
     impl.net = nullptr;         // sends fail -> proves parse completed first
-    impl.HandleServerJoinedGame(ref.data.data(), nb);
+    impl.HandleServerJoinedGame(ref.data.data(), nb, ref.bits);
 
     CHECK(impl.info.localPlayerId == 352, "player id parsed");
     CHECK(impl.info.rootElementId == 373, "root element id parsed");
@@ -316,6 +316,50 @@ static void TestModNameRequiredAuthRefused() {
     CHECK(impl.info.lastError.find("SA:O") != std::string::npos, "failure reason mentions SA:O identity");
 }
 
+// Inbound sync that CNetAPI consumes during STATUS_JOINING must not abort the
+// join or move it past the packet it is actually waiting for.
+static void TestInGameNoticeIgnoresPureSync() {
+    const uint8_t body[] = {0};
+    NeonJoinClient notice;
+    notice.pImpl_->state = JoinState::InGameNoticeSent;
+    CHECK(notice.ProcessGamePacket(32, body, sizeof(body), 8),
+          "PLAYER_PURESYNC during ingame-notice-sent is consumed");
+    CHECK(notice.State() == JoinState::InGameNoticeSent,
+          "PLAYER_PURESYNC does not advance or fail ingame-notice-sent");
+    CHECK(notice.Info().lastError.empty(), "ignored pure sync leaves no join error");
+
+    CHECK(notice.ProcessGamePacket(35, body, sizeof(body), 8),
+          "VEHICLE_RESYNC during ingame-notice-sent is consumed");
+    CHECK(notice.State() == JoinState::InGameNoticeSent,
+          "VEHICLE_RESYNC does not advance ingame-notice-sent");
+
+    notice.ProcessGamePacket(static_cast<uint8_t>(NeonPacketID::SERVER_JOINEDGAME), body, sizeof(body), 8);
+    CHECK(notice.State() == JoinState::Failed &&
+              notice.Info().lastError == "SERVER_JOINEDGAME truncated",
+          "packet 22 is still the packet that advances ingame-notice-sent");
+
+    NeonJoinClient joining;
+    joining.pImpl_->state = JoinState::JoinDataSent;
+    CHECK(joining.ProcessGamePacket(32, body, sizeof(body), 8),
+          "PLAYER_PURESYNC during joindata-sent is consumed");
+    CHECK(joining.State() == JoinState::JoinDataSent,
+          "PLAYER_PURESYNC does not advance joindata-sent");
+
+    NeonJoinClient connecting;
+    connecting.pImpl_->state = JoinState::WaitingModName;
+    connecting.ProcessGamePacket(32, body, sizeof(body), 8);
+    CHECK(connecting.State() == JoinState::Failed &&
+              connecting.Info().lastError.find("unexpected packet id 32") != std::string::npos,
+          "pure sync before MOD_NAME still fails");
+
+    NeonJoinClient listed;
+    listed.pImpl_->state = JoinState::InGameNoticeSent;
+    listed.ProcessGamePacket(25, body, sizeof(body), 8);
+    CHECK(listed.State() == JoinState::Failed &&
+              listed.Info().lastError.find("unexpected packet id 25") != std::string::npos,
+          "PLAYER_LIST before STATUS_JOINED still fails");
+}
+
 static void TestTransportFailureEndsAttempt() {
     RakNetWrapper net;
     NeonJoinClient join;
@@ -354,6 +398,7 @@ int main() {
     TestServerJoinedGameParse();
     TestModNameParse();
     TestModNameRequiredAuthRefused();
+    TestInGameNoticeIgnoresPureSync();
     TestTransportFailureEndsAttempt();
     if (g_failures == 0) {
         printf("ALL JOIN CODEC WIRE TESTS PASSED\n");

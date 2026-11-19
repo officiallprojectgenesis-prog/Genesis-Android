@@ -8,11 +8,15 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
+#include <memory>
 #include <string>
 #include <utility>
 #include <vector>
 
 #include "../../net/raknet/RakNetWrapper.h"
+#include "PedSpawn.h"
+#include "../SpatialWorld.h"
+#include "WeaponSpawn.h"
 
 #ifdef __ANDROID__
 #include <android/log.h>
@@ -53,6 +57,8 @@ enum ElementType : uint8_t {
 };
 
 struct Visual {
+    uint64_t generation = 0, shapeRevision = 0;
+    std::shared_ptr<const Spatial::Geometry> colshape;
     int kind = 0; // 4 marker, 5 blip, 7 area, 14 ped, 1 player
     int model = -1;
     float x = 0, y = 0, z = 0, w = 0, h = 0, size = 1;
@@ -60,14 +66,30 @@ struct Visual {
     int r = 255, g = 255, b = 255, a = 255;
     int markerType = 2;
     float heading = 0;
+    // Vehicles (kind 2) only, from the ENTITY_ADD body: roll and pitch in degrees and SVehicleHealthSync.
+    // health < 0 means the body did not carry one.
+    float rotX = 0, rotY = 0;
+    float health = -1.f;
     bool hosted = false;
+    // ENTITY_ADD common header. CClientPed::SetInterior / RequestCollision use it.
+    uint8_t interior = 0;
+    // ENTITY_ADD sync time context (CPacketHandler::Packet_EntityAdd sets it on the element).
+    uint8_t syncTimeContext = 0;
+    // ENTITY_ADD common header / PLAYER_LIST / SET_ELEMENT_DIMENSION (CClientEntity::m_usDimension).
+    uint16_t dimension = 0;
     uint32_t attached = 0xFFFFFFFFu;
     int blipHandle = -1;
     bool blipLive = false;
+    // Peds (kind 14) only: the rest of the ENTITY_ADD ped body. Shared so copies of Visual stay cheap.
+    std::shared_ptr<const PedSpawn> ped;
+    std::shared_ptr<const WeaponSpawn> weapon;
 };
 
 struct Datum {
     bool number = false;
+    // Lua boolean (LUA_TBOOLEAN, CLuaArgument::ReadFromBitStream): value is 1 or 0 and number is true,
+    // so readers that want a number keep working; getElementData returns true/false as desktop does.
+    bool boolean = false;
     double value = 0;
     std::string text;
 };
@@ -85,6 +107,8 @@ struct EntityCommon {
     float attachedRotX = 0, attachedRotY = 0, attachedRotZ = 0; // degrees
     bool collisions = false;
     bool callProp = true;     // default true, as in the reference
+    // One byte after the name. Desktop stores it with SetSyncTimeContext (CPacketHandler.cpp 4420).
+    uint8_t syncTimeContext = 0;
     std::string name;
     std::vector<std::pair<std::string, Datum>> customData;
 };
@@ -183,12 +207,16 @@ bool ReadEntityCommon(Net::BitStreamReader& reader, EntityCommon& out);
 
 // Dispatch on common.type. Defined in EntityAddCore.cpp.
 // Returns false on a parse failure (DIAG already logged); the caller stops the packet.
-bool ReadEntityBody(Net::BitStreamReader& reader, const EntityCommon& common, Visual& visual);
+// Resolver runs under the caller's element-table lock; -1 means unknown.
+using ElementKindResolver = int (*)(uint32_t id);
+bool ReadEntityBody(Net::BitStreamReader& reader, const EntityCommon& common, Visual& visual,
+                    ElementKindResolver resolveKind = nullptr);
 
 // Per-type bodies.
 bool ReadEntityBodyPed(Net::BitStreamReader& reader, const EntityCommon& common, Visual& visual);      // EntityAddPed.cpp (stub)
 bool ReadEntityBodyVehicle(Net::BitStreamReader& reader, const EntityCommon& common, Visual& visual);  // EntityAddVehicle.cpp (stub)
-bool ReadEntityBodyObject(Net::BitStreamReader& reader, const EntityCommon& common, Visual& visual);   // EntityAddObject.cpp (stub)
+bool ReadEntityBodyObject(Net::BitStreamReader& reader, const EntityCommon& common, Visual& visual,
+                          ElementKindResolver resolveKind = nullptr); // EntityAddObject.cpp
 bool ReadEntityBodyDummy(Net::BitStreamReader& reader, const EntityCommon& common, Visual& visual);   // EntityAddDummy.cpp
 bool ReadEntityBodyMarker(Net::BitStreamReader& reader, const EntityCommon& common, Visual& visual);  // EntityAddMarker.cpp
 bool ReadEntityBodyOther(Net::BitStreamReader& reader, const EntityCommon& common, Visual& visual);   // EntityAddOther.cpp: BLIP, PICKUP, RADAR_AREA, COLSHAPE, PATH_NODE, TEAM, ...
