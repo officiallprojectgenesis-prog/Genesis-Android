@@ -1212,17 +1212,6 @@ int DetachElements(lua_State* L) {
     return 1;
 }
 
-bool ClientCallPropagationEnabled(uint32_t id) {
-    return CallPropOf(id);
-}
-
-void CopyClientChildren(uint32_t id, std::vector<uint32_t>& out) {
-    out.clear();
-    if (Node* node = Find(id)) {
-        out = node->children;
-    }
-}
-
 void InstallElementBindings(lua_State* L) {
     ResetCatalog();
     EnsureRoot();

@@ -6,7 +6,6 @@
 // binding here replaces a core binding or an "unimplemented" stub of the same name.
 
 #include <cstdint>
-#include <vector>
 
 struct lua_State;
 
@@ -17,7 +16,5 @@ void InstallExtraBindings(lua_State* L);
 // Element tables are {id = <id>, element = true}, as every element binding expects.
 void PushElement(lua_State* L, uint32_t id);
 uint32_t ElementIdOf(lua_State* L, int index);
-bool ClientCallPropagationEnabled(uint32_t id);
-void CopyClientChildren(uint32_t id, std::vector<uint32_t>& out);
 
 } // namespace WorldRPG::Script
