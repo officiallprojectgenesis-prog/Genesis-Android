@@ -53,7 +53,7 @@ bool ReadElementId(WorldRPG::Net::BitStreamReader& reader, uint32_t& out) {
 int ReadableScore(const std::string& text) {
     int score = 0;
     for (unsigned char ch : text) {
-        if ((ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9'))
+        if ((ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9') || ch >= 0x80)
             ++score;
     }
     return score;
@@ -74,26 +74,25 @@ std::string ReadChatText(WorldRPG::Net::BitStreamReader& reader) {
 }
 
 bool HandleChatEcho(const uint8_t* body, size_t length, size_t bits) {
-    // Mobile peers receive R,G,B and one color bit, then the text. The server
-    // has already removed the 17-bit speaker id and the message type. A
-    // desktop-shaped packet (those 25 bits still present) is tried when the
-    // short header does not produce a readable line. That is how a sentence
-    // typed on the desktop client was being dropped.
-    WorldRPG::Net::BitStreamReader mobile(body, length, bits);
+    // Standard MTA CChatEchoPacket::Write sends [R][G][B][codedBit][ElementID 17b][MessageType 8b][text].
+    // Try desktop layout first; fall back to short mobile layout only if desktop header fails.
     uint8_t red = 0, green = 0, blue = 0, coded = 0;
-    if (!mobile.Read(red) || !mobile.Read(green) || !mobile.Read(blue) || !mobile.ReadBits(&coded, 1))
-        return false;
-    std::string text = ReadChatText(mobile);
-    if (ReadableScore(text) < 2) {
+    std::string text;
+    {
         WorldRPG::Net::BitStreamReader desktop(body, length, bits);
         uint8_t ignored = 0;
         uint32_t speaker = 0;
         if (desktop.Read(red) && desktop.Read(green) && desktop.Read(blue) &&
             desktop.ReadBits(&coded, 1) && ReadElementId(desktop, speaker) &&
             desktop.Read(ignored)) {
-            const std::string other = ReadChatText(desktop);
-            if (ReadableScore(other) > ReadableScore(text)) text = other;
+            text = ReadChatText(desktop);
         }
+    }
+    if (text.empty()) {
+        WorldRPG::Net::BitStreamReader mobile(body, length, bits);
+        if (!mobile.Read(red) || !mobile.Read(green) || !mobile.Read(blue) || !mobile.ReadBits(&coded, 1))
+            return false;
+        text = ReadChatText(mobile);
     }
     if (text.empty()) return false;
     char colored[400];
